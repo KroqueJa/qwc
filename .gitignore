@@ -3,4 +3,6 @@ wcl.exe
 wcl_avx
 .idea
 benchmarks/test-data
+benchmarks/bench-spec.csv
+benchmarks/benchmarks.log
 CLAUDE.md
