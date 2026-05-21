@@ -1,17 +1,31 @@
-CXX = g++
-CXXFLAGS = --std=c++17 -msse4.1 -mavx2 -O3
-TARGET = wcl
-SRC = wcl.cpp
+CXX      = g++
+CC       = gcc
+CFLAGS   = -O3
+C_TARGET = wcl-c
+C_SRC    = wcl.c
+TARGET   = wcl
+SRCS     = src/main.cpp src/countlines.cpp src/processfile.cpp
 
-.PHONY: all clean gen-test-data bench
+# Platform-specific SIMD flags
+UNAME := $(shell uname -m)
+ifeq ($(UNAME), x86_64)
+  CXXFLAGS = --std=c++17 -msse4.1 -mavx2 -O3 -Iinclude
+else
+  CXXFLAGS = --std=c++17 -O3 -Iinclude
+endif
+
+.PHONY: all clean gen-test-data bench c
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
-	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRC)
+$(TARGET): $(SRCS)
+	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRCS)
+
+$(C_TARGET): $(C_SRC)
+	$(CC) $(CFLAGS) -o $(C_TARGET) $(C_SRC) -lpthread
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(TARGET) $(C_TARGET)
 
 gen-test-data:
 	python3 benchmarks/gen-test-data.py
@@ -19,3 +33,4 @@ gen-test-data:
 bench: $(TARGET)
 	python3 benchmarks/bench.py
 
+c: $(C_TARGET)
