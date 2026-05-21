@@ -23,6 +23,8 @@ std::atomic<size_t>      nextFile = 0;
 // vector
 void processFile( std::vector<Result>& localOutput )
 {
+  const size_t bufferSize = 128 * 4096;
+  static thread_local char buffer[bufferSize];
   while ( true ) {
     size_t idx = nextFile.fetch_add( 1 );
     if ( idx >= files.size() ) return;
@@ -40,8 +42,6 @@ void processFile( std::vector<Result>& localOutput )
       posix_fadvise( fd, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_NOREUSE );
     }
 
-    const size_t bufferSize = 128 * 4096;
-    char buffer[bufferSize];
     ssize_t bytesRead;
 
     __m256i chunk1, chunk2, result1, result2;
