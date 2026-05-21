@@ -1,0 +1,7 @@
+big:
+  ratio-newlines: 0.23
+  bytes: 1000000000
+
+small:
+  number-of-files: 200
+  ratio-newlines: 0.5

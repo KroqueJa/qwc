@@ -1,3 +1,6 @@
-testdata/**
 wcl
+wcl.exe
 wcl_avx
+.idea
+benchmarks/test-data
+CLAUDE.md
