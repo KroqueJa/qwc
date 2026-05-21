@@ -54,7 +54,7 @@ void processFile()
     }
 
     // Define a buffer for chunks of the file
-    const size_t bufferSize = 163840; // Size of the chunk buffer
+    const size_t bufferSize = 128 * 4096; // Size of the chunk buffer
     char buffer[bufferSize];          // The buffer itself
     ssize_t bytesRead;                // Track how many bytes have been read
 
