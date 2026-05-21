@@ -19,22 +19,17 @@ struct Result
 std::vector<std::string> files;
 std::atomic<size_t>      nextFile = 0;
 
-// Pre-sized output vector — each thread writes to its own slot, no locking
-std::vector<Result> output;
-
 // Function to process a file path and put a `Result` struct into the `output`
 // vector
-void processFile()
+void processFile( std::vector<Result>& localOutput )
 {
   while ( true ) {
-    // ---- Claim a file slot atomically ----
     size_t idx = nextFile.fetch_add( 1 );
     if ( idx >= files.size() ) return;
     const std::string& filename = files[idx];
 
-    // ---- Open a file (or read STDIN) ----
     int fd;
-    if ( filename.empty() ) {  // If filename is empty, read from STDIN
+    if ( filename.empty() ) {
       fd = 0;
     } else {
       fd = open( filename.c_str(), O_RDONLY );
@@ -45,7 +40,6 @@ void processFile()
       posix_fadvise( fd, 0, 0, POSIX_FADV_SEQUENTIAL | POSIX_FADV_NOREUSE );
     }
 
-    // Define a buffer for chunks of the file
     const size_t bufferSize = 128 * 4096;
     char buffer[bufferSize];
     ssize_t bytesRead;
@@ -53,7 +47,6 @@ void processFile()
     __m256i chunk1, chunk2, result1, result2;
     int mask1, mask2;
 
-    // ---- Read the file into the buffer, and count newlines in each chunk ----
     size_t totalLines = 0;
     while ( ( bytesRead = read( fd, buffer, bufferSize ) ) > 0 ) {
       __m256i vec_target = _mm256_set1_epi8( '\n' );
@@ -61,14 +54,12 @@ void processFile()
       char* tmp = buffer;
       size_t processedBytes = 0;
 
-      // Align to 32-byte boundary
       while ( processedBytes < (size_t)bytesRead && ( (uintptr_t)tmp % 32 != 0 ) ) {
         if ( *tmp == '\n' ) ++lines;
         ++tmp;
         ++processedBytes;
       }
 
-      // Process buffer in 64-byte chunks
       while ( processedBytes + 63 < (size_t)bytesRead ) {
         chunk1  = _mm256_loadu_si256( (__m256i*)tmp );
         chunk2  = _mm256_loadu_si256( (__m256i*)( tmp + 32 ) );
@@ -81,7 +72,6 @@ void processFile()
         processedBytes += 64;
       }
 
-      // Process remaining bytes
       while ( processedBytes < (size_t)bytesRead ) {
         if ( *tmp == '\n' ) ++lines;
         ++tmp;
@@ -93,33 +83,34 @@ void processFile()
 
     if ( !filename.empty() ) close( fd );
 
-    // Write directly to pre-assigned slot — no lock needed
-    output[idx] = { std::to_string( totalLines ) + " " + filename, totalLines };
+    localOutput.push_back( { std::to_string( totalLines ) + " " + filename, totalLines } );
   }
 }
 
 int main( int argc, char** argv )
 {
   if ( argc == 1 ) {
-    // No arguments — read from STDIN
     files.push_back( "" );
-    output.resize( 1 );
-    processFile();
-    std::cout << output[0].lineCount << std::endl;
+    std::vector<Result> localOutput;
+    processFile( localOutput );
+    std::cout << localOutput[0].lineCount << std::endl;
   } else {
     files.assign( argv + 1, argv + argc );
-    output.resize( files.size() );
 
     unsigned numThreads = std::thread::hardware_concurrency();
+    std::vector<std::vector<Result>> threadOutputs( numThreads );
     std::vector<std::thread> threads( numThreads );
+
     for ( unsigned i = 0; i < numThreads; ++i )
-      threads[i] = std::thread( processFile );
+      threads[i] = std::thread( processFile, std::ref( threadOutputs[i] ) );
     for ( auto& t : threads ) t.join();
 
     size_t total = 0;
-    for ( const auto& result : output ) {
-      total += result.lineCount;
-      if ( argc > 2 ) std::cout << result.str << '\n';
+    for ( const auto& localOutput : threadOutputs ) {
+      for ( const auto& result : localOutput ) {
+        total += result.lineCount;
+        if ( argc > 2 ) std::cout << result.str << '\n';
+      }
     }
     std::cout << total << std::endl;
   }
