@@ -6,3 +6,4 @@ benchmarks/test-data
 benchmarks/bench-spec.csv
 benchmarks/benchmarks.log
 CLAUDE.md
+.venv
