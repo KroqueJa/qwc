@@ -19,7 +19,7 @@ SRCS = src/main.cpp src/processfile.cpp $(COUNTLINES)
 .PHONY: all clean gen-test-data bench
 
 all: $(TARGET)
-
+	@echo "Built $(TARGET) with $(COUNTLINES) on $(UNAME)"
 $(TARGET): $(SRCS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(SRCS)
 
@@ -34,3 +34,7 @@ gen-test-data:
 
 bench: $(TARGET)
 	python3 benchmarks/bench.py
+
+wcl-scalar: src/main.cpp src/processfile.cpp src/countlines_scalar.cpp
+	$(CXX) --std=c++17 -O3 -Iinclude -o wcl-scalar src/main.cpp src/processfile.cpp src/countlines_scalar.cpp
+	@echo "Built wcl-scalar with scalar countlines"
