@@ -3,16 +3,8 @@ CFLAGS   = -O3
 TARGET   = wcl
 
 UNAME := $(shell uname -m)
-ifeq ($(UNAME), x86_64)
-  CXXFLAGS   = --std=c++17 -msse4.1 -mavx2 -O3 -Iinclude
-  COUNTLINES = src/countlines_avx2.cpp
-else ifeq ($(UNAME), arm64)
-  CXXFLAGS   = --std=c++17 -O3 -Iinclude
-  COUNTLINES = src/countlines_neon.cpp
-else
-  CXXFLAGS   = --std=c++17 -O3 -Iinclude
-  COUNTLINES = src/countlines_scalar.cpp
-endif
+CXXFLAGS   = --std=c++17 -O3 -Iinclude
+COUNTLINES = src/countlines_scalar.cpp
 
 SRCS = src/main.cpp src/processfile.cpp $(COUNTLINES)
 

@@ -11,10 +11,9 @@
 #include <thread>
 #include <vector>
 
-static const size_t   BYTES_PER_THREAD = 64 * 1024 * 1024;
-static const unsigned MAX_THREADS      = std::thread::hardware_concurrency();
+static const unsigned MAX_THREADS = std::thread::hardware_concurrency();
 
-size_t processFile( const char* filename )
+size_t processFile( const char* filename, size_t bytesPerThread )
 {
   if ( filename[0] == '\0' ) {
     static thread_local char buffer[128 * 4096];
@@ -53,7 +52,7 @@ size_t processFile( const char* filename )
 
   unsigned numThreads = (unsigned)std::min(
       (size_t)MAX_THREADS,
-      ( fileSize + BYTES_PER_THREAD - 1 ) / BYTES_PER_THREAD
+      ( fileSize + bytesPerThread - 1 ) / bytesPerThread
   );
   numThreads = std::max( numThreads, 1u );
 

@@ -1,3 +1,6 @@
+// DEPRECATED: This vectorized implementation is temporarily disabled pending a rewrite
+// to improve the vectorization strategy. Use countlines_scalar.cpp for now.
+
 #include "countlines.h"
 #include <immintrin.h>
 #include <stdint.h>
