@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <climits>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -40,6 +41,19 @@ size_t processFile( const char* filename, size_t bytesPerThread )
   if ( fileSize == 0 ) {
     close( fd );
     return 0;
+  }
+
+  // We will read every byte sequentially, so ask the kernel to start
+  // pulling the whole file into the page cache up front. On macOS F_RDADVISE
+  // is the most effective hint for this (MADV_WILLNEED is largely a no-op).
+  // radvisory::ra_count is an int, so issue the advice in <=INT_MAX chunks.
+  for ( size_t off = 0; off < fileSize; ) {
+    size_t            remaining = fileSize - off;
+    struct radvisory  ra;
+    ra.ra_offset = (off_t)off;
+    ra.ra_count  = (int)std::min( remaining, (size_t)INT_MAX );
+    fcntl( fd, F_RDADVISE, &ra );
+    off += (size_t)ra.ra_count;
   }
 
   char* mapped = (char*)mmap( NULL, fileSize, PROT_READ, MAP_PRIVATE, fd, 0 );
