@@ -2,7 +2,6 @@
 #include "countlines.h"
 
 #include <fcntl.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -56,14 +55,6 @@ size_t processFile( const char* filename, size_t bytesPerThread )
     off += (size_t)ra.ra_count;
   }
 
-  char* mapped = (char*)mmap( NULL, fileSize, PROT_READ, MAP_PRIVATE, fd, 0 );
-  close( fd );
-  if ( mapped == MAP_FAILED ) {
-    std::cerr << "mmap failed: " << filename << '\n';
-    exit( 1 );
-  }
-  madvise( mapped, fileSize, MADV_SEQUENTIAL );
-
   unsigned numThreads = (unsigned)std::min(
       (size_t)MAX_THREADS,
       ( fileSize + bytesPerThread - 1 ) / bytesPerThread
@@ -76,18 +67,35 @@ size_t processFile( const char* filename, size_t bytesPerThread )
   std::vector<std::thread> threads;
   threads.reserve( numThreads );
 
+  // Each thread streams its byte range with pread() into a private, reused
+  // buffer rather than faulting an mmap page-by-page. pread() is thread-safe
+  // (the offset is per-call, not shared via fd), so a single fd serves all
+  // threads, and the kernel bulk-copies straight from the warmed page cache.
   for ( unsigned i = 0; i < numThreads; ++i ) {
-    const char* start = mapped + i * chunkSize;
-    size_t      size  = ( i == numThreads - 1 )
-                        ? fileSize - i * chunkSize
-                        : chunkSize;
-    threads.emplace_back( [start, size, &counts, i]() {
-      counts[i] = countLines( start, size );
+    off_t  start = (off_t)( i * chunkSize );
+    size_t size  = ( i == numThreads - 1 )
+                   ? fileSize - i * chunkSize
+                   : chunkSize;
+    threads.emplace_back( [fd, start, size, &counts, i]() {
+      static const size_t BUF_SIZE = 1 << 20;  // 1 MiB
+      std::vector<char>   buffer( BUF_SIZE );
+      size_t lines     = 0;
+      size_t remaining = size;
+      off_t  pos       = start;
+      while ( remaining > 0 ) {
+        size_t  want = std::min( BUF_SIZE, remaining );
+        ssize_t got  = pread( fd, buffer.data(), want, pos );
+        if ( got <= 0 ) break;
+        lines     += countLines( buffer.data(), (size_t)got );
+        remaining -= (size_t)got;
+        pos       += got;
+      }
+      counts[i] = lines;
     } );
   }
 
   for ( auto& t : threads ) t.join();
-  munmap( mapped, fileSize );
+  close( fd );
 
   size_t total = 0;
   for ( size_t c : counts ) total += c;
