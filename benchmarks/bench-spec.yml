@@ -1,15 +1,15 @@
 big:
-  ratio-newlines: 0.23
+  ratio-newlines: 0.05
   bytes: 1000000000
 
 medium:
   number-of-files: 20
-  ratio-newlines: 0.35
+  ratio-newlines: 0.05
   min-bytes: 20000000
   max-bytes: 100000000
 
 small:
   number-of-files: 200
-  ratio-newlines: 0.5
+  ratio-newlines: 0.05
   min-bytes: 512000
   max-bytes: 2097152
