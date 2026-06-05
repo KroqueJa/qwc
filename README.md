@@ -2,10 +2,21 @@
 
 Have you ever used `wc -l`? I have. If you are running said command on a processor modern enough to support vectorized instructions and multithreading (`wc` does those things too), `wcl` is faster.
 
-Is it "blazingly fast"? ~~Probably not yet~~ If it works the way it seems to work... yes! In my preliminary testing (on one system) it is
+Is it "blazingly fast"? Yes. On a dataset containing lots of small files, some medium files and a huge file:
 
-- 40% faster than `wc -l` on a very big file
-- 69% faster on a "typical" dataset consisting of some random large csv files from kaggle
-- 300% (!) faster on a dataset consisting of 4720 json files
+```bash
+❯ hyperfine --warmup 1 './wcl benchmarks/test-data/*' 'wc -l benchmarks/test-data/*'
+Benchmark 1: ./wcl benchmarks/test-data/*
+  Time (mean ± σ):      35.1 ms ±   2.8 ms    [User: 39.8 ms, System: 202.3 ms]
+  Range (min … max):    31.4 ms …  40.9 ms    71 runs
+ 
+Benchmark 2: wc -l benchmarks/test-data/*
+  Time (mean ± σ):      1.732 s ±  0.004 s    [User: 1.603 s, System: 0.112 s]
+  Range (min … max):    1.726 s …  1.736 s    10 runs
+  
+Summary
+  ./wcl benchmarks/test-data/* ran
+   49.37 ± 3.94 times faster than wc -l benchmarks/test-data/*
+```
 
 
