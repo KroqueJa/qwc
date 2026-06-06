@@ -704,7 +704,9 @@ struct Mode
   const char* wclFlag;  // how wcl selects this mode ("" == default, lines)
   const char* wcFlag;   // the matching wc flag
 };
-const Mode kCoreModes[] = { { "", "-l" }, { "-w", "-w" }, { "-c", "-c" } };
+// wcl's -a is bare wc; the rest map to a single wc flag.
+const Mode kCoreModes[] = {
+    { "", "-l" }, { "-w", "-w" }, { "-c", "-c" }, { "-a", "" } };
 
 }  // namespace
 

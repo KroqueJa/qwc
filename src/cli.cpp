@@ -38,6 +38,8 @@ void printHelp()
       "                        scanning of the file contents is needed.\n"
       "  -w, --words           Count whitespace-separated words instead of\n"
       "                        lines, like `wc -w`.\n"
+      "  -a, --all             Print lines, words and bytes together, like\n"
+      "                        running `wc` with no flags.\n"
       "  -r, --recursive       Treat directory arguments as whole trees: wcl\n"
       "                        walks into them and counts every file it finds,\n"
       "                        something wc can't do on its own.\n"
@@ -72,6 +74,7 @@ void printHelp()
       "  wcl --char , data.csv         commas in data.csv\n"
       "  wcl -c notes.txt              bytes in notes.txt\n"
       "  wcl -w notes.txt              words in notes.txt\n"
+      "  wcl -a notes.txt              lines, words and bytes in notes.txt\n"
       "  wcl --recursive src           lines in every file under src/\n"
       "  wcl -r --top 10 src           the 10 biggest files under src/\n";
 }
@@ -112,6 +115,9 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-w", "--words" ) ) {
       opt.mode = CountMode::Words;
+      fileStart += 1;
+    } else if ( isFlag( argv[fileStart], "-a", "--all" ) ) {
+      opt.all = true;
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-r", "--recursive" ) ) {
       opt.recursive = true;
@@ -202,6 +208,15 @@ void printCountLine( const usize count, const char* name )
   std::cout << '\n';
 }
 
+void printAllLine( const Counts& c, const char* name )
+{
+  // Bare wc's layout: " %7ju %7ju %7ju %s\n" -- lines, words, bytes, name.
+  std::cout << ' ' << std::setw( 7 ) << c.lines << ' ' << std::setw( 7 )
+            << c.words << ' ' << std::setw( 7 ) << c.bytes;
+  if ( name ) std::cout << ' ' << name;
+  std::cout << '\n';
+}
+
 void printResults( const Options& opt, const std::vector<Result>& output )
 {
   const usize numFiles = output.size();
@@ -261,4 +276,25 @@ void printResults( const Options& opt, const std::vector<Result>& output )
     printCountLine( total, "total" );
   else if ( numFiles == 0 )
     printCountLine( total, nullptr );
+}
+
+void printResultsAll( const Options& opt, const std::vector<Counts>& output )
+{
+  const usize numFiles = output.size();
+
+  Counts total{};
+  for ( const Counts& c: output ) {
+    total.lines += c.lines;
+    total.words += c.words;
+    total.bytes += c.bytes;
+  }
+
+  // wc has no sorting or --top, so --all keeps the collected file order.
+  for ( usize i = 0; i < numFiles; ++i )
+    printAllLine( output[i], opt.files[i].c_str() );
+
+  if ( numFiles > 1 )
+    printAllLine( total, "total" );
+  else if ( numFiles == 0 )
+    printAllLine( total, nullptr );
 }

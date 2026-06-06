@@ -160,3 +160,117 @@ usize processFile(
   for ( const ChunkTally& r: results ) total += r.count;
   return total;
 }
+
+Counts processFileAll( const char* filename, const usize bytesPerThread )
+{
+  // stdin: a single sequential pass tallies all three at once -- it has to,
+  // since fd 0 can only be read once.
+  if ( filename[0] == '\0' ) {
+    thread_local char buffer[128 * 4096];
+    isize bytesRead;
+    Counts c{};
+    bool inWord = false;  // carried across reads for word counting
+    while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
+      const auto got = static_cast<usize>( bytesRead );
+      c.lines += count( buffer, got, '\n' );
+      c.words += words( buffer, got, inWord );
+      c.bytes += got;
+    }
+    return c;
+  }
+
+  int fd = open( filename, O_RDONLY );
+  if ( fd < 0 ) {
+    std::cerr << "Error opening file: " << filename << '\n';
+    exit( 1 );
+  }
+
+  struct stat st{};
+  if ( fstat( fd, &st ) < 0 ) {
+    std::cerr << "Error stating file: " << filename << '\n';
+    exit( 1 );
+  }
+
+  Counts result{};
+  result.bytes = st.st_size;  // bytes come straight from the stat
+  if ( result.bytes == 0 ) {
+    close( fd );
+    return result;
+  }
+  const usize fileSize = result.bytes;
+
+  // Warm the page cache up front (see processFile for the F_RDADVISE rationale).
+  for ( usize off = 0; off < fileSize; ) {
+    usize remaining = fileSize - off;
+    radvisory ra{};
+    ra.ra_offset = static_cast<i64>( off );
+    ra.ra_count = static_cast<int>(
+        std::min( remaining, static_cast<usize>( INT_MAX ) )
+    );
+    fcntl( fd, F_RDADVISE, &ra );
+    off += static_cast<usize>( ra.ra_count );
+  }
+
+  u32 numThreads = static_cast<u32>( std::min(
+      static_cast<usize>( MAX_THREADS ),
+      ( fileSize + bytesPerThread - 1 ) / bytesPerThread
+  ) );
+  numThreads = std::max( numThreads, 1u );
+
+  const usize chunkSize = fileSize / numThreads;
+
+  // Per-chunk lines and words, plus the word-edge flags used to stitch words
+  // across chunk boundaries (see processFile's word path).
+  struct AllTally
+  {
+    usize lines = 0;
+    usize words = 0;
+    bool startsInWord = false;
+    bool endsInWord = false;
+  };
+  std::vector<AllTally> results( numThreads );
+  std::vector<std::thread> threads;
+  threads.reserve( numThreads );
+
+  for ( u32 i = 0; i < numThreads; ++i ) {
+    usize start = i * chunkSize;
+    usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
+    threads.emplace_back( [fd, start, size, &results, i]() {
+      static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
+      std::vector<char> buffer( BUF_SIZE );
+      AllTally t;
+      bool inWord = false;  // carried across this chunk's own buffers
+      bool first = true;
+      usize remaining = size;
+      usize pos = start;
+      while ( remaining > 0 ) {
+        const usize want = std::min( BUF_SIZE, remaining );
+        const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
+        if ( got <= 0 ) break;
+        const auto g = static_cast<usize>( got );
+        t.lines += count( buffer.data(), g, '\n' );
+        if ( first ) t.startsInWord = !isWordSpace( buffer[0] );
+        t.words += words( buffer.data(), g, inWord );
+        first = false;
+        remaining -= g;
+        pos += g;
+      }
+      t.endsInWord = inWord;
+      results[i] = t;
+    } );
+  }
+
+  for ( auto& t: threads ) t.join();
+  close( fd );
+
+  // Lines and bytes just sum; words need the same boundary stitch as the
+  // word-only path (drop a word split across two chunks, counted twice).
+  bool carry = false;
+  for ( const AllTally& t: results ) {
+    result.lines += t.lines;
+    result.words += t.words;
+    if ( carry && t.startsInWord ) --result.words;
+    carry = t.endsInWord;
+  }
+  return result;
+}

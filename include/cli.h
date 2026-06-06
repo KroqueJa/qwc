@@ -19,6 +19,7 @@ struct Options
   usize bytesPerThread = 64 * 1024 * 1024;
   char target = '\n';            // byte to count; '\n' counts lines
   CountMode mode = CountMode::Target;  // --chars switches to byte counting
+  bool all = false;              // --all: lines, words and bytes, like bare wc
   bool recursive = false;        // expand directory arguments
   SortMode sortMode = SortMode::None;
   bool reverse = false;          // flip the display order
@@ -45,7 +46,16 @@ bool collectFiles( Options& opt );
 // in for wc.
 void printCountLine( usize count, const char* name );
 
+// Like printCountLine but with the three columns bare `wc` prints: lines, words
+// and bytes, each in its own " %7ju" field, then the optional name.
+void printAllLine( const Counts& c, const char* name );
+
 // Render counted results in wc's layout: one "<count> <name>" line per file
 // (ordered per `opt`), plus a trailing "<total> total" line when more than one
 // file was counted. A single file prints just its own line, like wc.
 void printResults( const Options& opt, const std::vector<Result>& output );
+
+// --all variant: one "<lines> <words> <bytes> <name>" line per file in the
+// collected order, plus a summed "total" line when more than one file was
+// counted (matching bare `wc`). Sorting/--top do not apply here.
+void printResultsAll( const Options& opt, const std::vector<Counts>& output );

@@ -211,6 +211,67 @@ TEST( ProcessFileWords, Deterministic )
 }
 
 // ---------------------------------------------------------------------------
+// processFileAll: lines, words and bytes in one pass (the bare-wc / --all mode).
+// ---------------------------------------------------------------------------
+TEST( ProcessFileAll, EmptyFile )
+{
+  TempFile f( "" );
+  const Counts c = processFileAll( f.path() );
+  EXPECT_EQ( c.lines, 0u );
+  EXPECT_EQ( c.words, 0u );
+  EXPECT_EQ( c.bytes, 0u );
+}
+
+TEST( ProcessFileAll, SmallKnownCounts )
+{
+  TempFile f( "alpha beta\ngamma\n\nx y z\n" );  // 4 lines, 6 words, 24 bytes
+  const Counts c = processFileAll( f.path() );
+  EXPECT_EQ( c.lines, 4u );
+  EXPECT_EQ( c.words, 6u );
+  EXPECT_EQ( c.bytes, 24u );
+}
+
+TEST( ProcessFileAll, NoTrailingNewline )
+{
+  TempFile f( "a b\nc d" );  // 1 line, 4 words, 7 bytes
+  const Counts c = processFileAll( f.path() );
+  EXPECT_EQ( c.lines, 1u );
+  EXPECT_EQ( c.words, 4u );
+  EXPECT_EQ( c.bytes, 7u );
+}
+
+// The all-pass shares the word-stitching logic, so verify it across chunk sizes
+// against the same oracle used for the word-only path.
+TEST( ProcessFileAll, ChunkBoundariesMatchOracles )
+{
+  std::string content;
+  for ( int i = 0; i < 4000; ++i ) content += "wordword ";
+  content += "tail";
+  const size_t expWords = refWords( content );
+  const size_t expLines = refCount( content, '\n' );
+  TempFile f( content );
+
+  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 4096 ),
+                       size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
+    const Counts c = processFileAll( f.path(), bpt );
+    EXPECT_EQ( c.lines, expLines ) << "bytesPerThread=" << bpt;
+    EXPECT_EQ( c.words, expWords ) << "bytesPerThread=" << bpt;
+    EXPECT_EQ( c.bytes, content.size() ) << "bytesPerThread=" << bpt;
+  }
+}
+
+TEST( ProcessFileAll, LargerThanReadBuffer )
+{
+  std::string content;
+  while ( content.size() < 5 * 1024 * 1024 ) content += "lorem ipsum dolor\n";
+  TempFile f( content );
+  const Counts c = processFileAll( f.path(), 256 * 1024 );  // many chunks
+  EXPECT_EQ( c.lines, refCount( content, '\n' ) );
+  EXPECT_EQ( c.words, refWords( content ) );
+  EXPECT_EQ( c.bytes, content.size() );
+}
+
+// ---------------------------------------------------------------------------
 // Multi-threaded chunking: a small bytesPerThread forces many threads, so line
 // boundaries fall across chunk splits. Because we count bytes (not lines),
 // splits must neither drop nor double-count targets.
@@ -359,4 +420,24 @@ TEST_F( StdinFixture, StdinWordsLargerThanReadBuffer )
   feedStdin( content );
   EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Words ),
              expected );
+}
+
+TEST_F( StdinFixture, StdinAllCounts )
+{
+  feedStdin( "alpha beta\ngamma\n\nx y z\n" );  // 4 lines, 6 words, 24 bytes
+  const Counts c = processFileAll( "" );
+  EXPECT_EQ( c.lines, 4u );
+  EXPECT_EQ( c.words, 6u );
+  EXPECT_EQ( c.bytes, 24u );
+}
+
+TEST_F( StdinFixture, StdinAllLargerThanReadBuffer )
+{
+  std::string content;
+  while ( content.size() < 2 * 1024 * 1024 ) content += "lorem ipsum\ndolor\n";
+  feedStdin( content );
+  const Counts c = processFileAll( "" );
+  EXPECT_EQ( c.lines, refCount( content, '\n' ) );
+  EXPECT_EQ( c.words, refWords( content ) );
+  EXPECT_EQ( c.bytes, content.size() );
 }
