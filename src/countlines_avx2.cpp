@@ -14,9 +14,9 @@ static inline uint64_t hsumBytes( __m256i v )
        + (uint64_t)_mm256_extract_epi64( sad, 3 );
 }
 
-size_t countLines( const char* buffer, size_t length )
+size_t countLines( const char* buffer, size_t length, char target )
 {
-  const __m256i vec_target = _mm256_set1_epi8( '\n' );
+  const __m256i vec_target = _mm256_set1_epi8( target );
 
   size_t      lines = 0;
   const char* tmp   = buffer;
@@ -24,7 +24,7 @@ size_t countLines( const char* buffer, size_t length )
 
   // Align to 32-byte boundary with a scalar prologue.
   while ( processedBytes < length && ( (uintptr_t)tmp % 32 != 0 ) ) {
-    if ( *tmp == '\n' ) ++lines;
+    if ( *tmp == target ) ++lines;
     ++tmp;
     ++processedBytes;
   }
@@ -61,7 +61,7 @@ size_t countLines( const char* buffer, size_t length )
 
   // Scalar epilogue for the remaining < 128 bytes.
   while ( processedBytes < length ) {
-    if ( *tmp == '\n' ) ++lines;
+    if ( *tmp == target ) ++lines;
     ++tmp;
     ++processedBytes;
   }

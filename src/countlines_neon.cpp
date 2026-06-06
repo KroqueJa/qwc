@@ -2,9 +2,9 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
-size_t countLines( const char* buffer, size_t length )
+size_t countLines( const char* buffer, size_t length, char target )
 {
-  const uint8x16_t vec_target = vdupq_n_u8( '\n' );
+  const uint8x16_t vec_target = vdupq_n_u8( (uint8_t)target );
 
   size_t         lines = 0;
   const uint8_t* tmp   = (const uint8_t*)buffer;
@@ -12,7 +12,7 @@ size_t countLines( const char* buffer, size_t length )
 
   // Align to 16-byte boundary with a scalar prologue.
   while ( processedBytes < length && ( (uintptr_t)tmp % 16 != 0 ) ) {
-    if ( *tmp == '\n' ) ++lines;
+    if ( *tmp == (uint8_t)target ) ++lines;
     ++tmp;
     ++processedBytes;
   }
@@ -50,7 +50,7 @@ size_t countLines( const char* buffer, size_t length )
 
   // Scalar epilogue for the remaining < 64 bytes.
   while ( processedBytes < length ) {
-    if ( *tmp == '\n' ) ++lines;
+    if ( *tmp == (uint8_t)target ) ++lines;
     ++tmp;
     ++processedBytes;
   }

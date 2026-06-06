@@ -13,14 +13,14 @@
 
 static const unsigned MAX_THREADS = std::thread::hardware_concurrency();
 
-size_t processFile( const char* filename, size_t bytesPerThread )
+size_t processFile( const char* filename, size_t bytesPerThread, char target )
 {
   if ( filename[0] == '\0' ) {
     static thread_local char buffer[128 * 4096];
     ssize_t bytesRead;
     size_t totalLines = 0;
     while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 )
-      totalLines += countLines( buffer, (size_t)bytesRead );
+      totalLines += countLines( buffer, (size_t)bytesRead, target );
     return totalLines;
   }
 
@@ -76,7 +76,7 @@ size_t processFile( const char* filename, size_t bytesPerThread )
     size_t size  = ( i == numThreads - 1 )
                    ? fileSize - i * chunkSize
                    : chunkSize;
-    threads.emplace_back( [fd, start, size, &counts, i]() {
+    threads.emplace_back( [fd, start, size, &counts, i, target]() {
       static const size_t BUF_SIZE = 1 << 20;  // 1 MiB
       std::vector<char>   buffer( BUF_SIZE );
       size_t lines     = 0;
@@ -86,7 +86,7 @@ size_t processFile( const char* filename, size_t bytesPerThread )
         size_t  want = std::min( BUF_SIZE, remaining );
         ssize_t got  = pread( fd, buffer.data(), want, pos );
         if ( got <= 0 ) break;
-        lines     += countLines( buffer.data(), (size_t)got );
+        lines     += countLines( buffer.data(), (size_t)got, target );
         remaining -= (size_t)got;
         pos       += got;
       }

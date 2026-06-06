@@ -15,24 +15,41 @@ static const unsigned MAX_THREADS = std::thread::hardware_concurrency();
 int main( int argc, char** argv )
 {
   size_t bytesPerThread = 64 * 1024 * 1024;
-  int fileStart = 1;
 
-  // Parse --bytes-per-thread flag
-  if ( argc > 2 && std::strcmp( argv[1], "--bytes-per-thread" ) == 0 ) {
-    if ( argc < 4 ) {
-      std::cerr << "Error: --bytes-per-thread requires a value and at least one file\n";
+  // Byte to count. Defaults to '\n' (line counting). --char overrides it with
+  // an arbitrary byte.
+  char target    = '\n';
+  int  fileStart = 1;
+
+  // Parse leading "--flag [value]" options; the first non-flag argument begins
+  // the file list.
+  while ( fileStart < argc && std::strncmp( argv[fileStart], "--", 2 ) == 0 ) {
+    if ( std::strcmp( argv[fileStart], "--bytes-per-thread" ) == 0 ) {
+      if ( fileStart + 1 >= argc ) {
+        std::cerr << "Error: --bytes-per-thread requires a value\n";
+        return 1;
+      }
+      bytesPerThread = std::strtoull( argv[fileStart + 1], nullptr, 10 );
+      if ( bytesPerThread == 0 ) {
+        std::cerr << "Error: --bytes-per-thread must be > 0\n";
+        return 1;
+      }
+      fileStart += 2;
+    } else if ( std::strcmp( argv[fileStart], "--char" ) == 0 ) {
+      if ( fileStart + 1 >= argc || argv[fileStart + 1][0] == '\0' ) {
+        std::cerr << "Error: --char requires a single-character value\n";
+        return 1;
+      }
+      target = argv[fileStart + 1][0];
+      fileStart += 2;
+    } else {
+      std::cerr << "Error: unknown flag " << argv[fileStart] << '\n';
       return 1;
     }
-    bytesPerThread = std::strtoull( argv[2], nullptr, 10 );
-    if ( bytesPerThread == 0 ) {
-      std::cerr << "Error: --bytes-per-thread must be > 0\n";
-      return 1;
-    }
-    fileStart = 3;
   }
 
   if ( fileStart == argc ) {
-    std::cout << processFile( "", bytesPerThread ) << std::endl;
+    std::cout << processFile( "", bytesPerThread, target ) << std::endl;
     return 0;
   }
 
@@ -46,7 +63,7 @@ int main( int argc, char** argv )
         size_t idx = nextFile.fetch_add( 1 );
         if ( idx >= (size_t)( argc - fileStart ) ) return;
         const char* filename = argv[idx + fileStart];
-        size_t lines = processFile( filename, bytesPerThread );
+        size_t lines = processFile( filename, bytesPerThread, target );
         output[idx] = { std::to_string( lines ) + " " + filename, lines };
       }
     } );
