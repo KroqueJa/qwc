@@ -1,5 +1,4 @@
 #include <arm_neon.h>
-#include <stdint.h>
 
 #include "countlines.h"
 

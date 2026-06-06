@@ -1,5 +1,4 @@
 #include <immintrin.h>
-#include <stdint.h>
 
 #include "countlines.h"
 
