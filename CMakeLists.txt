@@ -44,6 +44,11 @@ set( WCL_SUFFIX "" CACHE STRING "Suffix for the wcl binary name (e.g. la2 -> wcl
 #   -DWCL_DEFINES=ADVISE_LOOKAHEAD=2;ADVISE_WINDOW_MIB=8
 set( WCL_DEFINES "" CACHE STRING "Extra compile definitions (NAME=VALUE list) for sweeps" )
 
+# Build the GoogleTest-based unit tests (under tests/). On by default for the
+# top-level build; harmless to leave on for benchmark profiles since the test
+# target is only built by `ctest`/explicit `--target wcl_tests`.
+option( WCL_BUILD_TESTS "Build unit tests (requires the tests/googletest submodule)" ON )
+
 # ---------------------------------------------------------------------------
 # Architecture dispatch (mirrors the Makefile's uname -m logic)
 # ---------------------------------------------------------------------------
@@ -125,3 +130,11 @@ add_custom_target( bench
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         DEPENDS wcl
         USES_TERMINAL )
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+if( WCL_BUILD_TESTS )
+  enable_testing()
+  add_subdirectory( tests )
+endif()

@@ -12,3 +12,4 @@ benchmarks/bench-spec.csv
 benchmarks/benchmarks.log
 CLAUDE.md
 .venv
+thirdparty
