@@ -48,19 +48,19 @@ set( WCL_DEFINES "" CACHE STRING "Extra compile definitions (NAME=VALUE list) fo
 # Architecture dispatch (mirrors the Makefile's uname -m logic)
 # ---------------------------------------------------------------------------
 if( WCL_SCALAR )
-  set( WCL_COUNTLINES src/countlines_scalar.cpp )
+  set( WCL_COUNTLINES src/count_scalar.cpp)
   set( WCL_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64" )
-  set( WCL_COUNTLINES src/countlines_neon.cpp )
+  set( WCL_COUNTLINES src/count_neon.cpp)
   # Bare like the old Makefile: Apple clang targets the native Apple Silicon
   # baseline (NEON included) with no flag. If you ever benchmarked with an
   # explicit -mcpu=apple-mN or -mcpu=native, add it here to match.
   set( WCL_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64" )
-  set( WCL_COUNTLINES src/countlines_avx2.cpp )
+  set( WCL_COUNTLINES src/count_avx2.cpp)
   set( WCL_SIMD_FLAGS -mavx2 )
 else()
-  set( WCL_COUNTLINES src/countlines_scalar.cpp )
+  set( WCL_COUNTLINES src/count_scalar.cpp)
   set( WCL_SIMD_FLAGS )
 endif()
 message( STATUS "wcl: building ${WCL_COUNTLINES} for ${CMAKE_SYSTEM_PROCESSOR}" )
@@ -108,7 +108,7 @@ wcl_configure( wcl )
 message( STATUS "wcl: output binary -> ${CMAKE_SOURCE_DIR}/${WCL_OUTPUT_NAME}" )
 
 # Portable scalar build, on demand (old: `make wcl-scalar`).
-add_executable( wcl-scalar EXCLUDE_FROM_ALL ${WCL_COMMON_SOURCES} src/countlines_scalar.cpp )
+add_executable( wcl-scalar EXCLUDE_FROM_ALL ${WCL_COMMON_SOURCES} src/count_scalar.cpp)
 wcl_configure( wcl-scalar )
 target_compile_options( wcl PRIVATE -Wall -Wextra -Wpedantic )
 

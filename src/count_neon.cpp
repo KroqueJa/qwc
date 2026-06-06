@@ -2,7 +2,7 @@
 
 #include "countlines.h"
 
-usize countLines( const char* buffer, usize length, char target )
+usize count( const char* buffer, usize length, char target )
 {
   const uint8x16_t vec_target = vdupq_n_u8( static_cast<u8>( target ) );
 

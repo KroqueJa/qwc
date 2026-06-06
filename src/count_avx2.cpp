@@ -14,7 +14,7 @@ static u64 hsumBytes( const __m256i v )
          static_cast<u64>( _mm256_extract_epi64( sad, 3 ) );
 }
 
-usize countLines( const char* buffer, const usize length, const char target )
+usize count( const char* buffer, const usize length, const char target )
 {
   const __m256i vec_target = _mm256_set1_epi8( target );
 

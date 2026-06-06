@@ -22,7 +22,7 @@ usize processFile( const char* filename, const usize bytesPerThread, char target
     usize totalLines = 0;
     while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 )
       totalLines +=
-          countLines( buffer, static_cast<usize>( bytesRead ), target );
+          count( buffer, static_cast<usize>( bytesRead ), target );
     return totalLines;
   }
 
@@ -88,7 +88,7 @@ usize processFile( const char* filename, const usize bytesPerThread, char target
         const usize want = std::min( BUF_SIZE, remaining );
         const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
         if ( got <= 0 ) break;
-        lines += countLines( buffer.data(), static_cast<usize>( got ), target );
+        lines += count( buffer.data(), static_cast<usize>( got ), target );
         remaining -= static_cast<usize>( got );
         pos += static_cast<usize>( got );
       }
