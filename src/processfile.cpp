@@ -14,10 +14,10 @@
 
 static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 
-usize processFile( const char* filename, usize bytesPerThread, char target )
+usize processFile( const char* filename, const usize bytesPerThread, char target )
 {
   if ( filename[0] == '\0' ) {
-    static thread_local char buffer[128 * 4096];
+    thread_local char buffer[128 * 4096];
     isize bytesRead;
     usize totalLines = 0;
     while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 )
@@ -32,12 +32,12 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
     exit( 1 );
   }
 
-  struct stat st;
+  struct stat st{};
   if ( fstat( fd, &st ) < 0 ) {
     std::cerr << "Error stating file: " << filename << '\n';
     exit( 1 );
   }
-  usize fileSize = static_cast<usize>( st.st_size );
+  const usize fileSize = st.st_size;
 
   if ( fileSize == 0 ) {
     close( fd );
@@ -50,7 +50,7 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
   // radvisory::ra_count is an int, so issue the advice in <=INT_MAX chunks.
   for ( usize off = 0; off < fileSize; ) {
     usize remaining = fileSize - off;
-    struct radvisory ra;
+    radvisory ra{};
     ra.ra_offset = static_cast<i64>( off );
     ra.ra_count = static_cast<int>(
         std::min( remaining, static_cast<usize>( INT_MAX ) )
@@ -65,7 +65,7 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
   ) );
   numThreads = std::max( numThreads, 1u );
 
-  usize chunkSize = fileSize / numThreads;
+  const usize chunkSize = fileSize / numThreads;
 
   std::vector<usize> counts( numThreads, 0 );
   std::vector<std::thread> threads;
@@ -76,21 +76,21 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
   // (the offset is per-call, not shared via fd), so a single fd serves all
   // threads, and the kernel bulk-copies straight from the warmed page cache.
   for ( u32 i = 0; i < numThreads; ++i ) {
-    i64 start = static_cast<i64>( i * chunkSize );
+    usize start = i * chunkSize;
     usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
     threads.emplace_back( [fd, start, size, &counts, i, target]() {
-      static const usize BUF_SIZE = 1 << 20;  // 1 MiB
+      static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
       std::vector<char> buffer( BUF_SIZE );
       usize lines = 0;
       usize remaining = size;
-      i64 pos = start;
+      usize pos = start;
       while ( remaining > 0 ) {
-        usize want = std::min( BUF_SIZE, remaining );
-        isize got = pread( fd, buffer.data(), want, pos );
+        const usize want = std::min( BUF_SIZE, remaining );
+        const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
         if ( got <= 0 ) break;
         lines += countLines( buffer.data(), static_cast<usize>( got ), target );
         remaining -= static_cast<usize>( got );
-        pos += got;
+        pos += static_cast<usize>( got );
       }
       counts[i] = lines;
     } );
@@ -100,6 +100,6 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
   close( fd );
 
   usize total = 0;
-  for ( usize c: counts ) total += c;
+  for ( const usize c: counts ) total += c;
   return total;
 }
