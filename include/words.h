@@ -12,3 +12,12 @@
 // and carriage return. UTF-8 multibyte sequences never use these byte values,
 // so byte-wise scanning still matches wc's C-locale behaviour on UTF-8 input.
 usize words( const char* buffer, usize length, bool& inWord );
+
+// The whitespace predicate words() uses. Exposed so the chunk-stitching logic
+// in processFile can decide whether a chunk starts mid-word, sharing one
+// definition of "whitespace".
+inline bool isWordSpace( const char c )
+{
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' ||
+         c == '\r';
+}

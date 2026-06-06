@@ -1,11 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <string>
 #include <vector>
 
 #include "countlines.h"
 #include "typedef.h"
+#include "words.h"
 
 namespace wcltest {
 
@@ -29,6 +31,50 @@ inline usize refCount( const std::string& s, char target = '\n' )
 inline usize countStr( const std::string& s, char target = '\n' )
 {
   return count( s.data(), s.size(), target );
+}
+
+// Independent reference for `words`. Deliberately structured differently from
+// the implementation under test -- it tokenizes by skipping whitespace then
+// skipping a word, rather than counting whitespace->word transitions -- so a
+// shared bug is unlikely. Whitespace is the C-locale set.
+inline bool refIsSpace( unsigned char c )
+{
+  return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' ||
+         c == '\r';
+}
+
+inline usize refWords( const std::string& s )
+{
+  usize n = 0;
+  size_t i = 0;
+  while ( i < s.size() ) {
+    while ( i < s.size() && refIsSpace( static_cast<unsigned char>( s[i] ) ) )
+      ++i;
+    if ( i >= s.size() ) break;
+    ++n;  // start of a word
+    while ( i < s.size() && !refIsSpace( static_cast<unsigned char>( s[i] ) ) )
+      ++i;
+  }
+  return n;
+}
+
+// Run `words` over a whole string in one shot (fresh in-word state).
+inline usize wordsStr( const std::string& s )
+{
+  bool inWord = false;
+  return words( s.data(), s.size(), inWord );
+}
+
+// Run `words` feeding the string in fixed-size pieces, carrying in-word state
+// across them -- the way a single thread streams successive read buffers. Must
+// agree with wordsStr/refWords regardless of where the splits land.
+inline usize wordsChunked( const std::string& s, size_t chunk )
+{
+  bool inWord = false;
+  usize total = 0;
+  for ( size_t i = 0; i < s.size(); i += chunk )
+    total += words( s.data() + i, std::min( chunk, s.size() - i ), inWord );
+  return total;
 }
 
 }  // namespace wcltest

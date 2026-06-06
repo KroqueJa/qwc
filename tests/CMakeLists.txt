@@ -27,6 +27,7 @@ add_subdirectory( ${WCL_GTEST_DIR} ${CMAKE_BINARY_DIR}/thirdparty/googletest EXC
 # is exercised end-to-end via cli_test.cpp instead (gtest_main owns main()).
 add_executable( wcl_tests
   count_test.cpp
+  words_test.cpp
   processfile_test.cpp
   cli_test.cpp
   ${CMAKE_SOURCE_DIR}/src/processfile.cpp

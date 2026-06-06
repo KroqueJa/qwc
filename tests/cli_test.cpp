@@ -89,6 +89,8 @@ TEST( Cli, HelpPrintsUsageAndExitsZero )
   EXPECT_NE( r.out.find( "Usage:" ), std::string::npos );
   EXPECT_NE( r.out.find( "--recursive" ), std::string::npos );
   EXPECT_NE( r.out.find( "--char" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--chars" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--words" ), std::string::npos );
 }
 
 TEST( Cli, HelpDoesNotConsumeStdin )
@@ -110,8 +112,8 @@ TEST( Cli, NoArgsDoesNotDefaultToHelp )
 }
 
 // ---------------------------------------------------------------------------
-// Short-flag aliases: -h/-r/-c mirror their long forms (no short form for
-// --bytes-per-thread by design).
+// Short-flag aliases: -h/-r/-c/-w mirror their long forms. --char and
+// --bytes-per-thread have no short form by design.
 // ---------------------------------------------------------------------------
 TEST( CliShortFlags, DashHIsHelp )
 {
@@ -120,17 +122,30 @@ TEST( CliShortFlags, DashHIsHelp )
   EXPECT_NE( r.out.find( "Usage:" ), std::string::npos );
 }
 
-TEST( CliShortFlags, DashCIsChar )
+// -c is the byte-count flag (like `wc -c`), no longer an alias for --char.
+TEST( CliShortFlags, DashCCountsBytes )
 {
-  CmdResult r = run( piped( "a,b,c,d", "-c ," ) );
+  CmdResult r = run( piped( "hello world", "-c" ) );  // 11 bytes
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );
+  EXPECT_EQ( r.out, "11\n" );
 }
 
-TEST( CliShortFlags, DashCMissingValueErrors )
+// -c takes no value: a following argument is a file, not consumed as a value.
+TEST( CliShortFlags, DashCTakesNoValue )
 {
-  CmdResult r = run( kBin + " -c </dev/null 2>/dev/null" );
-  EXPECT_EQ( r.exitCode, 1 );
+  std::string create = "printf '%b' 'abc' > /tmp/wcl_dashc.txt && ";
+  CmdResult r = run( create + kBin + " -c /tmp/wcl_dashc.txt"
+                     "; rm -f /tmp/wcl_dashc.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "3\n" );  // 3 bytes; the path was not swallowed
+}
+
+// -w is the word-count flag (like `wc -w`).
+TEST( CliShortFlags, DashWCountsWords )
+{
+  CmdResult r = run( piped( "  the quick brown   fox\\n", "-w" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "4\n" );
 }
 
 TEST( CliShortFlags, DashRRecursesDirectory )
@@ -150,15 +165,16 @@ TEST( CliShortFlags, DashRRecursesDirectory )
 TEST( CliShortFlags, ShortFlagsCombine )
 {
   const std::string root = makeRecTree( "/tmp/wcl_short_rc" );
-  CmdResult r = run( kBin + " -c x -r " + root );
+  CmdResult r = run( kBin + " -c -r " + root );  // byte counts, recursive
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
+  // Byte sizes: bottom.txt=8, mid.txt=6, top.txt=4 -> 18 total.
   EXPECT_EQ( r.out,
-             "0 /tmp/wcl_short_rc/sub/deep/bottom.txt\n"
-             "1 /tmp/wcl_short_rc/sub/mid.txt\n"
-             "0 /tmp/wcl_short_rc/top.txt\n"
-             "1\n" );
+             "8 /tmp/wcl_short_rc/sub/deep/bottom.txt\n"
+             "6 /tmp/wcl_short_rc/sub/mid.txt\n"
+             "4 /tmp/wcl_short_rc/top.txt\n"
+             "18\n" );
 }
 
 TEST( CliShortFlags, NoShortFormForBytesPerThread )
@@ -195,6 +211,98 @@ TEST( Cli, CharFlagEmptyValueErrors )
 {
   CmdResult r = run( kBin + " --char '' </dev/null 2>/dev/null" );
   EXPECT_EQ( r.exitCode, 1 );
+}
+
+// ---------------------------------------------------------------------------
+// --chars counts bytes (like `wc -c`): the file's size, not its contents.
+// ---------------------------------------------------------------------------
+TEST( Cli, CharsFlagCountsBytesStdin )
+{
+  CmdResult r = run( piped( "abcde", "--chars" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "5\n" );
+}
+
+TEST( Cli, CharsFlagCountsBytesFile )
+{
+  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_chars.txt && ";
+  CmdResult r = run( create + kBin + " --chars /tmp/wcl_chars.txt"
+                     "; rm -f /tmp/wcl_chars.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "6\n" );  // 6 bytes
+}
+
+TEST( Cli, CharsAndCharAreDistinct )
+{
+  // --char (with a value) counts a chosen byte; --chars counts the size. The
+  // shared prefix must not make the parser confuse them.
+  CmdResult r = run( piped( "a,b,c", "--char ," ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "2\n" );  // two commas, not the 5-byte size
+}
+
+// ---------------------------------------------------------------------------
+// --words counts whitespace-separated words (like `wc -w`).
+// ---------------------------------------------------------------------------
+TEST( Cli, WordsFlagStdin )
+{
+  CmdResult r = run( piped( "  the quick brown   fox\\n", "--words" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "4\n" );
+}
+
+TEST( Cli, WordsFlagSingleFileTotalOnly )
+{
+  std::string create =
+      "printf '%b' 'one two\\nthree four five\\n' > /tmp/wcl_words.txt && ";
+  CmdResult r = run( create + kBin + " --words /tmp/wcl_words.txt"
+                     "; rm -f /tmp/wcl_words.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "5\n" );
+}
+
+TEST( Cli, WordsFlagMultipleFiles )
+{
+  std::string setup =
+      "printf '%b' 'a b\\n'   > /tmp/wcl_w_a.txt && "
+      "printf '%b' 'x y z\\n' > /tmp/wcl_w_b.txt && ";
+  std::string teardown = "; rm -f /tmp/wcl_w_a.txt /tmp/wcl_w_b.txt";
+  CmdResult r = run( setup + kBin + " --words"
+                     " /tmp/wcl_w_a.txt /tmp/wcl_w_b.txt" + teardown );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "2 /tmp/wcl_w_a.txt\n"
+             "3 /tmp/wcl_w_b.txt\n"
+             "5\n" );
+}
+
+// Word counting across a tiny bytes-per-thread, so the file is split into many
+// chunks: the per-chunk merge must not drop or double-count boundary words.
+TEST( Cli, WordsFlagChunkedMatchesTotal )
+{
+  // Ten two-letter words separated by single spaces (29 bytes); -bpt 4 forces
+  // chunk edges to fall inside words and inside the separators.
+  std::string create =
+      "printf '%b' 'aa bb cc dd ee ff gg hh ii jj' > /tmp/wcl_w_big.txt && ";
+  CmdResult r = run( create + kBin + " --words --bytes-per-thread 4"
+                     " /tmp/wcl_w_big.txt; rm -f /tmp/wcl_w_big.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "10\n" );
+}
+
+TEST( CliRecursive, ComposesWithWordsFlag )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_rec_words" );
+  // One token per line: top=2 words, mid=3, bottom=4 -> 9 total.
+  CmdResult r = run( kBin + " --words --recursive " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "4 /tmp/wcl_rec_words/sub/deep/bottom.txt\n"
+             "3 /tmp/wcl_rec_words/sub/mid.txt\n"
+             "2 /tmp/wcl_rec_words/top.txt\n"
+             "9\n" );
 }
 
 // ---------------------------------------------------------------------------

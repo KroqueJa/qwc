@@ -14,6 +14,7 @@
 #include "test_util.h"
 
 using wcltest::refCount;
+using wcltest::refWords;
 
 namespace {
 
@@ -86,6 +87,127 @@ TEST( ProcessFile, CustomTarget )
 {
   TempFile f( "a,b,c,d,e" );
   EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, ',' ), 4u );
+}
+
+// ---------------------------------------------------------------------------
+// Byte counting (CountMode::Bytes, like `wc -c`): returns the file size, taken
+// straight from fstat without scanning. The target byte is irrelevant.
+// ---------------------------------------------------------------------------
+TEST( ProcessFileBytes, CountsFileSize )
+{
+  TempFile f( "hello\nworld" );  // 11 bytes
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Bytes ),
+             11u );
+}
+
+TEST( ProcessFileBytes, EmptyFileIsZero )
+{
+  TempFile f( "" );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Bytes ),
+             0u );
+}
+
+TEST( ProcessFileBytes, TargetDoesNotAffectByteCount )
+{
+  const std::string content( 1234, 'x' );
+  TempFile f( content );
+  // Whatever the target, byte mode reports the size.
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, 'x', CountMode::Bytes ),
+             content.size() );
+}
+
+TEST( ProcessFileBytes, LargeFileSize )
+{
+  const std::string content = makePattern( 5 * 1024 * 1024, 100 );
+  TempFile f( content );
+  EXPECT_EQ( processFile( f.path(), 256 * 1024, '\n', CountMode::Bytes ),
+             content.size() );
+}
+
+// ---------------------------------------------------------------------------
+// Word counting (CountMode::Words, like `wc -w`).
+// ---------------------------------------------------------------------------
+TEST( ProcessFileWords, EmptyFile )
+{
+  TempFile f( "" );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
+             0u );
+}
+
+TEST( ProcessFileWords, OnlyWhitespace )
+{
+  TempFile f( "   \n\t \n" );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
+             0u );
+}
+
+TEST( ProcessFileWords, SmallKnownCount )
+{
+  TempFile f( "  the quick brown   fox\n" );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
+             4u );
+}
+
+// ---------------------------------------------------------------------------
+// The critical chunk-stitching test: a small bytesPerThread forces many chunks
+// so word boundaries fall across splits. The merge must neither drop a word nor
+// double-count one straddling a boundary, for every chunk size.
+// ---------------------------------------------------------------------------
+TEST( ProcessFileWords, ChunkBoundariesDoNotMiscount )
+{
+  // Long non-whitespace runs interspersed with single spaces, so many words
+  // straddle chunk edges.
+  std::string content;
+  for ( int i = 0; i < 4000; ++i ) content += "wordword ";
+  content += "tail";  // no trailing whitespace
+  const size_t expected = refWords( content );
+  TempFile f( content );
+
+  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
+                       size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
+                       size_t( 64 * 1024 * 1024 ) } ) {
+    EXPECT_EQ( processFile( f.path(), bpt, '\n', CountMode::Words ), expected )
+        << "bytesPerThread=" << bpt;
+  }
+}
+
+TEST( ProcessFileWords, BoundaryInsideWhitespaceRun )
+{
+  // A long whitespace run between words: chunk edges may land inside it, which
+  // must not invent or drop a word.
+  std::string content = "alpha";
+  content += std::string( 500, ' ' );
+  content += "beta";
+  const size_t expected = refWords( content );  // 2
+  TempFile f( content );
+  for ( size_t bpt : { size_t( 1 ), size_t( 8 ), size_t( 64 ), size_t( 256 ) } )
+    EXPECT_EQ( processFile( f.path(), bpt, '\n', CountMode::Words ), expected )
+        << "bytesPerThread=" << bpt;
+}
+
+TEST( ProcessFileWords, LargerThanReadBuffer )
+{
+  // Exceeds the 1 MiB per-thread read buffer, exercising the streaming loop and
+  // the carry across read buffers within a single chunk.
+  std::string content;
+  while ( content.size() < 5 * 1024 * 1024 ) content += "lorem ipsum dolor ";
+  const size_t expected = refWords( content );
+  TempFile f( content );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
+             expected );
+  EXPECT_EQ( processFile( f.path(), 256 * 1024, '\n', CountMode::Words ),
+             expected );  // many chunks
+}
+
+TEST( ProcessFileWords, Deterministic )
+{
+  std::string content;
+  for ( int i = 0; i < 1000; ++i ) content += "a bb ccc  dddd\n";
+  const size_t expected = refWords( content );
+  TempFile f( content );
+  for ( int i = 0; i < 8; ++i )
+    EXPECT_EQ( processFile( f.path(), 4096, '\n', CountMode::Words ), expected )
+        << "run " << i;
 }
 
 // ---------------------------------------------------------------------------
@@ -213,4 +335,28 @@ TEST_F( StdinFixture, StdinCustomTarget )
 {
   feedStdin( "a;b;c;" );
   EXPECT_EQ( processFile( "", 64 * 1024 * 1024, ';' ), 3u );
+}
+
+TEST_F( StdinFixture, StdinByteCount )
+{
+  feedStdin( "hello world" );  // 11 bytes
+  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Bytes ), 11u );
+}
+
+TEST_F( StdinFixture, StdinWordCount )
+{
+  feedStdin( "  the quick brown   fox\n" );
+  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Words ), 4u );
+}
+
+TEST_F( StdinFixture, StdinWordsLargerThanReadBuffer )
+{
+  // The stdin path reads in 128*4096 = 512 KiB chunks; exceed that so the
+  // in-word state must carry across reads.
+  std::string content;
+  while ( content.size() < 2 * 1024 * 1024 ) content += "lorem ipsum dolor ";
+  const size_t expected = refWords( content );
+  feedStdin( content );
+  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Words ),
+             expected );
 }

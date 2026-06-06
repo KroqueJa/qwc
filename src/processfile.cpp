@@ -77,26 +77,6 @@ usize processFile(
     off += static_cast<usize>( ra.ra_count );
   }
 
-  // Word counting carries the in-a-word state across buffer boundaries, so for
-  // now a single thread streams the whole file in order. (Chunked, vectorised
-  // word counting is a later step.)
-  if ( mode == CountMode::Words ) {
-    static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
-    std::vector<char> buffer( BUF_SIZE );
-    usize total = 0;
-    bool inWord = false;
-    usize pos = 0;
-    while ( pos < fileSize ) {
-      const usize want = std::min( BUF_SIZE, fileSize - pos );
-      const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
-      if ( got <= 0 ) break;
-      total += words( buffer.data(), static_cast<usize>( got ), inWord );
-      pos += static_cast<usize>( got );
-    }
-    close( fd );
-    return total;
-  }
-
   u32 numThreads = static_cast<u32>( std::min(
       static_cast<usize>( MAX_THREADS ),
       ( fileSize + bytesPerThread - 1 ) / bytesPerThread
@@ -105,7 +85,18 @@ usize processFile(
 
   const usize chunkSize = fileSize / numThreads;
 
-  std::vector<usize> counts( numThreads, 0 );
+  // Per-chunk tally. `count` is what the chunk found scanning in isolation (as
+  // if preceded by whitespace). For word counting we also record the edge
+  // states so neighbouring chunks can be stitched: `startsInWord` (first byte
+  // is non-whitespace) and `endsInWord` (last byte is non-whitespace -- the
+  // carry handed to the next chunk). Both are unused for line/byte counting.
+  struct ChunkResult
+  {
+    usize count = 0;
+    bool startsInWord = false;
+    bool endsInWord = false;
+  };
+  std::vector<ChunkResult> results( numThreads );
   std::vector<std::thread> threads;
   threads.reserve( numThreads );
 
@@ -116,28 +107,56 @@ usize processFile(
   for ( u32 i = 0; i < numThreads; ++i ) {
     usize start = i * chunkSize;
     usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
-    threads.emplace_back( [fd, start, size, &counts, i, target]() {
+    threads.emplace_back( [fd, start, size, &results, i, target, mode]() {
       static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
       std::vector<char> buffer( BUF_SIZE );
-      usize lines = 0;
+      ChunkResult r;
+      bool inWord = false;  // carried across this chunk's own buffers
+      bool first = true;
       usize remaining = size;
       usize pos = start;
       while ( remaining > 0 ) {
         const usize want = std::min( BUF_SIZE, remaining );
         const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
         if ( got <= 0 ) break;
-        lines += count( buffer.data(), static_cast<usize>( got ), target );
-        remaining -= static_cast<usize>( got );
-        pos += static_cast<usize>( got );
+        const usize g = static_cast<usize>( got );
+        if ( mode == CountMode::Words ) {
+          if ( first ) r.startsInWord = !isWordSpace( buffer[0] );
+          r.count += words( buffer.data(), g, inWord );
+        } else {
+          r.count += count( buffer.data(), g, target );
+        }
+        first = false;
+        remaining -= g;
+        pos += g;
       }
-      counts[i] = lines;
+      if ( mode == CountMode::Words ) r.endsInWord = inWord;
+      results[i] = r;
     } );
   }
 
   for ( auto& t: threads ) t.join();
   close( fd );
 
+  if ( mode == CountMode::Words ) {
+    // Stitch the chunks back together in order. Each chunk counted as if a
+    // whitespace preceded it, so a word straddling a boundary is counted twice:
+    // once as the tail of the left chunk, once as a fresh word starting the
+    // right chunk. `carry` tracks whether the previous chunk ended mid-word; if
+    // it did and this chunk also starts mid-word, the two are halves of one
+    // word -- drop the duplicate. (Chunks are non-empty here, since numThreads
+    // never exceeds fileSize, so the carry never has to skip past a chunk.)
+    usize total = 0;
+    bool carry = false;
+    for ( const ChunkResult& r: results ) {
+      total += r.count;
+      if ( carry && r.startsInWord ) --total;
+      carry = r.endsInWord;
+    }
+    return total;
+  }
+
   usize total = 0;
-  for ( const usize c: counts ) total += c;
+  for ( const ChunkResult& r: results ) total += r.count;
   return total;
 }
