@@ -1,5 +1,12 @@
 wcl*
 .idea
+
+# CMake build artifacts
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
 benchmarks/test-data
 benchmarks/bench-spec.csv
 benchmarks/benchmarks.log

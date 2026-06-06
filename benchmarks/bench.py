@@ -8,7 +8,7 @@ Results are appended to benchmarks/benchmarks.log (pipe-separated).
 
 Usage:
     python3 benchmarks/bench.py          # from the repo root
-    make bench                           # equivalent shortcut
+    cmake --build build --target bench   # equivalent shortcut
 """
 
 import datetime
@@ -42,7 +42,7 @@ def find_test_files() -> list[str]:
     if not files:
         sys.exit(
             f"No files found in {TEST_DATA_DIR}\n"
-            "Run 'make gen-test-data' first."
+            "Run 'cmake --build build --target gen-test-data' first."
         )
     return [os.path.abspath(f) for f in files]
 
@@ -185,7 +185,7 @@ def main() -> int:
     if not os.path.isfile(WCL_BIN):
         sys.exit(
             f"wcl binary not found at {WCL_BIN}\n"
-            "Run 'make' first."
+            "Run 'cmake -S . -B build && cmake --build build' first."
         )
 
     files = find_test_files()
