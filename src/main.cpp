@@ -61,7 +61,7 @@ int main( int argc, char** argv )
     t = std::thread( [&]() {
       while ( true ) {
         usize idx = nextFile.fetch_add( 1 );
-        if ( idx >= (usize)( argc - fileStart ) ) return;
+        if ( idx >= static_cast<usize>( argc - fileStart ) ) return;
         const char* filename = argv[idx + fileStart];
         usize lines = processFile( filename, bytesPerThread, target );
         output[idx] = { std::to_string( lines ) + " " + filename, lines };

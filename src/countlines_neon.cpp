@@ -4,15 +4,15 @@
 
 usize countLines( const char* buffer, usize length, char target )
 {
-  const uint8x16_t vec_target = vdupq_n_u8( (u8)target );
+  const uint8x16_t vec_target = vdupq_n_u8( static_cast<u8>( target ) );
 
   usize     lines = 0;
-  const u8* tmp   = (const u8*)buffer;
+  const u8* tmp   = reinterpret_cast<const u8*>( buffer );
   usize     processedBytes = 0;
 
   // Align to 16-byte boundary with a scalar prologue.
-  while ( processedBytes < length && ( (usize)tmp % 16 != 0 ) ) {
-    if ( *tmp == (u8)target ) ++lines;
+  while ( processedBytes < length && ( reinterpret_cast<usize>( tmp ) % 16 != 0 ) ) {
+    if ( *tmp == static_cast<u8>( target ) ) ++lines;
     ++tmp;
     ++processedBytes;
   }
@@ -50,7 +50,7 @@ usize countLines( const char* buffer, usize length, char target )
 
   // Scalar epilogue for the remaining < 64 bytes.
   while ( processedBytes < length ) {
-    if ( *tmp == (u8)target ) ++lines;
+    if ( *tmp == static_cast<u8>( target ) ) ++lines;
     ++tmp;
     ++processedBytes;
   }
