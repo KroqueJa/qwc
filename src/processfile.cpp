@@ -26,7 +26,7 @@ usize processFile(
     usize total = 0;
     bool inWord = false;  // carried across reads for word counting
     while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
-      const usize got = static_cast<usize>( bytesRead );
+      const auto got = static_cast<usize>( bytesRead );
       if ( mode == CountMode::Bytes )
         total += got;
       else if ( mode == CountMode::Words )
@@ -87,7 +87,7 @@ usize processFile(
 
   // Per-chunk tally. `count` is what the chunk found scanning in isolation (as
   // if preceded by whitespace). For word counting we also record the edge
-  // states so neighbouring chunks can be stitched: `startsInWord` (first byte
+  // states so neighboring chunks can be stitched: `startsInWord` (first byte
   // is non-whitespace) and `endsInWord` (last byte is non-whitespace -- the
   // carry handed to the next chunk). Both are unused for line/byte counting.
   struct ChunkResult
@@ -119,7 +119,7 @@ usize processFile(
         const usize want = std::min( BUF_SIZE, remaining );
         const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
         if ( got <= 0 ) break;
-        const usize g = static_cast<usize>( got );
+        const auto g = static_cast<usize>( got );
         if ( mode == CountMode::Words ) {
           if ( first ) r.startsInWord = !isWordSpace( buffer[0] );
           r.count += words( buffer.data(), g, inWord );
@@ -148,10 +148,10 @@ usize processFile(
     // never exceeds fileSize, so the carry never has to skip past a chunk.)
     usize total = 0;
     bool carry = false;
-    for ( const ChunkResult& r: results ) {
-      total += r.count;
-      if ( carry && r.startsInWord ) --total;
-      carry = r.endsInWord;
+    for ( const auto& [count, startsInWord, endsInWord]: results ) {
+      total += count;
+      if ( carry && startsInWord ) --total;
+      carry = endsInWord;
     }
     return total;
   }
