@@ -1,10 +1,10 @@
 #pragma once
-#include <string>
-
 #include "typedef.h"
 
+// One file's tally (lines, words, or bytes, depending on the count mode). The
+// file's name is not stored here -- it lives in Options::files at the same
+// index, so printResults pairs them up when formatting.
 struct Result
 {
-  std::string str;
-  usize lineCount;
+  usize count;
 };

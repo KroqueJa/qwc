@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <iomanip>
 #include <iostream>
 #include <numeric>
 #include <string>
@@ -61,9 +62,9 @@ void printHelp()
       "  -h, --help            Show this message and exit.\n"
       "\n"
       "Output:\n"
-      "  Counting a single file (or piped input) prints just the number.\n"
-      "  Counting several files prints one \"<count> <name>\" line per file,\n"
-      "  followed by the grand total on its own line.\n"
+      "  wcl matches wc's layout so it can stand in for it: each file prints a\n"
+      "  right-aligned count followed by the file name, piped input prints just\n"
+      "  the count, and counting several files adds a final \"total\" line.\n"
       "\n"
       "Examples:\n"
       "  wcl notes.txt                 lines in notes.txt\n"
@@ -192,13 +193,22 @@ bool collectFiles( Options& opt )
   return true;
 }
 
+void printCountLine( const usize count, const char* name )
+{
+  // " %7ju %s\n" -- a leading space, the count right-justified to a minimum
+  // field of 7 (it grows for larger counts, exactly as wc does), then the name.
+  std::cout << ' ' << std::setw( 7 ) << count;
+  if ( name ) std::cout << ' ' << name;
+  std::cout << '\n';
+}
+
 void printResults( const Options& opt, const std::vector<Result>& output )
 {
   const usize numFiles = output.size();
 
   // The grand total always covers every file, independent of sorting or --top.
   usize total = 0;
-  for ( const Result& result: output ) total += result.lineCount;
+  for ( const Result& result: output ) total += result.count;
 
   // Decide the display order via an index permutation, leaving `output` (and the
   // total) untouched. Default order is the order files were collected in.
@@ -223,8 +233,8 @@ void printResults( const Options& opt, const std::vector<Result>& output )
         order.begin(), order.end(),
         [&]( const usize a, const usize b ) {
           if ( opt.sortMode == SortMode::Count &&
-               output[a].lineCount != output[b].lineCount )
-            return output[a].lineCount < output[b].lineCount;
+               output[a].count != output[b].count )
+            return output[a].count < output[b].count;
           if ( opt.sortMode == SortMode::Size && sizes[a] != sizes[b] )
             return sizes[a] < sizes[b];
           return opt.files[a] < opt.files[b];
@@ -239,9 +249,16 @@ void printResults( const Options& opt, const std::vector<Result>& output )
   // --reverse flips the final display order (e.g. biggest counts first).
   if ( opt.reverse ) std::reverse( order.begin(), order.end() );
 
-  // Per-file lines are shown whenever more than one file was counted, even if
-  // --top narrows the listing to one of them.
+  // wc prints one line per file -- including for a single file (with its name).
+  for ( const usize i: order )
+    printCountLine( output[i].count, opt.files[i].c_str() );
+
+  // The "<total> total" line appears only when more than one file was counted,
+  // matching wc. (--top may narrow the listing above, but the total still
+  // covers every file.) A recursive walk that matched no files has nothing to
+  // name, so it just prints a bare zero rather than nothing at all.
   if ( numFiles > 1 )
-    for ( const usize i: order ) std::cout << output[i].str << '\n';
-  std::cout << total << std::endl;
+    printCountLine( total, "total" );
+  else if ( numFiles == 0 )
+    printCountLine( total, nullptr );
 }

@@ -39,6 +39,13 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt );
 // false after reporting an unreadable directory.
 bool collectFiles( Options& opt );
 
-// Render counted results: per-file "<count> <name>" lines (only when more than
-// one file was counted), ordered per `opt`, followed by the grand total.
+// Print one BSD-wc-style count line: a leading space, `count` right-justified
+// to a minimum width of 7, and -- when `name` is non-null -- a space and the
+// name. Matches `wc`'s `" %7ju %s\n"` (and `" %7ju\n"` for stdin) so wcl drops
+// in for wc.
+void printCountLine( usize count, const char* name );
+
+// Render counted results in wc's layout: one "<count> <name>" line per file
+// (ordered per `opt`), plus a trailing "<total> total" line when more than one
+// file was counted. A single file prints just its own line, like wc.
 void printResults( const Options& opt, const std::vector<Result>& output );

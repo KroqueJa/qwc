@@ -90,13 +90,13 @@ usize processFile(
   // states so neighboring chunks can be stitched: `startsInWord` (first byte
   // is non-whitespace) and `endsInWord` (last byte is non-whitespace -- the
   // carry handed to the next chunk). Both are unused for line/byte counting.
-  struct ChunkResult
+  struct ChunkTally
   {
     usize count = 0;
     bool startsInWord = false;
     bool endsInWord = false;
   };
-  std::vector<ChunkResult> results( numThreads );
+  std::vector<ChunkTally> results( numThreads );
   std::vector<std::thread> threads;
   threads.reserve( numThreads );
 
@@ -110,7 +110,7 @@ usize processFile(
     threads.emplace_back( [fd, start, size, &results, i, target, mode]() {
       static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
       std::vector<char> buffer( BUF_SIZE );
-      ChunkResult r;
+      ChunkTally r;
       bool inWord = false;  // carried across this chunk's own buffers
       bool first = true;
       usize remaining = size;
@@ -157,6 +157,6 @@ usize processFile(
   }
 
   usize total = 0;
-  for ( const ChunkResult& r: results ) total += r.count;
+  for ( const ChunkTally& r: results ) total += r.count;
   return total;
 }

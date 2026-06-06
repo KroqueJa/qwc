@@ -3,8 +3,11 @@
 #include <sys/wait.h>
 
 #include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
 #include <string>
 
 // WCL_BINARY is defined by CMake as the absolute path to the built `wcl`
@@ -60,6 +63,18 @@ std::string makeRecTree( const std::string& root )
   return root;
 }
 
+// Format one expected output line the way wc/wcl do: " %7ju %s\n" with the name,
+// or " %7ju\n" without one. Lets the structural tests below assert exact bytes
+// without hand-counting padding.
+std::string line( uintmax_t count, const std::string& name = "" )
+{
+  std::ostringstream os;
+  os << ' ' << std::setw( 7 ) << count;
+  if ( !name.empty() ) os << ' ' << name;
+  os << '\n';
+  return os.str();
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -69,14 +84,14 @@ TEST( Cli, StdinDefaultNewline )
 {
   CmdResult r = run( piped( "a\\nb\\nc\\n", "" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );
+  EXPECT_EQ( r.out, line( 3 ) );
 }
 
 TEST( Cli, StdinEmpty )
 {
   CmdResult r = run( piped( "", "" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "0\n" );
+  EXPECT_EQ( r.out, line( 0 ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -107,7 +122,7 @@ TEST( Cli, NoArgsDoesNotDefaultToHelp )
   // Unlike many tools, bare `wcl` must read stdin (wc-compatible), not help.
   CmdResult r = run( piped( "a\\nb\\n", "" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "2\n" );
+  EXPECT_EQ( r.out, line( 2 ) );
   EXPECT_EQ( r.out.find( "Usage:" ), std::string::npos );
 }
 
@@ -127,7 +142,7 @@ TEST( CliShortFlags, DashCCountsBytes )
 {
   CmdResult r = run( piped( "hello world", "-c" ) );  // 11 bytes
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "11\n" );
+  EXPECT_EQ( r.out, line( 11 ) );
 }
 
 // -c takes no value: a following argument is a file, not consumed as a value.
@@ -137,7 +152,8 @@ TEST( CliShortFlags, DashCTakesNoValue )
   CmdResult r = run( create + kBin + " -c /tmp/wcl_dashc.txt"
                      "; rm -f /tmp/wcl_dashc.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );  // 3 bytes; the path was not swallowed
+  // 3 bytes; the path was not swallowed (and a single file still names itself).
+  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_dashc.txt" ) );
 }
 
 // -w is the word-count flag (like `wc -w`).
@@ -145,7 +161,7 @@ TEST( CliShortFlags, DashWCountsWords )
 {
   CmdResult r = run( piped( "  the quick brown   fox\\n", "-w" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "4\n" );
+  EXPECT_EQ( r.out, line( 4 ) );
 }
 
 TEST( CliShortFlags, DashRRecursesDirectory )
@@ -156,10 +172,10 @@ TEST( CliShortFlags, DashRRecursesDirectory )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_short_r/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_short_r/sub/mid.txt\n"
-             "2 /tmp/wcl_short_r/top.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_short_r/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_short_r/sub/mid.txt" ) +
+             line( 2, "/tmp/wcl_short_r/top.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliShortFlags, ShortFlagsCombine )
@@ -171,10 +187,10 @@ TEST( CliShortFlags, ShortFlagsCombine )
   EXPECT_EQ( r.exitCode, 0 );
   // Byte sizes: bottom.txt=8, mid.txt=6, top.txt=4 -> 18 total.
   EXPECT_EQ( r.out,
-             "8 /tmp/wcl_short_rc/sub/deep/bottom.txt\n"
-             "6 /tmp/wcl_short_rc/sub/mid.txt\n"
-             "4 /tmp/wcl_short_rc/top.txt\n"
-             "18\n" );
+             line( 8, "/tmp/wcl_short_rc/sub/deep/bottom.txt" ) +
+             line( 6, "/tmp/wcl_short_rc/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_short_rc/top.txt" ) +
+             line( 18, "total" ) );
 }
 
 TEST( CliShortFlags, NoShortFormForBytesPerThread )
@@ -191,14 +207,14 @@ TEST( Cli, CharFlagSelectsTarget )
 {
   CmdResult r = run( piped( "a,b,c,d", "--char ," ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );
+  EXPECT_EQ( r.out, line( 3 ) );
 }
 
 TEST( Cli, CharFlagUsesFirstCharOnly )
 {
   CmdResult r = run( piped( "axbxc", "--char xyz" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "2\n" );
+  EXPECT_EQ( r.out, line( 2 ) );
 }
 
 TEST( Cli, CharFlagMissingValueErrors )
@@ -220,7 +236,7 @@ TEST( Cli, CharsFlagCountsBytesStdin )
 {
   CmdResult r = run( piped( "abcde", "--chars" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "5\n" );
+  EXPECT_EQ( r.out, line( 5 ) );
 }
 
 TEST( Cli, CharsFlagCountsBytesFile )
@@ -229,7 +245,7 @@ TEST( Cli, CharsFlagCountsBytesFile )
   CmdResult r = run( create + kBin + " --chars /tmp/wcl_chars.txt"
                      "; rm -f /tmp/wcl_chars.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "6\n" );  // 6 bytes
+  EXPECT_EQ( r.out, line( 6, "/tmp/wcl_chars.txt" ) );  // 6 bytes
 }
 
 TEST( Cli, CharsAndCharAreDistinct )
@@ -238,7 +254,7 @@ TEST( Cli, CharsAndCharAreDistinct )
   // shared prefix must not make the parser confuse them.
   CmdResult r = run( piped( "a,b,c", "--char ," ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "2\n" );  // two commas, not the 5-byte size
+  EXPECT_EQ( r.out, line( 2 ) );  // two commas, not the 5-byte size
 }
 
 // ---------------------------------------------------------------------------
@@ -248,17 +264,17 @@ TEST( Cli, WordsFlagStdin )
 {
   CmdResult r = run( piped( "  the quick brown   fox\\n", "--words" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "4\n" );
+  EXPECT_EQ( r.out, line( 4 ) );
 }
 
-TEST( Cli, WordsFlagSingleFileTotalOnly )
+TEST( Cli, WordsFlagSingleFile )
 {
   std::string create =
       "printf '%b' 'one two\\nthree four five\\n' > /tmp/wcl_words.txt && ";
   CmdResult r = run( create + kBin + " --words /tmp/wcl_words.txt"
                      "; rm -f /tmp/wcl_words.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "5\n" );
+  EXPECT_EQ( r.out, line( 5, "/tmp/wcl_words.txt" ) );
 }
 
 TEST( Cli, WordsFlagMultipleFiles )
@@ -271,9 +287,9 @@ TEST( Cli, WordsFlagMultipleFiles )
                      " /tmp/wcl_w_a.txt /tmp/wcl_w_b.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_w_a.txt\n"
-             "3 /tmp/wcl_w_b.txt\n"
-             "5\n" );
+             line( 2, "/tmp/wcl_w_a.txt" ) +
+             line( 3, "/tmp/wcl_w_b.txt" ) +
+             line( 5, "total" ) );
 }
 
 // Word counting across a tiny bytes-per-thread, so the file is split into many
@@ -287,7 +303,7 @@ TEST( Cli, WordsFlagChunkedMatchesTotal )
   CmdResult r = run( create + kBin + " --words --bytes-per-thread 4"
                      " /tmp/wcl_w_big.txt; rm -f /tmp/wcl_w_big.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "10\n" );
+  EXPECT_EQ( r.out, line( 10, "/tmp/wcl_w_big.txt" ) );
 }
 
 TEST( CliRecursive, ComposesWithWordsFlag )
@@ -299,10 +315,10 @@ TEST( CliRecursive, ComposesWithWordsFlag )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_rec_words/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_rec_words/sub/mid.txt\n"
-             "2 /tmp/wcl_rec_words/top.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_rec_words/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_rec_words/sub/mid.txt" ) +
+             line( 2, "/tmp/wcl_rec_words/top.txt" ) +
+             line( 9, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +328,7 @@ TEST( Cli, BytesPerThreadAcceptedSmall )
 {
   CmdResult r = run( piped( "a\\nb\\nc\\nd\\n", "--bytes-per-thread 2" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "4\n" );
+  EXPECT_EQ( r.out, line( 4 ) );
 }
 
 TEST( Cli, BytesPerThreadZeroErrors )
@@ -343,18 +359,19 @@ TEST( Cli, CombinedFlags )
 {
   CmdResult r = run( piped( "a;b;c;d;e", "--bytes-per-thread 3 --char ';'" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "4\n" );
+  EXPECT_EQ( r.out, line( 4 ) );
 }
 
 // ---------------------------------------------------------------------------
-// Single file argument: prints only the grand total (no per-file line).
+// Single file argument: one line with the count and the file name, no total --
+// exactly like `wc`.
 // ---------------------------------------------------------------------------
-TEST( Cli, SingleFileTotalOnly )
+TEST( Cli, SingleFileCountAndName )
 {
   std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_cli_one.txt && ";
   CmdResult r = run( create + kBin + " /tmp/wcl_cli_one.txt; rm -f /tmp/wcl_cli_one.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );
+  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_cli_one.txt" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -371,9 +388,9 @@ TEST( Cli, MultipleFilesPerFileAndTotal )
                      " /tmp/wcl_cli_a.txt /tmp/wcl_cli_b.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_cli_a.txt\n"
-             "3 /tmp/wcl_cli_b.txt\n"
-             "5\n" );
+             line( 2, "/tmp/wcl_cli_a.txt" ) +
+             line( 3, "/tmp/wcl_cli_b.txt" ) +
+             line( 5, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -388,10 +405,10 @@ TEST( CliRecursive, ExpandsDirectorySortedWithTotal )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_rec_cli/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_rec_cli/sub/mid.txt\n"
-             "2 /tmp/wcl_rec_cli/top.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_rec_cli/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_rec_cli/sub/mid.txt" ) +
+             line( 2, "/tmp/wcl_rec_cli/top.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliRecursive, ComposesWithCharFlag )
@@ -402,10 +419,10 @@ TEST( CliRecursive, ComposesWithCharFlag )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "0 /tmp/wcl_rec_cli2/sub/deep/bottom.txt\n"
-             "1 /tmp/wcl_rec_cli2/sub/mid.txt\n"
-             "0 /tmp/wcl_rec_cli2/top.txt\n"
-             "1\n" );
+             line( 0, "/tmp/wcl_rec_cli2/sub/deep/bottom.txt" ) +
+             line( 1, "/tmp/wcl_rec_cli2/sub/mid.txt" ) +
+             line( 0, "/tmp/wcl_rec_cli2/top.txt" ) +
+             line( 1, "total" ) );
 }
 
 TEST( CliRecursive, EmptyDirectoryPrintsZero )
@@ -416,7 +433,7 @@ TEST( CliRecursive, EmptyDirectoryPrintsZero )
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "0\n" );
+  EXPECT_EQ( r.out, line( 0 ) );  // no files matched -> bare padded zero
 }
 
 TEST( CliRecursive, PreservesTopLevelOrderForMixedArgs )
@@ -428,10 +445,10 @@ TEST( CliRecursive, PreservesTopLevelOrderForMixedArgs )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_rec_cli3/top.txt\n"
-             "4 /tmp/wcl_rec_cli3/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_rec_cli3/sub/mid.txt\n"
-             "9\n" );
+             line( 2, "/tmp/wcl_rec_cli3/top.txt" ) +
+             line( 4, "/tmp/wcl_rec_cli3/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_rec_cli3/sub/mid.txt" ) +
+             line( 9, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -463,11 +480,11 @@ TEST( CliSortByCount, OrdersAscendingAcrossDirectories )
   EXPECT_EQ( r.exitCode, 0 );
   // Counts: zzz_one=1, top=2, mid=3, bottom=4. Largest last, above total.
   EXPECT_EQ( r.out,
-             "1 /tmp/wcl_sort_cnt/zzz_one.txt\n"
-             "2 /tmp/wcl_sort_cnt/top.txt\n"
-             "3 /tmp/wcl_sort_cnt/sub/mid.txt\n"
-             "4 /tmp/wcl_sort_cnt/sub/deep/bottom.txt\n"
-             "10\n" );
+             line( 1, "/tmp/wcl_sort_cnt/zzz_one.txt" ) +
+             line( 2, "/tmp/wcl_sort_cnt/top.txt" ) +
+             line( 3, "/tmp/wcl_sort_cnt/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_sort_cnt/sub/deep/bottom.txt" ) +
+             line( 10, "total" ) );
 }
 
 TEST( CliSortByCount, WorksWithoutRecursive )
@@ -481,9 +498,9 @@ TEST( CliSortByCount, WorksWithoutRecursive )
                      " /tmp/wcl_sc_big.txt /tmp/wcl_sc_small.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_sc_small.txt\n"
-             "4 /tmp/wcl_sc_big.txt\n"
-             "6\n" );
+             line( 2, "/tmp/wcl_sc_small.txt" ) +
+             line( 4, "/tmp/wcl_sc_big.txt" ) +
+             line( 6, "total" ) );
 }
 
 TEST( CliSortByCount, EqualCountsTieBreakAlphabetically )
@@ -501,29 +518,29 @@ TEST( CliSortByCount, EqualCountsTieBreakAlphabetically )
                      " /tmp/wcl_sc_alpha.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_sc_alpha.txt\n"
-             "2 /tmp/wcl_sc_bravo.txt\n"
-             "2 /tmp/wcl_sc_charlie.txt\n"
-             "6\n" );
+             line( 2, "/tmp/wcl_sc_alpha.txt" ) +
+             line( 2, "/tmp/wcl_sc_bravo.txt" ) +
+             line( 2, "/tmp/wcl_sc_charlie.txt" ) +
+             line( 6, "total" ) );
 }
 
-TEST( CliSortByCount, SingleFileStillTotalOnly )
+TEST( CliSortByCount, SingleFileNoTotalLine )
 {
   std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_sc_one.txt && ";
   CmdResult r = run( create + kBin + " --sort-by-count /tmp/wcl_sc_one.txt"
                      "; rm -f /tmp/wcl_sc_one.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );
+  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_sc_one.txt" ) );
 }
 
-TEST( CliRecursive, SingleFileArgStillTotalOnly )
+TEST( CliRecursive, SingleFileArgNoTotalLine )
 {
   // --recursive with a non-directory arg behaves like a normal single file.
   std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_rec_one.txt && ";
   CmdResult r = run( create + kBin + " --recursive /tmp/wcl_rec_one.txt"
                      "; rm -f /tmp/wcl_rec_one.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, "3\n" );
+  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_rec_one.txt" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -541,10 +558,10 @@ TEST( CliSort, ByNameAlphabetical )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_sort_name/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_sort_name/sub/mid.txt\n"
-             "2 /tmp/wcl_sort_name/top.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_sort_name/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_sort_name/sub/mid.txt" ) +
+             line( 2, "/tmp/wcl_sort_name/top.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliSort, BySizeAscending )
@@ -555,10 +572,10 @@ TEST( CliSort, BySizeAscending )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_sort_size/top.txt\n"
-             "3 /tmp/wcl_sort_size/sub/mid.txt\n"
-             "4 /tmp/wcl_sort_size/sub/deep/bottom.txt\n"
-             "9\n" );
+             line( 2, "/tmp/wcl_sort_size/top.txt" ) +
+             line( 3, "/tmp/wcl_sort_size/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_sort_size/sub/deep/bottom.txt" ) +
+             line( 9, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -572,10 +589,10 @@ TEST( CliReverse, FlipsCountOrderBiggestFirst )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_rev_count/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_rev_count/sub/mid.txt\n"
-             "2 /tmp/wcl_rev_count/top.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_rev_count/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_rev_count/sub/mid.txt" ) +
+             line( 2, "/tmp/wcl_rev_count/top.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliReverse, AloneFlipsDefaultAlphabetical )
@@ -586,10 +603,10 @@ TEST( CliReverse, AloneFlipsDefaultAlphabetical )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_rev_alpha/top.txt\n"
-             "3 /tmp/wcl_rev_alpha/sub/mid.txt\n"
-             "4 /tmp/wcl_rev_alpha/sub/deep/bottom.txt\n"
-             "9\n" );
+             line( 2, "/tmp/wcl_rev_alpha/top.txt" ) +
+             line( 3, "/tmp/wcl_rev_alpha/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_rev_alpha/sub/deep/bottom.txt" ) +
+             line( 9, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -603,9 +620,9 @@ TEST( CliTop, KeepsLargestByCountAscending )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "3 /tmp/wcl_top_count/sub/mid.txt\n"
-             "4 /tmp/wcl_top_count/sub/deep/bottom.txt\n"
-             "9\n" );  // total covers all three files
+             line( 3, "/tmp/wcl_top_count/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_top_count/sub/deep/bottom.txt" ) +
+             line( 9, "total" ) );  // total covers all three files
 }
 
 TEST( CliTop, WithReverseBiggestFirst )
@@ -616,9 +633,9 @@ TEST( CliTop, WithReverseBiggestFirst )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_top_rev/sub/deep/bottom.txt\n"
-             "3 /tmp/wcl_top_rev/sub/mid.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_top_rev/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/wcl_top_rev/sub/mid.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliTop, OneFileTotalStillCoversAll )
@@ -629,8 +646,8 @@ TEST( CliTop, OneFileTotalStillCoversAll )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "4 /tmp/wcl_top_one/sub/deep/bottom.txt\n"
-             "9\n" );
+             line( 4, "/tmp/wcl_top_one/sub/deep/bottom.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliTop, LargerThanCountShowsAll )
@@ -641,10 +658,10 @@ TEST( CliTop, LargerThanCountShowsAll )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "2 /tmp/wcl_top_all/top.txt\n"
-             "3 /tmp/wcl_top_all/sub/mid.txt\n"
-             "4 /tmp/wcl_top_all/sub/deep/bottom.txt\n"
-             "9\n" );
+             line( 2, "/tmp/wcl_top_all/top.txt" ) +
+             line( 3, "/tmp/wcl_top_all/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_top_all/sub/deep/bottom.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliTop, ComposesWithSortBySize )
@@ -656,9 +673,9 @@ TEST( CliTop, ComposesWithSortBySize )
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             "3 /tmp/wcl_top_size/sub/mid.txt\n"
-             "4 /tmp/wcl_top_size/sub/deep/bottom.txt\n"
-             "9\n" );
+             line( 3, "/tmp/wcl_top_size/sub/mid.txt" ) +
+             line( 4, "/tmp/wcl_top_size/sub/deep/bottom.txt" ) +
+             line( 9, "total" ) );
 }
 
 TEST( CliTop, ZeroErrors )
@@ -671,4 +688,67 @@ TEST( CliTop, MissingValueErrors )
 {
   CmdResult r = run( kBin + " --top </dev/null 2>/dev/null" );
   EXPECT_EQ( r.exitCode, 1 );
+}
+
+// ---------------------------------------------------------------------------
+// Drop-in compatibility: with the system `wc` as the ground truth, wcl's output
+// must match byte-for-byte for the three core modes. wcl's default counts lines
+// (== wc -l); -w == wc -w; -c == wc -c. This guards the exact wc formatting
+// (leading space, min-width-7 field, filename, and the "total" line) without
+// the test re-implementing it.
+// ---------------------------------------------------------------------------
+namespace {
+
+struct Mode
+{
+  const char* wclFlag;  // how wcl selects this mode ("" == default, lines)
+  const char* wcFlag;   // the matching wc flag
+};
+const Mode kCoreModes[] = { { "", "-l" }, { "-w", "-w" }, { "-c", "-c" } };
+
+}  // namespace
+
+TEST( CliWcCompat, SingleFileMatchesWc )
+{
+  const std::string f = "/tmp/wcl_wc_one.txt";
+  // Mixed content: words, blank line, trailing newline.
+  std::system(
+      ( "printf '%b' 'alpha beta\\ngamma\\n\\nx y z\\n' > " + f ).c_str() );
+  for ( const Mode& m : kCoreModes ) {
+    CmdResult got = run( kBin + " " + m.wclFlag + " " + f );
+    CmdResult exp = run( std::string( "wc " ) + m.wcFlag + " " + f );
+    EXPECT_EQ( got.exitCode, 0 );
+    EXPECT_EQ( got.out, exp.out )
+        << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
+  }
+  std::system( ( "rm -f " + f ).c_str() );
+}
+
+TEST( CliWcCompat, StdinMatchesWc )
+{
+  const std::string payload = "alpha beta\\ngamma\\n\\nx y z\\n";
+  for ( const Mode& m : kCoreModes ) {
+    CmdResult got = run( piped( payload, m.wclFlag ) );
+    CmdResult exp =
+        run( "printf '%b' '" + payload + "' | wc " + m.wcFlag );
+    EXPECT_EQ( got.out, exp.out )
+        << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
+  }
+}
+
+TEST( CliWcCompat, MultipleFilesMatchWcIncludingTotal )
+{
+  // Differing magnitudes (one file >9 lines, one <9) prove the columns are not
+  // globally aligned -- each line uses its own min-width-7, exactly like wc.
+  const std::string a = "/tmp/wcl_wc_a.txt", b = "/tmp/wcl_wc_b.txt";
+  std::system(
+      ( "yes 'a b' | head -n 12 > " + a + " && printf '%b' 'd\\ne\\n' > " + b )
+          .c_str() );
+  for ( const Mode& m : kCoreModes ) {
+    CmdResult got = run( kBin + " " + m.wclFlag + " " + a + " " + b );
+    CmdResult exp = run( std::string( "wc " ) + m.wcFlag + " " + a + " " + b );
+    EXPECT_EQ( got.out, exp.out )
+        << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
+  }
+  std::system( ( "rm -f " + a + " " + b ).c_str() );
 }
