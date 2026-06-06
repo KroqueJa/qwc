@@ -70,7 +70,7 @@ else()
 endif()
 message( STATUS "wcl: building ${WCL_COUNTLINES} for ${CMAKE_SYSTEM_PROCESSOR}" )
 
-set( WCL_COMMON_SOURCES src/main.cpp src/processfile.cpp )
+set( WCL_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp )
 
 # ---------------------------------------------------------------------------
 # Shared config applied to a target
