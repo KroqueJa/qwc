@@ -6,5 +6,5 @@
 struct Result
 {
   std::string str;
-  usize       lineCount;
+  usize lineCount;
 };
