@@ -5,7 +5,7 @@
 // Horizontally sum the 32 unsigned bytes of an accumulator. _mm256_sad_epu8
 // against zero reduces each 8-byte group to a 64-bit sum (max 8*255=2040),
 // leaving four partial sums to add up.
-static inline u64 hsumBytes( __m256i v )
+static u64 hsumBytes( const __m256i v )
 {
   __m256i sad = _mm256_sad_epu8( v, _mm256_setzero_si256() );
   return static_cast<u64>( _mm256_extract_epi64( sad, 0 ) ) +
@@ -14,7 +14,7 @@ static inline u64 hsumBytes( __m256i v )
          static_cast<u64>( _mm256_extract_epi64( sad, 3 ) );
 }
 
-usize countLines( const char* buffer, usize length, char target )
+usize countLines( const char* buffer, const usize length, const char target )
 {
   const __m256i vec_target = _mm256_set1_epi8( target );
 
@@ -37,8 +37,8 @@ usize countLines( const char* buffer, usize length, char target )
   // every iteration adds at most 1 to a given lane, so we only drain the
   // accumulators into `lines` once every 255 iterations.
   while ( processedBytes + 128 <= length ) {
-    usize remIters = ( length - processedBytes ) / 128;
-    usize block = remIters < 255 ? remIters : 255;
+    const usize remIters = ( length - processedBytes ) / 128;
+    const usize block = remIters < 255 ? remIters : 255;
 
     __m256i acc0 = _mm256_setzero_si256();
     __m256i acc1 = _mm256_setzero_si256();

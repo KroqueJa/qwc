@@ -25,8 +25,8 @@ usize countLines( const char* buffer, usize length, char target )
   // iteration adds at most 1 to a given lane, so we only need to drain the
   // accumulators into `lines` once every 255 iterations.
   while ( processedBytes + 64 <= length ) {
-    usize remIters = ( length - processedBytes ) / 64;
-    usize block = remIters < 255 ? remIters : 255;
+    const usize remIters = ( length - processedBytes ) / 64;
+    const usize block = remIters < 255 ? remIters : 255;
 
     uint8x16_t acc0 = vdupq_n_u8( 0 );
     uint8x16_t acc1 = vdupq_n_u8( 0 );

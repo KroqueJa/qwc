@@ -1,6 +1,6 @@
 #include "countlines.h"
 
-usize countLines( const char* buffer, usize length, char target )
+usize countLines( const char* buffer, const usize length, const char target )
 {
   usize lines = 0;
   for ( usize i = 0; i < length; ++i )
