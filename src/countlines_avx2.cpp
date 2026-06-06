@@ -1,6 +1,7 @@
-#include "countlines.h"
 #include <immintrin.h>
 #include <stdint.h>
+
+#include "countlines.h"
 
 // Horizontally sum the 32 unsigned bytes of an accumulator. _mm256_sad_epu8
 // against zero reduces each 8-byte group to a 64-bit sum (max 8*255=2040),
@@ -8,22 +9,23 @@
 static inline u64 hsumBytes( __m256i v )
 {
   __m256i sad = _mm256_sad_epu8( v, _mm256_setzero_si256() );
-  return static_cast<u64>( _mm256_extract_epi64( sad, 0 ) )
-       + static_cast<u64>( _mm256_extract_epi64( sad, 1 ) )
-       + static_cast<u64>( _mm256_extract_epi64( sad, 2 ) )
-       + static_cast<u64>( _mm256_extract_epi64( sad, 3 ) );
+  return static_cast<u64>( _mm256_extract_epi64( sad, 0 ) ) +
+         static_cast<u64>( _mm256_extract_epi64( sad, 1 ) ) +
+         static_cast<u64>( _mm256_extract_epi64( sad, 2 ) ) +
+         static_cast<u64>( _mm256_extract_epi64( sad, 3 ) );
 }
 
 usize countLines( const char* buffer, usize length, char target )
 {
   const __m256i vec_target = _mm256_set1_epi8( target );
 
-  usize       lines = 0;
-  const char* tmp   = buffer;
-  usize       processedBytes = 0;
+  usize lines = 0;
+  const char* tmp = buffer;
+  usize processedBytes = 0;
 
   // Align to 32-byte boundary with a scalar prologue.
-  while ( processedBytes < length && ( reinterpret_cast<usize>( tmp ) % 32 != 0 ) ) {
+  while ( processedBytes < length &&
+          ( reinterpret_cast<usize>( tmp ) % 32 != 0 ) ) {
     if ( *tmp == target ) ++lines;
     ++tmp;
     ++processedBytes;
@@ -37,7 +39,7 @@ usize countLines( const char* buffer, usize length, char target )
   // accumulators into `lines` once every 255 iterations.
   while ( processedBytes + 128 <= length ) {
     usize remIters = ( length - processedBytes ) / 128;
-    usize block    = remIters < 255 ? remIters : 255;
+    usize block = remIters < 255 ? remIters : 255;
 
     __m256i acc0 = _mm256_setzero_si256();
     __m256i acc1 = _mm256_setzero_si256();
@@ -45,11 +47,38 @@ usize countLines( const char* buffer, usize length, char target )
     __m256i acc3 = _mm256_setzero_si256();
 
     for ( usize b = 0; b < block; ++b ) {
-      acc0 = _mm256_sub_epi8( acc0, _mm256_cmpeq_epi8( _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp       ) ), vec_target ) );
-      acc1 = _mm256_sub_epi8( acc1, _mm256_cmpeq_epi8( _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 32  ) ), vec_target ) );
-      acc2 = _mm256_sub_epi8( acc2, _mm256_cmpeq_epi8( _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 64  ) ), vec_target ) );
-      acc3 = _mm256_sub_epi8( acc3, _mm256_cmpeq_epi8( _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 96  ) ), vec_target ) );
-      tmp            += 128;
+      acc0 = _mm256_sub_epi8(
+          acc0,
+          _mm256_cmpeq_epi8(
+              _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp ) ),
+              vec_target
+          )
+      );
+      acc1 = _mm256_sub_epi8(
+          acc1, _mm256_cmpeq_epi8(
+                    _mm256_loadu_si256(
+                        reinterpret_cast<const __m256i*>( tmp + 32 )
+                    ),
+                    vec_target
+                )
+      );
+      acc2 = _mm256_sub_epi8(
+          acc2, _mm256_cmpeq_epi8(
+                    _mm256_loadu_si256(
+                        reinterpret_cast<const __m256i*>( tmp + 64 )
+                    ),
+                    vec_target
+                )
+      );
+      acc3 = _mm256_sub_epi8(
+          acc3, _mm256_cmpeq_epi8(
+                    _mm256_loadu_si256(
+                        reinterpret_cast<const __m256i*>( tmp + 96 )
+                    ),
+                    vec_target
+                )
+      );
+      tmp += 128;
       processedBytes += 128;
     }
 

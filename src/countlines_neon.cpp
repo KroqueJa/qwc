@@ -1,17 +1,19 @@
-#include "countlines.h"
 #include <arm_neon.h>
 #include <stdint.h>
+
+#include "countlines.h"
 
 usize countLines( const char* buffer, usize length, char target )
 {
   const uint8x16_t vec_target = vdupq_n_u8( static_cast<u8>( target ) );
 
-  usize     lines = 0;
-  const u8* tmp   = reinterpret_cast<const u8*>( buffer );
-  usize     processedBytes = 0;
+  usize lines = 0;
+  const u8* tmp = reinterpret_cast<const u8*>( buffer );
+  usize processedBytes = 0;
 
   // Align to 16-byte boundary with a scalar prologue.
-  while ( processedBytes < length && ( reinterpret_cast<usize>( tmp ) % 16 != 0 ) ) {
+  while ( processedBytes < length &&
+          ( reinterpret_cast<usize>( tmp ) % 16 != 0 ) ) {
     if ( *tmp == static_cast<u8>( target ) ) ++lines;
     ++tmp;
     ++processedBytes;
@@ -25,7 +27,7 @@ usize countLines( const char* buffer, usize length, char target )
   // accumulators into `lines` once every 255 iterations.
   while ( processedBytes + 64 <= length ) {
     usize remIters = ( length - processedBytes ) / 64;
-    usize block    = remIters < 255 ? remIters : 255;
+    usize block = remIters < 255 ? remIters : 255;
 
     uint8x16_t acc0 = vdupq_n_u8( 0 );
     uint8x16_t acc1 = vdupq_n_u8( 0 );
@@ -33,11 +35,11 @@ usize countLines( const char* buffer, usize length, char target )
     uint8x16_t acc3 = vdupq_n_u8( 0 );
 
     for ( usize b = 0; b < block; ++b ) {
-      acc0 = vsubq_u8( acc0, vceqq_u8( vld1q_u8( tmp      ), vec_target ) );
+      acc0 = vsubq_u8( acc0, vceqq_u8( vld1q_u8( tmp ), vec_target ) );
       acc1 = vsubq_u8( acc1, vceqq_u8( vld1q_u8( tmp + 16 ), vec_target ) );
       acc2 = vsubq_u8( acc2, vceqq_u8( vld1q_u8( tmp + 32 ), vec_target ) );
       acc3 = vsubq_u8( acc3, vceqq_u8( vld1q_u8( tmp + 48 ), vec_target ) );
-      tmp            += 64;
+      tmp += 64;
       processedBytes += 64;
     }
 

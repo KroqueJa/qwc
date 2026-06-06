@@ -1,6 +1,7 @@
 cmake_minimum_required( VERSION 3.16 )
 project( wcl LANGUAGES CXX )
 
+
 # ---------------------------------------------------------------------------
 # Build type
 # ---------------------------------------------------------------------------
@@ -109,6 +110,7 @@ message( STATUS "wcl: output binary -> ${CMAKE_SOURCE_DIR}/${WCL_OUTPUT_NAME}" )
 # Portable scalar build, on demand (old: `make wcl-scalar`).
 add_executable( wcl-scalar EXCLUDE_FROM_ALL ${WCL_COMMON_SOURCES} src/countlines_scalar.cpp )
 wcl_configure( wcl-scalar )
+target_compile_options( wcl PRIVATE -Wall -Wextra -Wpedantic )
 
 # ---------------------------------------------------------------------------
 # Convenience targets wrapping the Python helpers, run from the project root.

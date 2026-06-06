@@ -1,5 +1,4 @@
 #include "processfile.h"
-#include "countlines.h"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -11,6 +10,8 @@
 #include <thread>
 #include <vector>
 
+#include "countlines.h"
+
 static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 
 usize processFile( const char* filename, usize bytesPerThread, char target )
@@ -20,7 +21,8 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
     isize bytesRead;
     usize totalLines = 0;
     while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 )
-      totalLines += countLines( buffer, static_cast<usize>( bytesRead ), target );
+      totalLines +=
+          countLines( buffer, static_cast<usize>( bytesRead ), target );
     return totalLines;
   }
 
@@ -47,10 +49,12 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
   // is the most effective hint for this (MADV_WILLNEED is largely a no-op).
   // radvisory::ra_count is an int, so issue the advice in <=INT_MAX chunks.
   for ( usize off = 0; off < fileSize; ) {
-    usize            remaining = fileSize - off;
-    struct radvisory  ra;
+    usize remaining = fileSize - off;
+    struct radvisory ra;
     ra.ra_offset = static_cast<i64>( off );
-    ra.ra_count  = static_cast<int>( std::min( remaining, static_cast<usize>( INT_MAX ) ) );
+    ra.ra_count = static_cast<int>(
+        std::min( remaining, static_cast<usize>( INT_MAX ) )
+    );
     fcntl( fd, F_RDADVISE, &ra );
     off += static_cast<usize>( ra.ra_count );
   }
@@ -63,7 +67,7 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
 
   usize chunkSize = fileSize / numThreads;
 
-  std::vector<usize>      counts( numThreads, 0 );
+  std::vector<usize> counts( numThreads, 0 );
   std::vector<std::thread> threads;
   threads.reserve( numThreads );
 
@@ -72,32 +76,30 @@ usize processFile( const char* filename, usize bytesPerThread, char target )
   // (the offset is per-call, not shared via fd), so a single fd serves all
   // threads, and the kernel bulk-copies straight from the warmed page cache.
   for ( u32 i = 0; i < numThreads; ++i ) {
-    i64  start = static_cast<i64>( i * chunkSize );
-    usize size  = ( i == numThreads - 1 )
-                   ? fileSize - i * chunkSize
-                   : chunkSize;
+    i64 start = static_cast<i64>( i * chunkSize );
+    usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
     threads.emplace_back( [fd, start, size, &counts, i, target]() {
       static const usize BUF_SIZE = 1 << 20;  // 1 MiB
-      std::vector<char>   buffer( BUF_SIZE );
-      usize lines     = 0;
+      std::vector<char> buffer( BUF_SIZE );
+      usize lines = 0;
       usize remaining = size;
-      i64  pos       = start;
+      i64 pos = start;
       while ( remaining > 0 ) {
-        usize  want = std::min( BUF_SIZE, remaining );
-        isize got  = pread( fd, buffer.data(), want, pos );
+        usize want = std::min( BUF_SIZE, remaining );
+        isize got = pread( fd, buffer.data(), want, pos );
         if ( got <= 0 ) break;
-        lines     += countLines( buffer.data(), static_cast<usize>( got ), target );
+        lines += countLines( buffer.data(), static_cast<usize>( got ), target );
         remaining -= static_cast<usize>( got );
-        pos       += got;
+        pos += got;
       }
       counts[i] = lines;
     } );
   }
 
-  for ( auto& t : threads ) t.join();
+  for ( auto& t: threads ) t.join();
   close( fd );
 
   usize total = 0;
-  for ( usize c : counts ) total += c;
+  for ( usize c: counts ) total += c;
   return total;
 }

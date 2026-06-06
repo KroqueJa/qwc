@@ -1,12 +1,8 @@
-#include <unistd.h>
-
 #include <atomic>
-#include <cstring>
 #include <iostream>
 #include <thread>
 #include <vector>
 
-#include "countlines.h"
 #include "processfile.h"
 #include "result.h"
 
@@ -18,8 +14,8 @@ int main( int argc, char** argv )
 
   // Byte to count. Defaults to '\n' (line counting). --char overrides it with
   // an arbitrary byte.
-  char target    = '\n';
-  int  fileStart = 1;
+  char target = '\n';
+  int fileStart = 1;
 
   // Parse leading "--flag [value]" options; the first non-flag argument begins
   // the file list.
@@ -57,7 +53,7 @@ int main( int argc, char** argv )
   std::atomic<usize> nextFile = 0;
   std::vector<std::thread> pool( MAX_THREADS );
 
-  for ( auto& t : pool ) {
+  for ( auto& t: pool ) {
     t = std::thread( [&]() {
       while ( true ) {
         usize idx = nextFile.fetch_add( 1 );
@@ -69,10 +65,10 @@ int main( int argc, char** argv )
     } );
   }
 
-  for ( auto& t : pool ) t.join();
+  for ( auto& t: pool ) t.join();
 
   usize total = 0;
-  for ( const auto& result : output ) {
+  for ( const auto& result: output ) {
     total += result.lineCount;
     if ( argc - fileStart > 1 ) std::cout << result.str << '\n';
   }

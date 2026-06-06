@@ -27,4 +27,3 @@ SpacesInAngles: Leave
 TabWidth: 2
 SpaceAfterTemplateKeyword: true
 SpacesInParentheses: true
-SpaceBeforeParens: ControlStatements
