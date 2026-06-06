@@ -18,7 +18,8 @@ int main( int argc, char** argv )
 
   // No file arguments: count standard input.
   if ( opt.files.empty() ) {
-    std::cout << processFile( "", opt.bytesPerThread, opt.target ) << std::endl;
+    std::cout << processFile( "", opt.bytesPerThread, opt.target, opt.mode )
+              << std::endl;
     return 0;
   }
 
@@ -37,8 +38,9 @@ int main( int argc, char** argv )
         const usize idx = nextFile.fetch_add( 1 );
         if ( idx >= numFiles ) return;
         const std::string& filename = opt.files[idx];
-        const usize lines =
-            processFile( filename.c_str(), opt.bytesPerThread, opt.target );
+        const usize lines = processFile(
+            filename.c_str(), opt.bytesPerThread, opt.target, opt.mode
+        );
         output[idx] = { std::to_string( lines ) + " " + filename, lines };
       }
     } );

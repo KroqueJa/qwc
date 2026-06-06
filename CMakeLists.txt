@@ -70,7 +70,9 @@ else()
 endif()
 message( STATUS "wcl: building ${WCL_COUNTLINES} for ${CMAKE_SYSTEM_PROCESSOR}" )
 
-set( WCL_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp )
+# words is scalar-only for now (no SIMD variant yet), so it always compiles in
+# alongside the arch-dispatched countlines.
+set( WCL_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp src/words_scalar.cpp )
 
 # ---------------------------------------------------------------------------
 # Shared config applied to a target

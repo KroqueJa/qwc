@@ -11,19 +11,30 @@
 #include <vector>
 
 #include "countlines.h"
+#include "words.h"
 
 static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 
-usize processFile( const char* filename, const usize bytesPerThread, char target )
+usize processFile(
+    const char* filename, const usize bytesPerThread, char target,
+    const CountMode mode
+)
 {
   if ( filename[0] == '\0' ) {
     thread_local char buffer[128 * 4096];
     isize bytesRead;
-    usize totalLines = 0;
-    while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 )
-      totalLines +=
-          count( buffer, static_cast<usize>( bytesRead ), target );
-    return totalLines;
+    usize total = 0;
+    bool inWord = false;  // carried across reads for word counting
+    while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
+      const usize got = static_cast<usize>( bytesRead );
+      if ( mode == CountMode::Bytes )
+        total += got;
+      else if ( mode == CountMode::Words )
+        total += words( buffer, got, inWord );
+      else
+        total += count( buffer, got, target );
+    }
+    return total;
   }
 
   int fd = open( filename, O_RDONLY );
@@ -38,6 +49,13 @@ usize processFile( const char* filename, const usize bytesPerThread, char target
     exit( 1 );
   }
   const usize fileSize = st.st_size;
+
+  // Byte counting (`wc -c`) needs nothing but the size we just stat'd: skip the
+  // readahead and the parallel scan entirely.
+  if ( mode == CountMode::Bytes ) {
+    close( fd );
+    return fileSize;
+  }
 
   if ( fileSize == 0 ) {
     close( fd );
@@ -57,6 +75,26 @@ usize processFile( const char* filename, const usize bytesPerThread, char target
     );
     fcntl( fd, F_RDADVISE, &ra );
     off += static_cast<usize>( ra.ra_count );
+  }
+
+  // Word counting carries the in-a-word state across buffer boundaries, so for
+  // now a single thread streams the whole file in order. (Chunked, vectorised
+  // word counting is a later step.)
+  if ( mode == CountMode::Words ) {
+    static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
+    std::vector<char> buffer( BUF_SIZE );
+    usize total = 0;
+    bool inWord = false;
+    usize pos = 0;
+    while ( pos < fileSize ) {
+      const usize want = std::min( BUF_SIZE, fileSize - pos );
+      const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
+      if ( got <= 0 ) break;
+      total += words( buffer.data(), static_cast<usize>( got ), inWord );
+      pos += static_cast<usize>( got );
+    }
+    close( fd );
+    return total;
   }
 
   u32 numThreads = static_cast<u32>( std::min(

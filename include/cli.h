@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "processfile.h"
 #include "result.h"
 #include "typedef.h"
 
@@ -17,6 +18,7 @@ struct Options
 {
   usize bytesPerThread = 64 * 1024 * 1024;
   char target = '\n';            // byte to count; '\n' counts lines
+  CountMode mode = CountMode::Target;  // --chars switches to byte counting
   bool recursive = false;        // expand directory arguments
   SortMode sortMode = SortMode::None;
   bool reverse = false;          // flip the display order

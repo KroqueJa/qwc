@@ -29,9 +29,14 @@ void printHelp()
       "pipe data straight into it, e.g.  cat access.log | wcl\n"
       "\n"
       "Options:\n"
-      "  -c, --char C          Count occurrences of the byte C instead of\n"
+      "      --char C          Count occurrences of the byte C instead of\n"
       "                        newlines. Handy for tallying commas in a CSV\n"
-      "                        (-c ,) or any other single character.\n"
+      "                        (--char ,) or any other single character.\n"
+      "  -c, --chars           Count bytes instead of lines, like `wc -c`. The\n"
+      "                        size is read straight from the filesystem, so no\n"
+      "                        scanning of the file contents is needed.\n"
+      "  -w, --words           Count whitespace-separated words instead of\n"
+      "                        lines, like `wc -w`.\n"
       "  -r, --recursive       Treat directory arguments as whole trees: wcl\n"
       "                        walks into them and counts every file it finds,\n"
       "                        something wc can't do on its own.\n"
@@ -64,6 +69,8 @@ void printHelp()
       "  wcl notes.txt                 lines in notes.txt\n"
       "  wcl *.log                     lines in each log, plus a total\n"
       "  wcl --char , data.csv         commas in data.csv\n"
+      "  wcl -c notes.txt              bytes in notes.txt\n"
+      "  wcl -w notes.txt              words in notes.txt\n"
       "  wcl --recursive src           lines in every file under src/\n"
       "  wcl -r --top 10 src           the 10 biggest files under src/\n";
 }
@@ -92,13 +99,19 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
         return 1;
       }
       fileStart += 2;
-    } else if ( isFlag( argv[fileStart], "-c", "--char" ) ) {
+    } else if ( std::strcmp( argv[fileStart], "--char" ) == 0 ) {
       if ( fileStart + 1 >= argc || argv[fileStart + 1][0] == '\0' ) {
         std::cerr << "Error: --char requires a single-character value\n";
         return 1;
       }
       opt.target = argv[fileStart + 1][0];
       fileStart += 2;
+    } else if ( isFlag( argv[fileStart], "-c", "--chars" ) ) {
+      opt.mode = CountMode::Bytes;
+      fileStart += 1;
+    } else if ( isFlag( argv[fileStart], "-w", "--words" ) ) {
+      opt.mode = CountMode::Words;
+      fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-r", "--recursive" ) ) {
       opt.recursive = true;
       fileStart += 1;
