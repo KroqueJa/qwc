@@ -1,8 +1,10 @@
 #pragma once
 #include <string>
 
+#include "typedef.h"
+
 struct Result
 {
   std::string str;
-  size_t      lineCount;
+  usize       lineCount;
 };

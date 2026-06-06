@@ -5,25 +5,25 @@
 // Horizontally sum the 32 unsigned bytes of an accumulator. _mm256_sad_epu8
 // against zero reduces each 8-byte group to a 64-bit sum (max 8*255=2040),
 // leaving four partial sums to add up.
-static inline uint64_t hsumBytes( __m256i v )
+static inline u64 hsumBytes( __m256i v )
 {
   __m256i sad = _mm256_sad_epu8( v, _mm256_setzero_si256() );
-  return (uint64_t)_mm256_extract_epi64( sad, 0 )
-       + (uint64_t)_mm256_extract_epi64( sad, 1 )
-       + (uint64_t)_mm256_extract_epi64( sad, 2 )
-       + (uint64_t)_mm256_extract_epi64( sad, 3 );
+  return (u64)_mm256_extract_epi64( sad, 0 )
+       + (u64)_mm256_extract_epi64( sad, 1 )
+       + (u64)_mm256_extract_epi64( sad, 2 )
+       + (u64)_mm256_extract_epi64( sad, 3 );
 }
 
-size_t countLines( const char* buffer, size_t length, char target )
+usize countLines( const char* buffer, usize length, char target )
 {
   const __m256i vec_target = _mm256_set1_epi8( target );
 
-  size_t      lines = 0;
+  usize       lines = 0;
   const char* tmp   = buffer;
-  size_t      processedBytes = 0;
+  usize       processedBytes = 0;
 
   // Align to 32-byte boundary with a scalar prologue.
-  while ( processedBytes < length && ( (uintptr_t)tmp % 32 != 0 ) ) {
+  while ( processedBytes < length && ( (usize)tmp % 32 != 0 ) ) {
     if ( *tmp == target ) ++lines;
     ++tmp;
     ++processedBytes;
@@ -36,15 +36,15 @@ size_t countLines( const char* buffer, size_t length, char target )
   // every iteration adds at most 1 to a given lane, so we only drain the
   // accumulators into `lines` once every 255 iterations.
   while ( processedBytes + 128 <= length ) {
-    size_t remIters = ( length - processedBytes ) / 128;
-    size_t block    = remIters < 255 ? remIters : 255;
+    usize remIters = ( length - processedBytes ) / 128;
+    usize block    = remIters < 255 ? remIters : 255;
 
     __m256i acc0 = _mm256_setzero_si256();
     __m256i acc1 = _mm256_setzero_si256();
     __m256i acc2 = _mm256_setzero_si256();
     __m256i acc3 = _mm256_setzero_si256();
 
-    for ( size_t b = 0; b < block; ++b ) {
+    for ( usize b = 0; b < block; ++b ) {
       acc0 = _mm256_sub_epi8( acc0, _mm256_cmpeq_epi8( _mm256_loadu_si256( (const __m256i*)( tmp       ) ), vec_target ) );
       acc1 = _mm256_sub_epi8( acc1, _mm256_cmpeq_epi8( _mm256_loadu_si256( (const __m256i*)( tmp + 32  ) ), vec_target ) );
       acc2 = _mm256_sub_epi8( acc2, _mm256_cmpeq_epi8( _mm256_loadu_si256( (const __m256i*)( tmp + 64  ) ), vec_target ) );

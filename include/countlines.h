@@ -1,5 +1,5 @@
 #pragma once
-#include <cstddef>
+#include "typedef.h"
 
 // Counts occurrences of `target` in buffer. Defaults to '\n' (line counting).
-size_t countLines( const char* buffer, size_t length, char target = '\n' );
+usize countLines( const char* buffer, usize length, char target = '\n' );

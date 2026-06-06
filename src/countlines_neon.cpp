@@ -2,17 +2,17 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
-size_t countLines( const char* buffer, size_t length, char target )
+usize countLines( const char* buffer, usize length, char target )
 {
-  const uint8x16_t vec_target = vdupq_n_u8( (uint8_t)target );
+  const uint8x16_t vec_target = vdupq_n_u8( (u8)target );
 
-  size_t         lines = 0;
-  const uint8_t* tmp   = (const uint8_t*)buffer;
-  size_t         processedBytes = 0;
+  usize     lines = 0;
+  const u8* tmp   = (const u8*)buffer;
+  usize     processedBytes = 0;
 
   // Align to 16-byte boundary with a scalar prologue.
-  while ( processedBytes < length && ( (uintptr_t)tmp % 16 != 0 ) ) {
-    if ( *tmp == (uint8_t)target ) ++lines;
+  while ( processedBytes < length && ( (usize)tmp % 16 != 0 ) ) {
+    if ( *tmp == (u8)target ) ++lines;
     ++tmp;
     ++processedBytes;
   }
@@ -24,15 +24,15 @@ size_t countLines( const char* buffer, size_t length, char target )
   // iteration adds at most 1 to a given lane, so we only need to drain the
   // accumulators into `lines` once every 255 iterations.
   while ( processedBytes + 64 <= length ) {
-    size_t remIters = ( length - processedBytes ) / 64;
-    size_t block    = remIters < 255 ? remIters : 255;
+    usize remIters = ( length - processedBytes ) / 64;
+    usize block    = remIters < 255 ? remIters : 255;
 
     uint8x16_t acc0 = vdupq_n_u8( 0 );
     uint8x16_t acc1 = vdupq_n_u8( 0 );
     uint8x16_t acc2 = vdupq_n_u8( 0 );
     uint8x16_t acc3 = vdupq_n_u8( 0 );
 
-    for ( size_t b = 0; b < block; ++b ) {
+    for ( usize b = 0; b < block; ++b ) {
       acc0 = vsubq_u8( acc0, vceqq_u8( vld1q_u8( tmp      ), vec_target ) );
       acc1 = vsubq_u8( acc1, vceqq_u8( vld1q_u8( tmp + 16 ), vec_target ) );
       acc2 = vsubq_u8( acc2, vceqq_u8( vld1q_u8( tmp + 32 ), vec_target ) );
@@ -50,7 +50,7 @@ size_t countLines( const char* buffer, size_t length, char target )
 
   // Scalar epilogue for the remaining < 64 bytes.
   while ( processedBytes < length ) {
-    if ( *tmp == (uint8_t)target ) ++lines;
+    if ( *tmp == (u8)target ) ++lines;
     ++tmp;
     ++processedBytes;
   }

@@ -10,11 +10,11 @@
 #include "processfile.h"
 #include "result.h"
 
-static const unsigned MAX_THREADS = std::thread::hardware_concurrency();
+static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 
 int main( int argc, char** argv )
 {
-  size_t bytesPerThread = 64 * 1024 * 1024;
+  usize bytesPerThread = 64 * 1024 * 1024;
 
   // Byte to count. Defaults to '\n' (line counting). --char overrides it with
   // an arbitrary byte.
@@ -54,16 +54,16 @@ int main( int argc, char** argv )
   }
 
   std::vector<Result> output( argc - fileStart );
-  std::atomic<size_t> nextFile = 0;
+  std::atomic<usize> nextFile = 0;
   std::vector<std::thread> pool( MAX_THREADS );
 
   for ( auto& t : pool ) {
     t = std::thread( [&]() {
       while ( true ) {
-        size_t idx = nextFile.fetch_add( 1 );
-        if ( idx >= (size_t)( argc - fileStart ) ) return;
+        usize idx = nextFile.fetch_add( 1 );
+        if ( idx >= (usize)( argc - fileStart ) ) return;
         const char* filename = argv[idx + fileStart];
-        size_t lines = processFile( filename, bytesPerThread, target );
+        usize lines = processFile( filename, bytesPerThread, target );
         output[idx] = { std::to_string( lines ) + " " + filename, lines };
       }
     } );
@@ -71,7 +71,7 @@ int main( int argc, char** argv )
 
   for ( auto& t : pool ) t.join();
 
-  size_t total = 0;
+  usize total = 0;
   for ( const auto& result : output ) {
     total += result.lineCount;
     if ( argc - fileStart > 1 ) std::cout << result.str << '\n';
