@@ -1,7 +1,4 @@
-wcl
-wcl.exe
-wcl_avx
-wcl-scalar
+wcl*
 .idea
 benchmarks/test-data
 benchmarks/bench-spec.csv
