@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <numeric>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -12,6 +14,11 @@
 #include "result.h"
 
 static const u32 MAX_THREADS = std::thread::hardware_concurrency();
+
+// How to order the per-file output list. The chosen key governs both the
+// display order and which files --top keeps; ordering is ascending by default
+// (so the largest land at the bottom), and --reverse flips it.
+enum class SortMode { None, Count, Name, Size };
 
 static void printHelp()
 {
@@ -36,6 +43,19 @@ static void printHelp()
       "  -r, --recursive       Treat directory arguments as whole trees: wcl\n"
       "                        walks into them and counts every file it finds,\n"
       "                        something wc can't do on its own.\n"
+      "      --sort-by-count   When listing several files, order them by their\n"
+      "                        count, smallest first - so the biggest ones end\n"
+      "                        up at the bottom, right next to the grand total\n"
+      "                        where they're easy to spot.\n"
+      "      --sort-by-name    Order the listing alphabetically by file name.\n"
+      "      --sort-by-size    Order the listing by file size on disk, smallest\n"
+      "                        first.\n"
+      "      --reverse         Flip whichever ordering is in effect (e.g. put\n"
+      "                        the biggest counts at the top instead).\n"
+      "      --top N           Show only the N files that rank highest by the\n"
+      "                        active sort (counts, if none is given). The grand\n"
+      "                        total still covers every file, not just the N\n"
+      "                        shown.\n"
       "      --bytes-per-thread N\n"
       "                        Tune how much data each worker thread handles\n"
       "                        before another thread is spun up (default 64\n"
@@ -52,7 +72,8 @@ static void printHelp()
       "  wcl notes.txt                 lines in notes.txt\n"
       "  wcl *.log                     lines in each log, plus a total\n"
       "  wcl --char , data.csv         commas in data.csv\n"
-      "  wcl --recursive src           lines in every file under src/\n";
+      "  wcl --recursive src           lines in every file under src/\n"
+      "  wcl -r --top 10 src           the 10 biggest files under src/\n";
 }
 
 int main( int argc, char** argv )
@@ -66,6 +87,13 @@ int main( int argc, char** argv )
   // --recursive expands any directory argument into all regular files beneath
   // it (something wc inexplicably can't do).
   bool recursive = false;
+
+  // Output ordering. SortMode picks the key (default: keep input order);
+  // --reverse flips the result; --top N keeps only the highest-ranked N files
+  // (0 means "show all").
+  SortMode sortMode = SortMode::None;
+  bool reverse = false;
+  usize topN = 0;
   int fileStart = 1;
 
   // Parse leading "--flag [value]" options; the first non-flag argument begins
@@ -99,6 +127,29 @@ int main( int argc, char** argv )
     } else if ( isFlag( argv[fileStart], "-r", "--recursive" ) ) {
       recursive = true;
       fileStart += 1;
+    } else if ( std::strcmp( argv[fileStart], "--sort-by-count" ) == 0 ) {
+      sortMode = SortMode::Count;
+      fileStart += 1;
+    } else if ( std::strcmp( argv[fileStart], "--sort-by-name" ) == 0 ) {
+      sortMode = SortMode::Name;
+      fileStart += 1;
+    } else if ( std::strcmp( argv[fileStart], "--sort-by-size" ) == 0 ) {
+      sortMode = SortMode::Size;
+      fileStart += 1;
+    } else if ( std::strcmp( argv[fileStart], "--reverse" ) == 0 ) {
+      reverse = true;
+      fileStart += 1;
+    } else if ( std::strcmp( argv[fileStart], "--top" ) == 0 ) {
+      if ( fileStart + 1 >= argc ) {
+        std::cerr << "Error: --top requires a value\n";
+        return 1;
+      }
+      topN = std::strtoull( argv[fileStart + 1], nullptr, 10 );
+      if ( topN == 0 ) {
+        std::cerr << "Error: --top must be > 0\n";
+        return 1;
+      }
+      fileStart += 2;
     } else if ( isFlag( argv[fileStart], "-h", "--help" ) ) {
       printHelp();
       return 0;
@@ -108,14 +159,18 @@ int main( int argc, char** argv )
     }
   }
 
+  // --top needs a ranking criterion; default it to counts when none was asked
+  // for, so `wcl --top 10 ...` means "the 10 files with the most lines".
+  if ( topN > 0 && sortMode == SortMode::None ) sortMode = SortMode::Count;
+
   if ( fileStart == argc ) {
     std::cout << processFile( "", bytesPerThread, target ) << std::endl;
     return 0;
   }
 
   // Build the list of files to count. With --recursive, a directory argument is
-  // replaced by every regular file beneath it, sorted for stable output; plain
-  // file arguments and the top-level argument order are left untouched.
+  // replaced by every regular file beneath it; plain file arguments and the
+  // top-level argument order are left untouched.
   namespace fs = std::filesystem;
   std::vector<std::string> files;
   for ( int i = fileStart; i < argc; ++i ) {
@@ -135,7 +190,11 @@ int main( int argc, char** argv )
         if ( it->is_regular_file( ec ) && !ec )
           dirFiles.push_back( it->path().string() );
       }
-      std::sort( dirFiles.begin(), dirFiles.end() );
+      // Alphabetize for stable output -- but only when no sort key is active,
+      // since otherwise the whole list is re-ordered below and this is wasted
+      // work. (With no key, --reverse still has this stable order to flip.)
+      if ( sortMode == SortMode::None )
+        std::sort( dirFiles.begin(), dirFiles.end() );
       files.insert( files.end(), dirFiles.begin(), dirFiles.end() );
     } else {
       files.emplace_back( argv[i] );
@@ -162,11 +221,52 @@ int main( int argc, char** argv )
 
   for ( auto& t: pool ) t.join();
 
+  // The grand total always covers every file, independent of sorting or --top.
   usize total = 0;
-  for ( const auto& result: output ) {
-    total += result.lineCount;
-    if ( numFiles > 1 ) std::cout << result.str << '\n';
+  for ( const auto& result: output ) total += result.lineCount;
+
+  // Decide the display order via an index permutation, leaving `output` (and the
+  // total) untouched. Default order is the order files were collected in.
+  std::vector<usize> order( numFiles );
+  std::iota( order.begin(), order.end(), 0 );
+
+  if ( sortMode != SortMode::None ) {
+    // File sizes are only needed for --sort-by-size, so fetch them lazily.
+    std::vector<std::uintmax_t> sizes;
+    if ( sortMode == SortMode::Size ) {
+      sizes.resize( numFiles );
+      for ( usize i = 0; i < numFiles; ++i ) {
+        std::error_code ec;
+        const std::uintmax_t s = fs::file_size( files[i], ec );
+        sizes[i] = ec ? 0 : s;
+      }
+    }
+
+    // Sort ascending by the chosen key, tie-broken by filename so output is
+    // deterministic regardless of which thread finished first.
+    std::sort(
+        order.begin(), order.end(),
+        [&]( usize a, usize b ) {
+          if ( sortMode == SortMode::Count && output[a].lineCount != output[b].lineCount )
+            return output[a].lineCount < output[b].lineCount;
+          if ( sortMode == SortMode::Size && sizes[a] != sizes[b] )
+            return sizes[a] < sizes[b];
+          return files[a] < files[b];
+        }
+    );
   }
+
+  // --top N keeps the N highest-ranked files: the tail of the ascending order.
+  if ( topN > 0 && topN < order.size() )
+    order.erase( order.begin(), order.end() - static_cast<isize>( topN ) );
+
+  // --reverse flips the final display order (e.g. biggest counts first).
+  if ( reverse ) std::reverse( order.begin(), order.end() );
+
+  // Per-file lines are shown whenever more than one file was counted, even if
+  // --top narrows the listing to one of them.
+  if ( numFiles > 1 )
+    for ( const usize i: order ) std::cout << output[i].str << '\n';
   std::cout << total << std::endl;
 
   return 0;

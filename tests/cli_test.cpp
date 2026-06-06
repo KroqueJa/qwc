@@ -326,6 +326,88 @@ TEST( CliRecursive, PreservesTopLevelOrderForMixedArgs )
              "9\n" );
 }
 
+// ---------------------------------------------------------------------------
+// --sort-by-count: orders the whole flat file list by count ascending (biggest
+// at the bottom, next to the grand total), tie-broken alphabetically.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Tree with distinct counts spread across directories so a global (not
+// per-directory) sort is observable. top.txt=2, sub/mid.txt=3,
+// sub/deep/bottom.txt=4 (from makeRecTree) -- already strictly increasing,
+// so add a 1-line file to land first.
+std::string makeSortTree( const std::string& root )
+{
+  makeRecTree( root );
+  std::system(
+      ( "printf '%b' 'solo\\n' > " + root + "/zzz_one.txt" ).c_str() );
+  return root;
+}
+
+}  // namespace
+
+TEST( CliSortByCount, OrdersAscendingAcrossDirectories )
+{
+  const std::string root = makeSortTree( "/tmp/wcl_sort_cnt" );
+  CmdResult r = run( kBin + " --recursive --sort-by-count " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  // Counts: zzz_one=1, top=2, mid=3, bottom=4. Largest last, above total.
+  EXPECT_EQ( r.out,
+             "1 /tmp/wcl_sort_cnt/zzz_one.txt\n"
+             "2 /tmp/wcl_sort_cnt/top.txt\n"
+             "3 /tmp/wcl_sort_cnt/sub/mid.txt\n"
+             "4 /tmp/wcl_sort_cnt/sub/deep/bottom.txt\n"
+             "10\n" );
+}
+
+TEST( CliSortByCount, WorksWithoutRecursive )
+{
+  std::string setup =
+      "printf '%b' 'x\\ny\\nz\\nw\\n' > /tmp/wcl_sc_big.txt && "
+      "printf '%b' 'a\\nb\\n'         > /tmp/wcl_sc_small.txt && ";
+  std::string teardown = "; rm -f /tmp/wcl_sc_big.txt /tmp/wcl_sc_small.txt";
+  // Pass big first; sort must reorder so small comes first.
+  CmdResult r = run( setup + kBin + " --sort-by-count"
+                     " /tmp/wcl_sc_big.txt /tmp/wcl_sc_small.txt" + teardown );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "2 /tmp/wcl_sc_small.txt\n"
+             "4 /tmp/wcl_sc_big.txt\n"
+             "6\n" );
+}
+
+TEST( CliSortByCount, EqualCountsTieBreakAlphabetically )
+{
+  std::string setup =
+      "printf '%b' 'a\\nb\\n' > /tmp/wcl_sc_charlie.txt && "
+      "printf '%b' 'a\\nb\\n' > /tmp/wcl_sc_alpha.txt && "
+      "printf '%b' 'a\\nb\\n' > /tmp/wcl_sc_bravo.txt && ";
+  std::string teardown =
+      "; rm -f /tmp/wcl_sc_charlie.txt /tmp/wcl_sc_alpha.txt "
+      "/tmp/wcl_sc_bravo.txt";
+  // Provide out of alphabetical order; equal counts must sort by name.
+  CmdResult r = run( setup + kBin + " --sort-by-count"
+                     " /tmp/wcl_sc_charlie.txt /tmp/wcl_sc_bravo.txt"
+                     " /tmp/wcl_sc_alpha.txt" + teardown );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "2 /tmp/wcl_sc_alpha.txt\n"
+             "2 /tmp/wcl_sc_bravo.txt\n"
+             "2 /tmp/wcl_sc_charlie.txt\n"
+             "6\n" );
+}
+
+TEST( CliSortByCount, SingleFileStillTotalOnly )
+{
+  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_sc_one.txt && ";
+  CmdResult r = run( create + kBin + " --sort-by-count /tmp/wcl_sc_one.txt"
+                     "; rm -f /tmp/wcl_sc_one.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, "3\n" );
+}
+
 TEST( CliRecursive, SingleFileArgStillTotalOnly )
 {
   // --recursive with a non-directory arg behaves like a normal single file.
@@ -334,4 +416,151 @@ TEST( CliRecursive, SingleFileArgStillTotalOnly )
                      "; rm -f /tmp/wcl_rec_one.txt" );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out, "3\n" );
+}
+
+// ---------------------------------------------------------------------------
+// --sort-by-name / --sort-by-size. makeRecTree gives, by name:
+//   sub/deep/bottom.txt (4 lines, 8 bytes)
+//   sub/mid.txt         (3 lines, 6 bytes)
+//   top.txt             (2 lines, 4 bytes)
+// so name order and size order are reverses of one another here.
+// ---------------------------------------------------------------------------
+TEST( CliSort, ByNameAlphabetical )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_sort_name" );
+  CmdResult r = run( kBin + " -r --sort-by-name " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "4 /tmp/wcl_sort_name/sub/deep/bottom.txt\n"
+             "3 /tmp/wcl_sort_name/sub/mid.txt\n"
+             "2 /tmp/wcl_sort_name/top.txt\n"
+             "9\n" );
+}
+
+TEST( CliSort, BySizeAscending )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_sort_size" );
+  CmdResult r = run( kBin + " -r --sort-by-size " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "2 /tmp/wcl_sort_size/top.txt\n"
+             "3 /tmp/wcl_sort_size/sub/mid.txt\n"
+             "4 /tmp/wcl_sort_size/sub/deep/bottom.txt\n"
+             "9\n" );
+}
+
+// ---------------------------------------------------------------------------
+// --reverse flips whichever order is active.
+// ---------------------------------------------------------------------------
+TEST( CliReverse, FlipsCountOrderBiggestFirst )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_rev_count" );
+  CmdResult r = run( kBin + " -r --sort-by-count --reverse " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "4 /tmp/wcl_rev_count/sub/deep/bottom.txt\n"
+             "3 /tmp/wcl_rev_count/sub/mid.txt\n"
+             "2 /tmp/wcl_rev_count/top.txt\n"
+             "9\n" );
+}
+
+TEST( CliReverse, AloneFlipsDefaultAlphabetical )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_rev_alpha" );
+  CmdResult r = run( kBin + " -r --reverse " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "2 /tmp/wcl_rev_alpha/top.txt\n"
+             "3 /tmp/wcl_rev_alpha/sub/mid.txt\n"
+             "4 /tmp/wcl_rev_alpha/sub/deep/bottom.txt\n"
+             "9\n" );
+}
+
+// ---------------------------------------------------------------------------
+// --top N keeps the N highest-ranked files; the total still covers all of them.
+// ---------------------------------------------------------------------------
+TEST( CliTop, KeepsLargestByCountAscending )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_top_count" );
+  CmdResult r = run( kBin + " -r --top 2 " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "3 /tmp/wcl_top_count/sub/mid.txt\n"
+             "4 /tmp/wcl_top_count/sub/deep/bottom.txt\n"
+             "9\n" );  // total covers all three files
+}
+
+TEST( CliTop, WithReverseBiggestFirst )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_top_rev" );
+  CmdResult r = run( kBin + " -r --top 2 --reverse " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "4 /tmp/wcl_top_rev/sub/deep/bottom.txt\n"
+             "3 /tmp/wcl_top_rev/sub/mid.txt\n"
+             "9\n" );
+}
+
+TEST( CliTop, OneFileTotalStillCoversAll )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_top_one" );
+  CmdResult r = run( kBin + " -r --top 1 " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "4 /tmp/wcl_top_one/sub/deep/bottom.txt\n"
+             "9\n" );
+}
+
+TEST( CliTop, LargerThanCountShowsAll )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_top_all" );
+  CmdResult r = run( kBin + " -r --top 99 " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "2 /tmp/wcl_top_all/top.txt\n"
+             "3 /tmp/wcl_top_all/sub/mid.txt\n"
+             "4 /tmp/wcl_top_all/sub/deep/bottom.txt\n"
+             "9\n" );
+}
+
+TEST( CliTop, ComposesWithSortBySize )
+{
+  const std::string root = makeRecTree( "/tmp/wcl_top_size" );
+  // Two largest by size are mid (6B) and bottom (8B), shown ascending by size.
+  CmdResult r = run( kBin + " -r --sort-by-size --top 2 " + root );
+  std::system( ( "rm -rf " + root ).c_str() );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out,
+             "3 /tmp/wcl_top_size/sub/mid.txt\n"
+             "4 /tmp/wcl_top_size/sub/deep/bottom.txt\n"
+             "9\n" );
+}
+
+TEST( CliTop, ZeroErrors )
+{
+  CmdResult r = run( kBin + " --top 0 </dev/null 2>/dev/null" );
+  EXPECT_EQ( r.exitCode, 1 );
+}
+
+TEST( CliTop, MissingValueErrors )
+{
+  CmdResult r = run( kBin + " --top </dev/null 2>/dev/null" );
+  EXPECT_EQ( r.exitCode, 1 );
 }
