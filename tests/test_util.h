@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "chars.h"
 #include "countlines.h"
 #include "typedef.h"
 #include "words.h"
@@ -63,6 +64,44 @@ inline usize wordsStr( const std::string& s )
 {
   bool inWord = false;
   return words( s.data(), s.size(), inWord );
+}
+
+// Independent reference for `chars` (UTF-8 code points). Structured differently
+// from the implementation under test: it walks the leading byte of each sequence
+// and skips the continuation bytes, rather than counting non-continuation bytes,
+// so a shared bug is unlikely. For well-formed UTF-8 it equals `wc -m`.
+inline usize refChars( const std::string& s )
+{
+  usize n = 0;
+  size_t i = 0;
+  while ( i < s.size() ) {
+    const auto b = static_cast<unsigned char>( s[i] );
+    size_t len = 1;
+    if ( ( b & 0x80 ) == 0x00 ) len = 1;        // 0xxxxxxx
+    else if ( ( b & 0xE0 ) == 0xC0 ) len = 2;   // 110xxxxx
+    else if ( ( b & 0xF0 ) == 0xE0 ) len = 3;   // 1110xxxx
+    else if ( ( b & 0xF8 ) == 0xF0 ) len = 4;   // 11110xxx
+    i += len;
+    ++n;
+  }
+  return n;
+}
+
+// Run `chars` over a whole string in one shot.
+inline usize charsStr( const std::string& s )
+{
+  return chars( s.data(), s.size() );
+}
+
+// Run `chars` over the string fed in fixed-size pieces, the way a single thread
+// streams successive read buffers. Because each byte is classified on its own,
+// this must agree with charsStr regardless of where the splits land.
+inline usize charsChunked( const std::string& s, size_t chunk )
+{
+  usize total = 0;
+  for ( size_t i = 0; i < s.size(); i += chunk )
+    total += chars( s.data() + i, std::min( chunk, s.size() - i ) );
+  return total;
 }
 
 // Run `words` feeding the string in fixed-size pieces, carrying in-word state

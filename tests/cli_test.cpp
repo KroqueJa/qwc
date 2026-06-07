@@ -106,6 +106,7 @@ TEST( Cli, HelpPrintsUsageAndExitsZero )
   EXPECT_NE( r.out.find( "--char" ), std::string::npos );
   EXPECT_NE( r.out.find( "--chars" ), std::string::npos );
   EXPECT_NE( r.out.find( "--words" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--multibyte-chars" ), std::string::npos );
 }
 
 TEST( Cli, HelpDoesNotConsumeStdin )
@@ -162,6 +163,15 @@ TEST( CliShortFlags, DashWCountsWords )
   CmdResult r = run( piped( "  the quick brown   fox\\n", "-w" ) );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out, line( 4 ) );
+}
+
+// -m is the character-count flag (like `wc -m`). On ASCII a character is a byte,
+// so this is locale-independent.
+TEST( CliShortFlags, DashMCountsChars )
+{
+  CmdResult r = run( piped( "hello world", "-m" ) );  // 11 ASCII chars
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 11 ) );
 }
 
 TEST( CliShortFlags, DashRRecursesDirectory )
@@ -319,6 +329,25 @@ TEST( CliRecursive, ComposesWithWordsFlag )
              line( 3, "/tmp/wcl_rec_words/sub/mid.txt" ) +
              line( 2, "/tmp/wcl_rec_words/top.txt" ) +
              line( 9, "total" ) );
+}
+
+// ---------------------------------------------------------------------------
+// --multibyte-chars counts characters (like `wc -m`). The long form mirrors -m.
+// ---------------------------------------------------------------------------
+TEST( Cli, MultibyteCharsFlagStdin )
+{
+  CmdResult r = run( piped( "abcde", "--multibyte-chars" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 5 ) );
+}
+
+TEST( Cli, MultibyteCharsFlagSingleFile )
+{
+  std::string create = "printf '%b' 'abc\\n' > /tmp/wcl_m.txt && ";
+  CmdResult r = run( create + kBin + " --multibyte-chars /tmp/wcl_m.txt"
+                     "; rm -f /tmp/wcl_m.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 4, "/tmp/wcl_m.txt" ) );  // 4 ASCII bytes/chars
 }
 
 // ---------------------------------------------------------------------------
@@ -706,7 +735,7 @@ struct Mode
 };
 // wcl's -a is bare wc; the rest map to a single wc flag.
 const Mode kCoreModes[] = {
-    { "", "-l" }, { "-w", "-w" }, { "-c", "-c" }, { "-a", "" } };
+    { "", "-l" }, { "-w", "-w" }, { "-c", "-c" }, { "-m", "-m" }, { "-a", "" } };
 
 }  // namespace
 
@@ -736,6 +765,24 @@ TEST( CliWcCompat, StdinMatchesWc )
     EXPECT_EQ( got.out, exp.out )
         << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
   }
+}
+
+// Multibyte: wcl -m must match wc -m byte-for-byte on real UTF-8 content. Both
+// honor the ambient locale (code points in a UTF-8 locale, bytes under C), so
+// they agree regardless of which locale the test happens to run under. The
+// payload is written as literal UTF-8 bytes to sidestep printf escape quirks.
+TEST( CliWcCompat, MultibyteCharsMatchWc )
+{
+  const std::string f = "/tmp/wcl_wc_utf8.txt";
+  // "héllo wörld ☃\n" -- accented letters (2 bytes each) and a snowman (3).
+  std::system(
+      ( "printf '%s\\n' 'h\xC3\xA9llo w\xC3\xB6rld \xE2\x98\x83' > " + f )
+          .c_str() );
+  CmdResult got = run( kBin + " -m " + f );
+  CmdResult exp = run( std::string( "wc -m " ) + f );
+  EXPECT_EQ( got.exitCode, 0 );
+  EXPECT_EQ( got.out, exp.out );
+  std::system( ( "rm -f " + f ).c_str() );
 }
 
 TEST( CliWcCompat, MultipleFilesMatchWcIncludingTotal )

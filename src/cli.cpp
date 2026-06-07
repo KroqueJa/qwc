@@ -38,6 +38,11 @@ void printHelp()
       "                        scanning of the file contents is needed.\n"
       "  -w, --words           Count whitespace-separated words instead of\n"
       "                        lines, like `wc -w`.\n"
+      "  -m, --multibyte-chars Count characters instead of lines, like `wc -m`.\n"
+      "                        In a UTF-8 locale this counts code points (so an\n"
+      "                        accented letter is one character, not two bytes);\n"
+      "                        in a single-byte locale it falls back to bytes,\n"
+      "                        exactly as wc does.\n"
       "  -a, --all             Print lines, words and bytes together, like\n"
       "                        running `wc` with no flags.\n"
       "  -r, --recursive       Treat directory arguments as whole trees: wcl\n"
@@ -74,6 +79,7 @@ void printHelp()
       "  wcl --char , data.csv         commas in data.csv\n"
       "  wcl -c notes.txt              bytes in notes.txt\n"
       "  wcl -w notes.txt              words in notes.txt\n"
+      "  wcl -m notes.txt              characters in notes.txt\n"
       "  wcl -a notes.txt              lines, words and bytes in notes.txt\n"
       "  wcl --recursive src           lines in every file under src/\n"
       "  wcl -r --top 10 src           the 10 biggest files under src/\n";
@@ -115,6 +121,9 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-w", "--words" ) ) {
       opt.mode = CountMode::Words;
+      fileStart += 1;
+    } else if ( isFlag( argv[fileStart], "-m", "--multibyte-chars" ) ) {
+      opt.mode = CountMode::Chars;
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-a", "--all" ) ) {
       opt.all = true;

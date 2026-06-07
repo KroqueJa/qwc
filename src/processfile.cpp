@@ -10,6 +10,7 @@
 #include <thread>
 #include <vector>
 
+#include "chars.h"
 #include "countlines.h"
 #include "words.h"
 
@@ -31,6 +32,8 @@ usize processFile(
         total += got;
       else if ( mode == CountMode::Words )
         total += words( buffer, got, inWord );
+      else if ( mode == CountMode::Chars )
+        total += chars( buffer, got );
       else
         total += count( buffer, got, target );
     }
@@ -123,6 +126,8 @@ usize processFile(
         if ( mode == CountMode::Words ) {
           if ( first ) r.startsInWord = !isWordSpace( buffer[0] );
           r.count += words( buffer.data(), g, inWord );
+        } else if ( mode == CountMode::Chars ) {
+          r.count += chars( buffer.data(), g );
         } else {
           r.count += count( buffer.data(), g, target );
         }

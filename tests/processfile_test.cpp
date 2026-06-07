@@ -13,6 +13,7 @@
 #include "processfile.h"
 #include "test_util.h"
 
+using wcltest::refChars;
 using wcltest::refCount;
 using wcltest::refWords;
 
@@ -208,6 +209,62 @@ TEST( ProcessFileWords, Deterministic )
   for ( int i = 0; i < 8; ++i )
     EXPECT_EQ( processFile( f.path(), 4096, '\n', CountMode::Words ), expected )
         << "run " << i;
+}
+
+// ---------------------------------------------------------------------------
+// Character counting (CountMode::Chars, like `wc -m`): UTF-8 code points.
+// ---------------------------------------------------------------------------
+TEST( ProcessFileChars, EmptyFile )
+{
+  TempFile f( "" );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
+             0u );
+}
+
+TEST( ProcessFileChars, AsciiCountsLikeBytes )
+{
+  TempFile f( "hello\nworld" );  // 11 bytes, all single-byte
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
+             11u );
+}
+
+TEST( ProcessFileChars, MultibyteCountsCodePoints )
+{
+  // "héllo wörld\n" -> 12 characters, 14 bytes.
+  const std::string content = "h\xC3\xA9llo w\xC3\xB6rld\n";
+  TempFile f( content );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
+             12u );
+}
+
+// Like the word path, a small bytesPerThread forces many chunks so multibyte
+// sequences straddle splits. Unlike words there is no stitching: each chunk's
+// non-continuation-byte count simply sums, and must equal the whole-file count.
+TEST( ProcessFileChars, ChunkBoundariesDoNotMiscount )
+{
+  std::string content;
+  for ( int i = 0; i < 4000; ++i ) content += "a\xC3\xA9z\xE2\x98\x83 ";
+  const size_t expected = refChars( content );
+  TempFile f( content );
+
+  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
+                       size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
+                       size_t( 64 * 1024 * 1024 ) } ) {
+    EXPECT_EQ( processFile( f.path(), bpt, '\n', CountMode::Chars ), expected )
+        << "bytesPerThread=" << bpt;
+  }
+}
+
+TEST( ProcessFileChars, LargerThanReadBuffer )
+{
+  std::string content;
+  while ( content.size() < 5 * 1024 * 1024 ) content += "lorem \xE2\x98\x83 ip ";
+  const size_t expected = refChars( content );
+  TempFile f( content );
+  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
+             expected );
+  EXPECT_EQ( processFile( f.path(), 256 * 1024, '\n', CountMode::Chars ),
+             expected );  // many chunks
 }
 
 // ---------------------------------------------------------------------------
@@ -419,6 +476,22 @@ TEST_F( StdinFixture, StdinWordsLargerThanReadBuffer )
   const size_t expected = refWords( content );
   feedStdin( content );
   EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Words ),
+             expected );
+}
+
+TEST_F( StdinFixture, StdinCharCount )
+{
+  feedStdin( "h\xC3\xA9llo w\xC3\xB6rld\n" );  // 12 chars, 14 bytes
+  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Chars ), 12u );
+}
+
+TEST_F( StdinFixture, StdinCharsLargerThanReadBuffer )
+{
+  std::string content;
+  while ( content.size() < 2 * 1024 * 1024 ) content += "lorem \xE2\x98\x83 ip ";
+  const size_t expected = refChars( content );
+  feedStdin( content );
+  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Chars ),
              expected );
 }
 

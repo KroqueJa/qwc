@@ -1,4 +1,6 @@
 #include <atomic>
+#include <clocale>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -37,6 +39,16 @@ int main( int argc, char** argv )
 {
   Options opt;
   if ( const std::optional<int> rc = parseArgs( argc, argv, opt ) ) return *rc;
+
+  // `wc -m` counts characters in the locale's encoding. In a single-byte locale
+  // (e.g. C/POSIX) a character is just a byte, so wc's -m collapses to -c.
+  // Mirror that: adopt the environment's locale and, when it isn't multibyte,
+  // count bytes instead of scanning for UTF-8 code points. (Other modes are
+  // byte-oriented by design, so they're unaffected.)
+  if ( opt.mode == CountMode::Chars ) {
+    std::setlocale( LC_CTYPE, "" );
+    if ( MB_CUR_MAX <= 1 ) opt.mode = CountMode::Bytes;
+  }
 
   // No file arguments: count standard input. wc prints just the padded count(s),
   // with no name.
