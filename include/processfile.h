@@ -5,8 +5,9 @@
 // byte (newlines by default, like `wc -l`); Bytes reports the file's size in
 // bytes, like `wc -c` -- the size is already known from fstat, so no scan is
 // needed; Words counts whitespace-separated words, like `wc -w`; Chars counts
-// UTF-8 characters (code points), like `wc -m` in a multibyte locale.
-enum class CountMode { Target, Bytes, Words, Chars };
+// UTF-8 characters (code points), like `wc -m` in a multibyte locale;
+// MaxLineLength reports the length in bytes of the longest line, like `wc -L`.
+enum class CountMode { Target, Bytes, Words, Chars, MaxLineLength };
 
 usize processFile(
     const char* filename, usize bytesPerThread = 64 * 1024 * 1024,

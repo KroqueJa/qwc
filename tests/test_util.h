@@ -7,6 +7,7 @@
 
 #include "chars.h"
 #include "countlines.h"
+#include "maxlinelen.h"
 #include "typedef.h"
 #include "words.h"
 
@@ -102,6 +103,45 @@ inline usize charsChunked( const std::string& s, size_t chunk )
   for ( size_t i = 0; i < s.size(); i += chunk )
     total += chars( s.data() + i, std::min( chunk, s.size() - i ) );
   return total;
+}
+
+// Independent reference for the longest-line length (`wc -L`). Structured by
+// splitting on newlines and measuring each segment's byte length, rather than
+// the running-counter approach the implementation uses, so a shared bug is
+// unlikely. The newline is excluded, and -- matching `wc -L` -- a trailing run
+// with no final newline is not a counted line (the bytes after the last newline
+// are intentionally ignored).
+inline usize refMaxLineLen( const std::string& s )
+{
+  usize best = 0;
+  size_t start = 0;
+  for ( size_t i = 0; i < s.size(); ++i ) {
+    if ( s[i] == '\n' ) {
+      best = std::max( best, i - start );  // line [start, i), newline excluded
+      start = i + 1;
+    }
+  }
+  return best;
+}
+
+// Run `maxLineLen` over a whole string in one shot. The answer is the longest
+// newline-terminated line; the trailing open run (`ls.cur`) is dropped.
+inline usize maxLineLenStr( const std::string& s )
+{
+  LineScan ls;
+  maxLineLen( s.data(), s.size(), ls );
+  return ls.maxComplete;
+}
+
+// Run `maxLineLen` over the string fed in fixed-size pieces, carrying state
+// across them, the way a single thread streams successive read buffers within
+// one chunk. Must agree with maxLineLenStr regardless of where splits land.
+inline usize maxLineLenChunked( const std::string& s, size_t chunk )
+{
+  LineScan ls;
+  for ( size_t i = 0; i < s.size(); i += chunk )
+    maxLineLen( s.data() + i, std::min( chunk, s.size() - i ), ls );
+  return ls.maxComplete;
 }
 
 // Run `words` feeding the string in fixed-size pieces, carrying in-word state

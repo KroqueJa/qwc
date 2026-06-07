@@ -15,6 +15,7 @@
 
 using wcltest::refChars;
 using wcltest::refCount;
+using wcltest::refMaxLineLen;
 using wcltest::refWords;
 
 namespace {
@@ -268,6 +269,99 @@ TEST( ProcessFileChars, LargerThanReadBuffer )
 }
 
 // ---------------------------------------------------------------------------
+// Longest-line length (CountMode::MaxLineLength, like `wc -L`).
+// ---------------------------------------------------------------------------
+TEST( ProcessFileMaxLine, EmptyFile )
+{
+  TempFile f( "" );
+  EXPECT_EQ(
+      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
+      0u );
+}
+
+TEST( ProcessFileMaxLine, SmallKnownLength )
+{
+  TempFile f( "ab\nabcd\nx\n" );  // longest line "abcd" -> 4
+  EXPECT_EQ(
+      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
+      4u );
+}
+
+TEST( ProcessFileMaxLine, UnterminatedFinalLineIgnored )
+{
+  // The final line "ccccc" has no trailing newline, so wc -L ignores it; the
+  // longest terminated line is "bb" -> 2.
+  TempFile f( "a\nbb\nccccc" );
+  EXPECT_EQ(
+      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
+      2u );
+}
+
+// The critical stitch test: a small bytesPerThread forces many chunks, so the
+// longest line straddles chunk edges. The merge must reassemble it (carry +
+// prefix) and never under- or over-count, for every chunk size.
+TEST( ProcessFileMaxLine, ChunkBoundariesDoNotMiscount )
+{
+  // Short lines around one very long line, so the long line spans many chunks.
+  std::string content = "aa\nbb\n";
+  content += std::string( 9000, 'x' );  // the longest line, no newline yet
+  content += "\ncc\n";
+  const size_t expected = refMaxLineLen( content );  // 9000
+  ASSERT_EQ( expected, 9000u );
+  TempFile f( content );
+
+  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
+                       size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
+                       size_t( 64 * 1024 * 1024 ) } ) {
+    EXPECT_EQ(
+        processFile( f.path(), bpt, '\n', CountMode::MaxLineLength ), expected )
+        << "bytesPerThread=" << bpt;
+  }
+}
+
+// A boundary landing exactly on a newline must not drop or merge lines.
+TEST( ProcessFileMaxLine, BoundaryOnNewline )
+{
+  std::string content;
+  for ( int i = 0; i < 2000; ++i ) content += "abcd\n";  // every line length 4
+  const size_t expected = refMaxLineLen( content );      // 4
+  TempFile f( content );
+  for ( size_t bpt : { size_t( 1 ), size_t( 5 ), size_t( 64 ), size_t( 256 ) } )
+    EXPECT_EQ(
+        processFile( f.path(), bpt, '\n', CountMode::MaxLineLength ), expected )
+        << "bytesPerThread=" << bpt;
+}
+
+TEST( ProcessFileMaxLine, LargerThanReadBuffer )
+{
+  // A line longer than the 1 MiB per-thread read buffer, exercising the carry
+  // across read buffers within a single chunk.
+  std::string content = "tiny\n";
+  content += std::string( 3 * 1024 * 1024, 'y' );  // the longest line
+  content += "\ntiny\n";
+  const size_t expected = refMaxLineLen( content );
+  TempFile f( content );
+  EXPECT_EQ(
+      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
+      expected );
+  EXPECT_EQ(
+      processFile( f.path(), 256 * 1024, '\n', CountMode::MaxLineLength ),
+      expected );  // many chunks
+}
+
+TEST( ProcessFileMaxLine, Deterministic )
+{
+  std::string content;
+  for ( int i = 0; i < 1000; ++i ) content += "a bb ccc dddd\n";
+  const size_t expected = refMaxLineLen( content );
+  TempFile f( content );
+  for ( int i = 0; i < 8; ++i )
+    EXPECT_EQ(
+        processFile( f.path(), 4096, '\n', CountMode::MaxLineLength ), expected )
+        << "run " << i;
+}
+
+// ---------------------------------------------------------------------------
 // processFileAll: lines, words and bytes in one pass (the bare-wc / --all mode).
 // ---------------------------------------------------------------------------
 TEST( ProcessFileAll, EmptyFile )
@@ -493,6 +587,27 @@ TEST_F( StdinFixture, StdinCharsLargerThanReadBuffer )
   feedStdin( content );
   EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Chars ),
              expected );
+}
+
+TEST_F( StdinFixture, StdinMaxLineLength )
+{
+  feedStdin( "ab\nabcd\nx\n" );  // longest line "abcd" -> 4
+  EXPECT_EQ(
+      processFile( "", 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ), 4u );
+}
+
+TEST_F( StdinFixture, StdinMaxLineLengthLargerThanReadBuffer )
+{
+  // The stdin path reads in 128*4096 = 512 KiB chunks; a line longer than that
+  // forces the open-run length to carry across reads.
+  std::string content = "tiny\n";
+  content += std::string( 2 * 1024 * 1024, 'z' );
+  content += "\ntiny\n";
+  const size_t expected = refMaxLineLen( content );
+  feedStdin( content );
+  EXPECT_EQ(
+      processFile( "", 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
+      expected );
 }
 
 TEST_F( StdinFixture, StdinAllCounts )

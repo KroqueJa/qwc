@@ -107,6 +107,7 @@ TEST( Cli, HelpPrintsUsageAndExitsZero )
   EXPECT_NE( r.out.find( "--chars" ), std::string::npos );
   EXPECT_NE( r.out.find( "--words" ), std::string::npos );
   EXPECT_NE( r.out.find( "--multibyte-chars" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--max-line-length" ), std::string::npos );
 }
 
 TEST( Cli, HelpDoesNotConsumeStdin )
@@ -172,6 +173,14 @@ TEST( CliShortFlags, DashMCountsChars )
   CmdResult r = run( piped( "hello world", "-m" ) );  // 11 ASCII chars
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out, line( 11 ) );
+}
+
+// -L is the longest-line flag (like `wc -L`): the most bytes on any one line.
+TEST( CliShortFlags, DashLLongestLine )
+{
+  CmdResult r = run( piped( "ab\\nabcd\\nx\\n", "-L" ) );  // "abcd" -> 4
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 4 ) );
 }
 
 TEST( CliShortFlags, DashRRecursesDirectory )
@@ -348,6 +357,44 @@ TEST( Cli, MultibyteCharsFlagSingleFile )
                      "; rm -f /tmp/wcl_m.txt" );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out, line( 4, "/tmp/wcl_m.txt" ) );  // 4 ASCII bytes/chars
+}
+
+// ---------------------------------------------------------------------------
+// --max-line-length reports the longest line (like `wc -L`). The long form
+// mirrors -L, and across files the "total" is the maximum, not a sum.
+// ---------------------------------------------------------------------------
+TEST( Cli, MaxLineLengthLongForm )
+{
+  CmdResult r = run( piped( "a\\nbbbbb\\ncc\\n", "--max-line-length" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 5 ) );  // "bbbbb"
+}
+
+TEST( Cli, MaxLineLengthMultiFileTotalIsMax )
+{
+  std::string setup =
+      "printf '%b' 'a\\nbbb\\n'    > /tmp/wcl_L_a.txt && "  // longest line 3
+      "printf '%b' 'cccccc\\nd\\n' > /tmp/wcl_L_b.txt && ";  // longest line 6
+  std::string teardown = "; rm -f /tmp/wcl_L_a.txt /tmp/wcl_L_b.txt";
+  CmdResult r = run( setup + kBin + " -L"
+                     " /tmp/wcl_L_a.txt /tmp/wcl_L_b.txt" + teardown );
+  EXPECT_EQ( r.exitCode, 0 );
+  // Total is the max (6), not the sum (9).
+  EXPECT_EQ( r.out,
+             line( 3, "/tmp/wcl_L_a.txt" ) +
+             line( 6, "/tmp/wcl_L_b.txt" ) +
+             line( 6, "total" ) );
+}
+
+// Longest line split across many chunks: the per-chunk merge must reassemble it.
+TEST( Cli, MaxLineLengthChunkedMatchesTotal )
+{
+  std::string create =
+      "printf '%b' 'aa\\nbbbbbbbbbbbbbbbbbbbb\\ncc' > /tmp/wcl_L_big.txt && ";
+  CmdResult r = run( create + kBin + " -L --bytes-per-thread 4"
+                     " /tmp/wcl_L_big.txt; rm -f /tmp/wcl_L_big.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 20, "/tmp/wcl_L_big.txt" ) );  // the 20 b's
 }
 
 // ---------------------------------------------------------------------------
@@ -734,8 +781,8 @@ struct Mode
   const char* wcFlag;   // the matching wc flag
 };
 // wcl's -a is bare wc; the rest map to a single wc flag.
-const Mode kCoreModes[] = {
-    { "", "-l" }, { "-w", "-w" }, { "-c", "-c" }, { "-m", "-m" }, { "-a", "" } };
+const Mode kCoreModes[] = { { "", "-l" },   { "-w", "-w" }, { "-c", "-c" },
+                            { "-m", "-m" },  { "-L", "-L" }, { "-a", "" } };
 
 }  // namespace
 

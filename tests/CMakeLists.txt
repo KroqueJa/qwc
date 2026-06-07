@@ -29,11 +29,13 @@ add_executable( wcl_tests
   count_test.cpp
   words_test.cpp
   chars_test.cpp
+  maxlinelen_test.cpp
   processfile_test.cpp
   cli_test.cpp
   ${CMAKE_SOURCE_DIR}/src/processfile.cpp
   ${CMAKE_SOURCE_DIR}/src/words_scalar.cpp
   ${CMAKE_SOURCE_DIR}/src/chars_scalar.cpp
+  ${CMAKE_SOURCE_DIR}/src/maxlinelen_scalar.cpp
   ${CMAKE_SOURCE_DIR}/${WCL_COUNTLINES}
 )
 target_include_directories( wcl_tests PRIVATE ${CMAKE_SOURCE_DIR}/include )

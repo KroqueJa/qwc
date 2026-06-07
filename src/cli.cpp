@@ -43,6 +43,11 @@ void printHelp()
       "                        accented letter is one character, not two bytes);\n"
       "                        in a single-byte locale it falls back to bytes,\n"
       "                        exactly as wc does.\n"
+      "  -L, --max-line-length Print the length of the longest line in bytes\n"
+      "                        instead of a count, like `wc -L`. The trailing\n"
+      "                        newline is not counted, and with several files the\n"
+      "                        \"total\" line reports the longest line across all\n"
+      "                        of them (the maximum, not a sum).\n"
       "  -a, --all             Print lines, words and bytes together, like\n"
       "                        running `wc` with no flags.\n"
       "  -r, --recursive       Treat directory arguments as whole trees: wcl\n"
@@ -80,6 +85,7 @@ void printHelp()
       "  wcl -c notes.txt              bytes in notes.txt\n"
       "  wcl -w notes.txt              words in notes.txt\n"
       "  wcl -m notes.txt              characters in notes.txt\n"
+      "  wcl -L notes.txt              length of the longest line in notes.txt\n"
       "  wcl -a notes.txt              lines, words and bytes in notes.txt\n"
       "  wcl --recursive src           lines in every file under src/\n"
       "  wcl -r --top 10 src           the 10 biggest files under src/\n";
@@ -124,6 +130,9 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-m", "--multibyte-chars" ) ) {
       opt.mode = CountMode::Chars;
+      fileStart += 1;
+    } else if ( isFlag( argv[fileStart], "-L", "--max-line-length" ) ) {
+      opt.mode = CountMode::MaxLineLength;
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-a", "--all" ) ) {
       opt.all = true;
@@ -231,8 +240,13 @@ void printResults( const Options& opt, const std::vector<Result>& output )
   const usize numFiles = output.size();
 
   // The grand total always covers every file, independent of sorting or --top.
+  // For --max-line-length the "total" is the longest line across all files (a
+  // maximum), matching `wc -L`; every other mode sums the per-file counts.
   usize total = 0;
-  for ( const Result& result: output ) total += result.count;
+  if ( opt.mode == CountMode::MaxLineLength )
+    for ( const Result& result: output ) total = std::max( total, result.count );
+  else
+    for ( const Result& result: output ) total += result.count;
 
   // Decide the display order via an index permutation, leaving `output` (and the
   // total) untouched. Default order is the order files were collected in.

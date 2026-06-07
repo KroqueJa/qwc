@@ -12,6 +12,7 @@
 
 #include "chars.h"
 #include "countlines.h"
+#include "maxlinelen.h"
 #include "words.h"
 
 static const u32 MAX_THREADS = std::thread::hardware_concurrency();
@@ -26,6 +27,7 @@ usize processFile(
     isize bytesRead;
     usize total = 0;
     bool inWord = false;  // carried across reads for word counting
+    LineScan ls;          // carried across reads for max-line-length
     while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
       const auto got = static_cast<usize>( bytesRead );
       if ( mode == CountMode::Bytes )
@@ -34,9 +36,15 @@ usize processFile(
         total += words( buffer, got, inWord );
       else if ( mode == CountMode::Chars )
         total += chars( buffer, got );
+      else if ( mode == CountMode::MaxLineLength )
+        maxLineLen( buffer, got, ls );
       else
         total += count( buffer, got, target );
     }
+    // One sequential stream: the longest line is the largest newline-terminated
+    // line. `wc -L` ignores a trailing line with no final newline, so `ls.cur`
+    // is intentionally dropped.
+    if ( mode == CountMode::MaxLineLength ) return ls.maxComplete;
     return total;
   }
 
@@ -98,6 +106,7 @@ usize processFile(
     usize count = 0;
     bool startsInWord = false;
     bool endsInWord = false;
+    LineScan line;  // per-chunk scan state for max-line-length mode
   };
   std::vector<ChunkTally> results( numThreads );
   std::vector<std::thread> threads;
@@ -128,6 +137,8 @@ usize processFile(
           r.count += words( buffer.data(), g, inWord );
         } else if ( mode == CountMode::Chars ) {
           r.count += chars( buffer.data(), g );
+        } else if ( mode == CountMode::MaxLineLength ) {
+          maxLineLen( buffer.data(), g, r.line );
         } else {
           r.count += count( buffer.data(), g, target );
         }
@@ -153,12 +164,34 @@ usize processFile(
     // never exceeds fileSize, so the carry never has to skip past a chunk.)
     usize total = 0;
     bool carry = false;
-    for ( const auto& [count, startsInWord, endsInWord]: results ) {
+    for ( const auto& [count, startsInWord, endsInWord, line]: results ) {
       total += count;
       if ( carry && startsInWord ) --total;
       carry = endsInWord;
     }
     return total;
+  }
+
+  if ( mode == CountMode::MaxLineLength ) {
+    // Stitch the per-chunk scans in order. A line split across a boundary is the
+    // previous chunk's open run (`carry`) plus this chunk's prefix (the bytes up
+    // to its first newline) -- but only a newline realizes it as a counted line.
+    // Candidates for the longest are that joined length and each chunk's
+    // newline-terminated lines (`maxComplete`); a chunk with no newline just
+    // extends the open run. The run still open after the last chunk has no
+    // terminating newline, so -- like `wc -L` -- it is dropped, not reported.
+    usize maxLen = 0;
+    usize carry = 0;
+    for ( const ChunkTally& r: results ) {
+      maxLen = std::max( maxLen, r.line.maxComplete );
+      if ( r.line.hasNewline ) {
+        maxLen = std::max( maxLen, carry + r.line.prefixLen );
+        carry = r.line.cur;  // this chunk's trailing open run
+      } else {
+        carry += r.line.cur;  // whole chunk continues the open run
+      }
+    }
+    return maxLen;
   }
 
   usize total = 0;
