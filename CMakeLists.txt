@@ -54,25 +54,30 @@ option( WCL_BUILD_TESTS "Build unit tests (requires the tests/googletest submodu
 # ---------------------------------------------------------------------------
 if( WCL_SCALAR )
   set( WCL_COUNTLINES src/count_scalar.cpp)
+  set( WCL_WORDS src/words_scalar.cpp)
   set( WCL_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64" )
   set( WCL_COUNTLINES src/count_neon.cpp)
+  set( WCL_WORDS src/words_neon.cpp)
   # Bare like the old Makefile: Apple clang targets the native Apple Silicon
   # baseline (NEON included) with no flag. If you ever benchmarked with an
   # explicit -mcpu=apple-mN or -mcpu=native, add it here to match.
   set( WCL_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64" )
   set( WCL_COUNTLINES src/count_avx2.cpp)
+  set( WCL_WORDS src/words_scalar.cpp)  # no AVX2 words variant yet
   set( WCL_SIMD_FLAGS -mavx2 )
 else()
   set( WCL_COUNTLINES src/count_scalar.cpp)
+  set( WCL_WORDS src/words_scalar.cpp)
   set( WCL_SIMD_FLAGS )
 endif()
-message( STATUS "wcl: building ${WCL_COUNTLINES} for ${CMAKE_SYSTEM_PROCESSOR}" )
+message( STATUS "wcl: building ${WCL_COUNTLINES} and ${WCL_WORDS} for ${CMAKE_SYSTEM_PROCESSOR}" )
 
-# words, chars and max-line-length are scalar-only for now (no SIMD variant yet),
-# so they always compile in alongside the arch-dispatched countlines.
-set( WCL_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp src/words_scalar.cpp src/chars_scalar.cpp src/maxlinelen_scalar.cpp )
+# countlines and words are arch-dispatched above (SIMD where available, scalar
+# otherwise) and added to each target explicitly. chars and max-line-length are
+# scalar-only for now, so they always compile in here.
+set( WCL_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp src/chars_scalar.cpp src/maxlinelen_scalar.cpp )
 
 # ---------------------------------------------------------------------------
 # Shared config applied to a target
@@ -108,14 +113,18 @@ else()
   set( WCL_OUTPUT_NAME "wcl-${WCL_SUFFIX}" )
 endif()
 
-add_executable( wcl ${WCL_COMMON_SOURCES} ${WCL_COUNTLINES} )
+add_executable( wcl ${WCL_COMMON_SOURCES} ${WCL_COUNTLINES} ${WCL_WORDS} )
 set_target_properties( wcl PROPERTIES OUTPUT_NAME ${WCL_OUTPUT_NAME} )
 target_compile_options( wcl PRIVATE ${WCL_SIMD_FLAGS} )
 wcl_configure( wcl )
 message( STATUS "wcl: output binary -> ${CMAKE_SOURCE_DIR}/${WCL_OUTPUT_NAME}" )
 
-# Portable scalar build, on demand (old: `make wcl-scalar`).
-add_executable( wcl-scalar EXCLUDE_FROM_ALL ${WCL_COMMON_SOURCES} src/count_scalar.cpp)
+# Portable scalar build, on demand (old: `make wcl-scalar`). Uses the scalar
+# implementation of every algorithm -- countlines and words included -- so it
+# serves as the baseline the SIMD build is benchmarked against. Built with
+# `cmake --build <dir> --target wcl-scalar`; emits ./wcl-scalar.
+add_executable( wcl-scalar EXCLUDE_FROM_ALL
+  ${WCL_COMMON_SOURCES} src/count_scalar.cpp src/words_scalar.cpp )
 wcl_configure( wcl-scalar )
 target_compile_options( wcl PRIVATE -Wall -Wextra -Wpedantic )
 
