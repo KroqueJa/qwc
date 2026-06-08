@@ -73,11 +73,13 @@ if( QWC_SCALAR )
   set( QWC_COUNTLINES src/count_scalar.cpp)
   set( QWC_WORDS src/words_scalar.cpp)
   set( QWC_MAXLINE src/maxlinelen_scalar.cpp)
+  set( QWC_CHARS src/chars_scalar.cpp)
   set( QWC_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64" )
   set( QWC_COUNTLINES src/count_neon.cpp)
   set( QWC_WORDS src/words_neon.cpp)
   set( QWC_MAXLINE src/maxlinelen_neon.cpp)
+  set( QWC_CHARS src/chars_neon.cpp)
   # Bare like the old Makefile: Apple clang targets the native Apple Silicon
   # baseline (NEON included) with no flag. If you ever benchmarked with an
   # explicit -mcpu=apple-mN or -mcpu=native, add it here to match.
@@ -86,19 +88,21 @@ elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64" )
   set( QWC_COUNTLINES src/count_avx2.cpp)
   set( QWC_WORDS src/words_scalar.cpp)  # no AVX2 words variant yet
   set( QWC_MAXLINE src/maxlinelen_scalar.cpp)  # no AVX2 max-line variant yet
+  set( QWC_CHARS src/chars_scalar.cpp)  # no AVX2 chars variant yet
   set( QWC_SIMD_FLAGS -mavx2 )
 else()
   set( QWC_COUNTLINES src/count_scalar.cpp)
   set( QWC_WORDS src/words_scalar.cpp)
   set( QWC_MAXLINE src/maxlinelen_scalar.cpp)
+  set( QWC_CHARS src/chars_scalar.cpp)
   set( QWC_SIMD_FLAGS )
 endif()
-message( STATUS "qwc: building ${QWC_COUNTLINES}, ${QWC_WORDS} and ${QWC_MAXLINE} for ${CMAKE_SYSTEM_PROCESSOR}" )
+message( STATUS "qwc: building ${QWC_COUNTLINES}, ${QWC_WORDS}, ${QWC_MAXLINE} and ${QWC_CHARS} for ${CMAKE_SYSTEM_PROCESSOR}" )
 
-# countlines, words and max-line-length are arch-dispatched above (SIMD where
-# available, scalar otherwise) and added to each target explicitly. chars is
-# scalar-only for now, so it always compiles in here.
-set( QWC_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp src/chars_scalar.cpp )
+# Every counting algorithm (countlines, words, max-line-length, chars) is
+# arch-dispatched above (SIMD where available, scalar otherwise) and added to
+# each target explicitly, so the common set is just the frontend and dispatcher.
+set( QWC_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp )
 
 # ---------------------------------------------------------------------------
 # Shared config applied to a target
@@ -142,20 +146,20 @@ else()
   set( QWC_OUTPUT_NAME "qwc-${QWC_SUFFIX}" )
 endif()
 
-add_executable( qwc ${QWC_COMMON_SOURCES} ${QWC_COUNTLINES} ${QWC_WORDS} ${QWC_MAXLINE} )
+add_executable( qwc ${QWC_COMMON_SOURCES} ${QWC_COUNTLINES} ${QWC_WORDS} ${QWC_MAXLINE} ${QWC_CHARS} )
 set_target_properties( qwc PROPERTIES OUTPUT_NAME ${QWC_OUTPUT_NAME} )
 target_compile_options( qwc PRIVATE ${QWC_SIMD_FLAGS} )
 qwc_configure( qwc )
 message( STATUS "qwc: output binary -> ${CMAKE_SOURCE_DIR}/${QWC_OUTPUT_NAME}" )
 
 # Portable scalar build, on demand (old: `make qwc-scalar`). Uses the scalar
-# implementation of every algorithm -- countlines, words and max-line-length
-# included -- so it serves as the baseline the SIMD build is benchmarked
+# implementation of every algorithm -- countlines, words, max-line-length and
+# chars included -- so it serves as the baseline the SIMD build is benchmarked
 # against. Built with `cmake --build <dir> --target qwc-scalar`; emits
 # ./qwc-scalar.
 add_executable( qwc-scalar EXCLUDE_FROM_ALL
   ${QWC_COMMON_SOURCES} src/count_scalar.cpp src/words_scalar.cpp
-  src/maxlinelen_scalar.cpp )
+  src/maxlinelen_scalar.cpp src/chars_scalar.cpp )
 qwc_configure( qwc-scalar )
 target_compile_options( qwc PRIVATE -Wall -Wextra -Wpedantic )
 

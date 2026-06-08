@@ -23,4 +23,4 @@ This allows it to be substantially faster than its two big brothers for this par
     - [x] NEON
   - [ ] Multibyte characters
     - [ ] AVX2
-    - [ ] NEON
+    - [x] NEON
