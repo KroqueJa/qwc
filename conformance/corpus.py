@@ -60,7 +60,7 @@ def curated() -> list[tuple[str, bytes]]:
         ("utf8-line-sep-2028", "line1 line2 word\n".encode("utf-8")),
         ("utf8-long", ("héllo wörld " * 1000 + "\n").encode("utf-8")),
         ("utf8-no-trailing-nl", "café 你好 façade".encode("utf-8")),
-        # Invalid UTF-8 (binary-ish) -- wcl's interpretation is allowed for -m/-w.
+        # Invalid UTF-8 (binary-ish) -- qwc's interpretation is allowed for -m/-w.
         ("invalid-utf8-lone-cont", b"abc\x80\x81def\n"),
         ("invalid-utf8-truncated", b"caf\xc3"),  # dangling lead byte
         ("invalid-utf8-overlong", b"\xc0\xaf word\n"),

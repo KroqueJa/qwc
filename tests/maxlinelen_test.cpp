@@ -6,9 +6,9 @@
 #include "maxlinelen.h"
 #include "test_util.h"
 
-using wcltest::maxLineLenChunked;
-using wcltest::maxLineLenStr;
-using wcltest::refMaxLineLen;
+using qwctest::maxLineLenChunked;
+using qwctest::maxLineLenStr;
+using qwctest::refMaxLineLen;
 
 // The longest-line length, like `wc -L`: the most bytes between newlines, with
 // the newline itself excluded. Only newline-terminated lines count -- a trailing

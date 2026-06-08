@@ -22,7 +22,7 @@ struct Counts
   usize bytes;
 };
 
-// Count lines, words and bytes in a single pass (the `--all` / bare-`wc` mode).
+// Count lines, words and bytes in a single pass (the bare-`wc` / no-flag mode).
 // Doing all three at once is what lets it read stdin, which can only be consumed
 // once. An empty filename reads standard input, matching processFile.
 Counts processFileAll(

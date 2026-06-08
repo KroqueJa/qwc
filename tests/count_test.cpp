@@ -9,8 +9,8 @@
 #include "countlines.h"
 #include "test_util.h"
 
-using wcltest::countStr;
-using wcltest::refCount;
+using qwctest::countStr;
+using qwctest::refCount;
 
 // ---------------------------------------------------------------------------
 // Basic / edge cases

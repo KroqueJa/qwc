@@ -11,7 +11,7 @@
 #include "typedef.h"
 #include "words.h"
 
-namespace wcltest {
+namespace qwctest {
 
 // Independent, obviously-correct reference implementation of `count`, used as
 // the oracle for the SIMD/scalar implementation under test. Compares at the
@@ -156,4 +156,4 @@ inline usize wordsChunked( const std::string& s, size_t chunk )
   return total;
 }
 
-}  // namespace wcltest
+}  // namespace qwctest

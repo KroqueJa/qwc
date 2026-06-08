@@ -16,41 +16,41 @@ namespace fs = std::filesystem;
 void printHelp()
 {
   std::cout <<
-      "wcl - count things in files, fast.\n"
+      "qwc - quick wc: count lines, words, bytes and more, fast.\n"
       "\n"
-      "By default wcl counts the number of lines (newline characters) in each\n"
-      "file you give it, just like `wc -l`. It reads big files in parallel, so\n"
-      "it stays quick even on very large inputs.\n"
+      "With no count flag qwc prints the line, word and byte counts of each file,\n"
+      "exactly like `wc`. It reads big files in parallel, so it stays quick even\n"
+      "on very large inputs.\n"
       "\n"
       "Usage:\n"
-      "  wcl [options] [file ...]\n"
-      "  wcl [options]            (reads from standard input)\n"
+      "  qwc [options] [file ...]\n"
+      "  qwc [options]            (reads from standard input)\n"
       "\n"
-      "If you don't name any files, wcl reads from standard input - so you can\n"
-      "pipe data straight into it, e.g.  cat access.log | wcl\n"
+      "If you don't name any files, qwc reads from standard input - so you can\n"
+      "pipe data straight into it, e.g.  cat access.log | qwc\n"
       "\n"
-      "Options:\n"
-      "      --char C          Count occurrences of the byte C instead of\n"
-      "                        newlines. Handy for tallying commas in a CSV\n"
+      "Count flags (give one; with none, qwc prints lines, words and bytes like\n"
+      "bare `wc`):\n"
+      "  -l, --lines           Count lines (newline characters), like `wc -l`.\n"
+      "  -w, --words           Count whitespace-separated words, like `wc -w`.\n"
+      "  -c, --bytes           Count bytes, like `wc -c`. The size is read\n"
+      "                        straight from the filesystem, so no scanning of\n"
+      "                        the file contents is needed.\n"
+      "  -m, --chars           Count characters, like `wc -m`. In a UTF-8 locale\n"
+      "                        this counts code points (so an accented letter is\n"
+      "                        one character, not two bytes); in a single-byte\n"
+      "                        locale it falls back to bytes, exactly as wc does.\n"
+      "  -L, --max-line-length Print the length of the longest line in bytes,\n"
+      "                        like `wc -L`. The trailing newline is not counted,\n"
+      "                        and with several files the \"total\" line reports\n"
+      "                        the longest line across all of them (the maximum,\n"
+      "                        not a sum).\n"
+      "      --char C          Count occurrences of the byte C (a qwc extension,\n"
+      "                        not in wc). Handy for tallying commas in a CSV\n"
       "                        (--char ,) or any other single character.\n"
-      "  -c, --chars           Count bytes instead of lines, like `wc -c`. The\n"
-      "                        size is read straight from the filesystem, so no\n"
-      "                        scanning of the file contents is needed.\n"
-      "  -w, --words           Count whitespace-separated words instead of\n"
-      "                        lines, like `wc -w`.\n"
-      "  -m, --multibyte-chars Count characters instead of lines, like `wc -m`.\n"
-      "                        In a UTF-8 locale this counts code points (so an\n"
-      "                        accented letter is one character, not two bytes);\n"
-      "                        in a single-byte locale it falls back to bytes,\n"
-      "                        exactly as wc does.\n"
-      "  -L, --max-line-length Print the length of the longest line in bytes\n"
-      "                        instead of a count, like `wc -L`. The trailing\n"
-      "                        newline is not counted, and with several files the\n"
-      "                        \"total\" line reports the longest line across all\n"
-      "                        of them (the maximum, not a sum).\n"
-      "  -a, --all             Print lines, words and bytes together, like\n"
-      "                        running `wc` with no flags.\n"
-      "  -r, --recursive       Treat directory arguments as whole trees: wcl\n"
+      "\n"
+      "Other options:\n"
+      "  -r, --recursive       Treat directory arguments as whole trees: qwc\n"
       "                        walks into them and counts every file it finds,\n"
       "                        something wc can't do on its own.\n"
       "      --sort-by-count   When listing several files, order them by their\n"
@@ -74,21 +74,21 @@ void printHelp()
       "  -h, --help            Show this message and exit.\n"
       "\n"
       "Output:\n"
-      "  wcl matches wc's layout so it can stand in for it: each file prints a\n"
-      "  right-aligned count followed by the file name, piped input prints just\n"
-      "  the count, and counting several files adds a final \"total\" line.\n"
+      "  qwc matches wc's layout so it can stand in for it: each file prints its\n"
+      "  right-aligned count(s) followed by the file name, piped input prints just\n"
+      "  the count(s), and counting several files adds a final \"total\" line.\n"
       "\n"
       "Examples:\n"
-      "  wcl notes.txt                 lines in notes.txt\n"
-      "  wcl *.log                     lines in each log, plus a total\n"
-      "  wcl --char , data.csv         commas in data.csv\n"
-      "  wcl -c notes.txt              bytes in notes.txt\n"
-      "  wcl -w notes.txt              words in notes.txt\n"
-      "  wcl -m notes.txt              characters in notes.txt\n"
-      "  wcl -L notes.txt              length of the longest line in notes.txt\n"
-      "  wcl -a notes.txt              lines, words and bytes in notes.txt\n"
-      "  wcl --recursive src           lines in every file under src/\n"
-      "  wcl -r --top 10 src           the 10 biggest files under src/\n";
+      "  qwc notes.txt                 lines, words and bytes in notes.txt\n"
+      "  qwc *.log                     counts for each log, plus a total\n"
+      "  qwc -l notes.txt              lines in notes.txt\n"
+      "  qwc -c notes.txt              bytes in notes.txt\n"
+      "  qwc -w notes.txt              words in notes.txt\n"
+      "  qwc -m notes.txt              characters in notes.txt\n"
+      "  qwc -L notes.txt              length of the longest line in notes.txt\n"
+      "  qwc --char , data.csv         commas in data.csv\n"
+      "  qwc --recursive src           counts for every file under src/\n"
+      "  qwc -r --top 10 src           the 10 biggest files under src/\n";
 }
 
 std::optional<int> parseArgs( int argc, char** argv, Options& opt )
@@ -98,6 +98,10 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
     return std::strcmp( arg, shortName ) == 0 ||
            std::strcmp( arg, longName ) == 0;
   };
+
+  // Track whether any count flag was given. With none, qwc prints lines, words
+  // and bytes -- the three columns bare `wc` shows.
+  bool countFlag = false;
 
   // Parse leading "-flag [value]" options; the first non-flag argument begins
   // the file list. A bare "-" is treated as a file, not a flag.
@@ -121,21 +125,29 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
         return 1;
       }
       opt.target = argv[fileStart + 1][0];
+      opt.mode = CountMode::Target;
+      countFlag = true;
       fileStart += 2;
-    } else if ( isFlag( argv[fileStart], "-c", "--chars" ) ) {
-      opt.mode = CountMode::Bytes;
+    } else if ( isFlag( argv[fileStart], "-l", "--lines" ) ) {
+      opt.mode = CountMode::Target;
+      opt.target = '\n';
+      countFlag = true;
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-w", "--words" ) ) {
       opt.mode = CountMode::Words;
+      countFlag = true;
       fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-m", "--multibyte-chars" ) ) {
+    } else if ( isFlag( argv[fileStart], "-c", "--bytes" ) ) {
+      opt.mode = CountMode::Bytes;
+      countFlag = true;
+      fileStart += 1;
+    } else if ( isFlag( argv[fileStart], "-m", "--chars" ) ) {
       opt.mode = CountMode::Chars;
+      countFlag = true;
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-L", "--max-line-length" ) ) {
       opt.mode = CountMode::MaxLineLength;
-      fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-a", "--all" ) ) {
-      opt.all = true;
+      countFlag = true;
       fileStart += 1;
     } else if ( isFlag( argv[fileStart], "-r", "--recursive" ) ) {
       opt.recursive = true;
@@ -173,9 +185,12 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
   }
 
   // --top needs a ranking criterion; default it to counts when none was asked
-  // for, so `wcl --top 10 ...` means "the 10 files with the most lines".
+  // for, so `qwc --top 10 ...` means "the 10 files with the most lines".
   if ( opt.topN > 0 && opt.sortMode == SortMode::None )
     opt.sortMode = SortMode::Count;
+
+  // No count flag means the bare-`wc` view: lines, words and bytes together.
+  opt.all = !countFlag;
 
   for ( int i = fileStart; i < argc; ++i ) opt.files.emplace_back( argv[i] );
   return std::nullopt;
@@ -312,7 +327,8 @@ void printResultsAll( const Options& opt, const std::vector<Counts>& output )
     total.bytes += c.bytes;
   }
 
-  // wc has no sorting or --top, so --all keeps the collected file order.
+  // wc has no sorting or --top, so the bare (no count flag) view keeps the
+  // collected file order.
   for ( usize i = 0; i < numFiles; ++i )
     printAllLine( output[i], opt.files[i].c_str() );
 

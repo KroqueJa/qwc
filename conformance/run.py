@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Standalone conformance runner: checks that wcl reproduces the system `wc` across
+Standalone conformance runner: checks that qwc reproduces the system `wc` across
 a curated + fuzzed corpus, under both the C and a UTF-8 locale, in single-file,
 multi-file and stdin forms, and with the thread-chunking knob cranked so the
 parallel boundary-stitch paths are exercised against wc's ground truth.
@@ -11,10 +11,10 @@ Python interpreter:
     python3 conformance/run.py                 # default (≈250 fuzz cases)
     python3 conformance/run.py --quick         # fast smoke run
     python3 conformance/run.py --fuzz 2000     # deep run
-    WCL_BIN=./wcl python3 conformance/run.py   # explicit binary
+    QWC_BIN=./qwc python3 conformance/run.py   # explicit binary
 
-Exits non-zero if any required wc/wcl comparison fails or wcl misbehaves.
-A prebuilt `wcl` is required (cmake --build <dir> --target wcl).
+Exits non-zero if any required wc/qwc comparison fails or qwc misbehaves.
+A prebuilt `qwc` is required (cmake --build <dir> --target qwc).
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ import wc_harness as H
 from session import build_session, Session
 
 
-# A bytes-per-thread of 1 forces wcl to split work into as many chunks as it has
+# A bytes-per-thread of 1 forces qwc to split work into as many chunks as it has
 # hardware threads, landing chunk boundaries inside words / lines / multibyte
 # sequences -- the parallel stitch logic must still match wc. None == default.
 BPT_STRESS = (None, 1)
@@ -117,7 +117,7 @@ def scenarios(
                         f"[{regime}] {mode.name} file {inp.cid}{tag}",
                         mode, regime, locale, inp.meta, [inp.path], None, bpt, ef,
                     )
-            # stdin (a distinct wcl code path; bpt does not apply).
+            # stdin (a distinct qwc code path; bpt does not apply).
             for inp in stdin_inputs:
                 yield Scenario(
                     f"[{regime}] {mode.name} stdin {inp.cid}",
@@ -138,7 +138,7 @@ def scenarios(
 
 def run_one(session: Session, sc: Scenario) -> tuple[str, H.Result]:
     res = H.compare(
-        wcl_bin=session.wcl_bin,
+        qwc_bin=session.qwc_bin,
         mode=sc.mode,
         regime=sc.regime,
         locale=sc.locale,
@@ -152,12 +152,12 @@ def run_one(session: Session, sc: Scenario) -> tuple[str, H.Result]:
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="wcl vs wc conformance suite")
+    ap = argparse.ArgumentParser(description="qwc vs wc conformance suite")
     ap.add_argument("--fuzz", type=int,
-                    default=int(os.environ.get("WCL_CONF_FUZZ", "250")),
+                    default=int(os.environ.get("QWC_CONF_FUZZ", "250")),
                     help="number of fuzz inputs (default 250)")
     ap.add_argument("--seed", type=int,
-                    default=int(os.environ.get("WCL_CONF_SEED", "1234")),
+                    default=int(os.environ.get("QWC_CONF_SEED", "1234")),
                     help="fuzz RNG seed (default 1234)")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 4,
                     help="parallel worker threads")
@@ -173,8 +173,8 @@ def main() -> int:
     fuzz_n = 40 if args.quick else args.fuzz
     bpt_stress = not (args.quick or args.no_bpt_stress)
 
-    print("wcl conformance suite")
-    print(f"  wcl binary    : {session.wcl_bin}")
+    print("qwc conformance suite")
+    print(f"  qwc binary    : {session.qwc_bin}")
     print(f"  C locale      : {session.c_locale}")
     print(f"  UTF-8 locale  : {session.utf8_locale or '(none available -- UTF-8 regime skipped)'}")
     print(f"  exact format  : {session.exact_format} "
@@ -184,7 +184,7 @@ def main() -> int:
     print(f"  jobs          : {args.jobs}")
     print()
 
-    with tempfile.TemporaryDirectory(prefix="wcl_conformance_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="qwc_conformance_") as tmp:
         inputs = corpus.curated() + corpus.fuzz(args.seed, fuzz_n)
         single = _materialize(inputs, tmp)
         by_id = {inp.cid: inp for inp in single}
@@ -225,7 +225,7 @@ def main() -> int:
             print(f"\n... and {len(failures) - args.max_failures} more failures")
         return 1
 
-    print("\nAll required wc/wcl comparisons agree. wcl is conformant. ✓")
+    print("\nAll required wc/qwc comparisons agree. qwc is conformant. ✓")
     return 0
 
 

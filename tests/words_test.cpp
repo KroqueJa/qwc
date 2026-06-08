@@ -7,9 +7,9 @@
 #include "test_util.h"
 #include "words.h"
 
-using wcltest::refWords;
-using wcltest::wordsChunked;
-using wcltest::wordsStr;
+using qwctest::refWords;
+using qwctest::wordsChunked;
+using qwctest::wordsStr;
 
 // ---------------------------------------------------------------------------
 // Basic / edge cases. A "word" is a maximal run of non-whitespace, matching

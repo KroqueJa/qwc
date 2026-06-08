@@ -1,4 +1,4 @@
-# wcl ↔ wc conformance.
+# qwc ↔ wc conformance.
 #
 # Copy to .github/workflows/conformance.yml to enable. Runs on Linux (GNU wc,
 # numeric comparison) and macOS (BSD wc, byte-for-byte comparison) so both
@@ -27,10 +27,10 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Build wcl
+      - name: Build qwc
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWCL_BUILD_TESTS=OFF
-          cmake --build build --target wcl
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQWC_BUILD_TESTS=OFF
+          cmake --build build --target qwc
 
       # A UTF-8 locale lets the suite exercise the multibyte (-m) path against
       # wc. C.UTF-8 ships on ubuntu-latest; macOS already has UTF-8 locales.
@@ -38,7 +38,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo locale-gen C.UTF-8 || true
-          echo "WCL_CONF_UTF8_LOCALE=C.UTF-8" >> "$GITHUB_ENV"
+          echo "QWC_CONF_UTF8_LOCALE=C.UTF-8" >> "$GITHUB_ENV"
 
       - name: Run conformance suite
         run: python3 conformance/run.py --fuzz 1000

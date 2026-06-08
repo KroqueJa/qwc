@@ -7,9 +7,9 @@
 #include "chars.h"
 #include "test_util.h"
 
-using wcltest::charsChunked;
-using wcltest::charsStr;
-using wcltest::refChars;
+using qwctest::charsChunked;
+using qwctest::charsStr;
+using qwctest::refChars;
 
 // A "character" here is a UTF-8 code point, matching `wc -m` in a UTF-8 locale.
 // The implementation counts every byte that is not a continuation byte

@@ -10,11 +10,11 @@
 #include <sstream>
 #include <string>
 
-// WCL_BINARY is defined by CMake as the absolute path to the built `wcl`
+// QWC_BINARY is defined by CMake as the absolute path to the built `qwc`
 // executable. These are end-to-end tests of main()'s argument parsing and
 // output formatting -- the parts not reachable as a plain function call.
-#ifndef WCL_BINARY
-#error "WCL_BINARY must be defined by the build system"
+#ifndef QWC_BINARY
+#error "QWC_BINARY must be defined by the build system"
 #endif
 
 namespace {
@@ -40,9 +40,9 @@ CmdResult run( const std::string& cmd )
   return { out, code };
 }
 
-const std::string kBin = WCL_BINARY;
+const std::string kBin = QWC_BINARY;
 
-// Build a `printf '...' | wcl ...` pipeline so we control stdin precisely.
+// Build a `printf '...' | qwc ...` pipeline so we control stdin precisely.
 std::string piped( const std::string& stdinPayload, const std::string& args )
 {
   // %b makes printf interpret backslash escapes like \n.
@@ -63,8 +63,8 @@ std::string makeRecTree( const std::string& root )
   return root;
 }
 
-// Format one expected output line the way wc/wcl do: " %7ju %s\n" with the name,
-// or " %7ju\n" without one. Lets the structural tests below assert exact bytes
+// Format one single-column output line the way wc/qwc do: " %7ju %s\n" with the
+// name, or " %7ju\n" without one. Lets the structural tests assert exact bytes
 // without hand-counting padding.
 std::string line( uintmax_t count, const std::string& name = "" )
 {
@@ -75,23 +75,45 @@ std::string line( uintmax_t count, const std::string& name = "" )
   return os.str();
 }
 
+// The three-column form bare `wc`/`qwc` print: lines, words, bytes.
+std::string allLine( uintmax_t l, uintmax_t w, uintmax_t b,
+                     const std::string& name = "" )
+{
+  std::ostringstream os;
+  os << ' ' << std::setw( 7 ) << l << ' ' << std::setw( 7 ) << w << ' '
+     << std::setw( 7 ) << b;
+  if ( !name.empty() ) os << ' ' << name;
+  os << '\n';
+  return os.str();
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// stdin (no file arguments) -> single number, newline-terminated.
+// No count flag: like bare `wc`, qwc prints lines, words and bytes. From stdin
+// there is no filename, just the three padded numbers.
 // ---------------------------------------------------------------------------
-TEST( Cli, StdinDefaultNewline )
+TEST( Cli, StdinDefaultIsLinesWordsBytes )
 {
-  CmdResult r = run( piped( "a\\nb\\nc\\n", "" ) );
+  CmdResult r = run( piped( "a\\nb\\nc\\n", "" ) );  // 3 lines, 3 words, 6 bytes
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 3 ) );
+  EXPECT_EQ( r.out, allLine( 3, 3, 6 ) );
 }
 
 TEST( Cli, StdinEmpty )
 {
   CmdResult r = run( piped( "", "" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 0 ) );
+  EXPECT_EQ( r.out, allLine( 0, 0, 0 ) );
+}
+
+TEST( Cli, NoArgsDoesNotDefaultToHelp )
+{
+  // Unlike many tools, bare `qwc` must read stdin (wc-compatible), not help.
+  CmdResult r = run( piped( "a\\nb\\n", "" ) );  // 2 lines, 2 words, 4 bytes
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, allLine( 2, 2, 4 ) );
+  EXPECT_EQ( r.out.find( "Usage:" ), std::string::npos );
 }
 
 // ---------------------------------------------------------------------------
@@ -102,12 +124,13 @@ TEST( Cli, HelpPrintsUsageAndExitsZero )
   CmdResult r = run( kBin + " --help </dev/null" );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_NE( r.out.find( "Usage:" ), std::string::npos );
-  EXPECT_NE( r.out.find( "--recursive" ), std::string::npos );
-  EXPECT_NE( r.out.find( "--char" ), std::string::npos );
-  EXPECT_NE( r.out.find( "--chars" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--lines" ), std::string::npos );
   EXPECT_NE( r.out.find( "--words" ), std::string::npos );
-  EXPECT_NE( r.out.find( "--multibyte-chars" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--bytes" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--chars" ), std::string::npos );
   EXPECT_NE( r.out.find( "--max-line-length" ), std::string::npos );
+  EXPECT_NE( r.out.find( "--char " ), std::string::npos );  // the qwc extension
+  EXPECT_NE( r.out.find( "--recursive" ), std::string::npos );
 }
 
 TEST( Cli, HelpDoesNotConsumeStdin )
@@ -116,21 +139,10 @@ TEST( Cli, HelpDoesNotConsumeStdin )
   CmdResult r = run( piped( "a\\nb\\nc\\n", "--help" ) );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_NE( r.out.find( "Usage:" ), std::string::npos );
-  EXPECT_EQ( r.out.find( "3\n" ), std::string::npos );  // no count emitted
-}
-
-TEST( Cli, NoArgsDoesNotDefaultToHelp )
-{
-  // Unlike many tools, bare `wcl` must read stdin (wc-compatible), not help.
-  CmdResult r = run( piped( "a\\nb\\n", "" ) );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 2 ) );
-  EXPECT_EQ( r.out.find( "Usage:" ), std::string::npos );
 }
 
 // ---------------------------------------------------------------------------
-// Short-flag aliases: -h/-r/-c/-w mirror their long forms. --char and
-// --bytes-per-thread have no short form by design.
+// Count flags select a single column, mirroring `wc`. Short and long forms.
 // ---------------------------------------------------------------------------
 TEST( CliShortFlags, DashHIsHelp )
 {
@@ -139,26 +151,20 @@ TEST( CliShortFlags, DashHIsHelp )
   EXPECT_NE( r.out.find( "Usage:" ), std::string::npos );
 }
 
-// -c is the byte-count flag (like `wc -c`), no longer an alias for --char.
-TEST( CliShortFlags, DashCCountsBytes )
+TEST( CliShortFlags, DashLCountsLines )
 {
-  CmdResult r = run( piped( "hello world", "-c" ) );  // 11 bytes
+  CmdResult r = run( piped( "a\\nb\\nc\\n", "-l" ) );  // 3 newlines
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 11 ) );
+  EXPECT_EQ( r.out, line( 3 ) );
 }
 
-// -c takes no value: a following argument is a file, not consumed as a value.
-TEST( CliShortFlags, DashCTakesNoValue )
+TEST( Cli, LinesLongForm )
 {
-  std::string create = "printf '%b' 'abc' > /tmp/wcl_dashc.txt && ";
-  CmdResult r = run( create + kBin + " -c /tmp/wcl_dashc.txt"
-                     "; rm -f /tmp/wcl_dashc.txt" );
+  CmdResult r = run( piped( "a\\nb\\nc\\nd\\n", "--lines" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  // 3 bytes; the path was not swallowed (and a single file still names itself).
-  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_dashc.txt" ) );
+  EXPECT_EQ( r.out, line( 4 ) );
 }
 
-// -w is the word-count flag (like `wc -w`).
 TEST( CliShortFlags, DashWCountsWords )
 {
   CmdResult r = run( piped( "  the quick brown   fox\\n", "-w" ) );
@@ -166,8 +172,50 @@ TEST( CliShortFlags, DashWCountsWords )
   EXPECT_EQ( r.out, line( 4 ) );
 }
 
-// -m is the character-count flag (like `wc -m`). On ASCII a character is a byte,
-// so this is locale-independent.
+TEST( Cli, WordsLongForm )
+{
+  CmdResult r = run( piped( "  the quick brown   fox\\n", "--words" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 4 ) );
+}
+
+// -c counts bytes (like `wc -c`); its long form is --bytes.
+TEST( CliShortFlags, DashCCountsBytes )
+{
+  CmdResult r = run( piped( "hello world", "-c" ) );  // 11 bytes
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 11 ) );
+}
+
+TEST( Cli, BytesLongForm )
+{
+  CmdResult r = run( piped( "abcde", "--bytes" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 5 ) );
+}
+
+TEST( Cli, BytesFlagCountsSizeFile )
+{
+  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/qwc_bytes.txt && ";
+  CmdResult r = run( create + kBin + " --bytes /tmp/qwc_bytes.txt"
+                     "; rm -f /tmp/qwc_bytes.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 6, "/tmp/qwc_bytes.txt" ) );  // 6 bytes
+}
+
+// -c takes no value: a following argument is a file, not consumed as a value.
+TEST( CliShortFlags, DashCTakesNoValue )
+{
+  std::string create = "printf '%b' 'abc' > /tmp/qwc_dashc.txt && ";
+  CmdResult r = run( create + kBin + " -c /tmp/qwc_dashc.txt"
+                     "; rm -f /tmp/qwc_dashc.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  // 3 bytes; the path was not swallowed (and a single file still names itself).
+  EXPECT_EQ( r.out, line( 3, "/tmp/qwc_dashc.txt" ) );
+}
+
+// -m counts characters (like `wc -m`); its long form is --chars. On ASCII a
+// character is a byte, so this is locale-independent.
 TEST( CliShortFlags, DashMCountsChars )
 {
   CmdResult r = run( piped( "hello world", "-m" ) );  // 11 ASCII chars
@@ -175,7 +223,14 @@ TEST( CliShortFlags, DashMCountsChars )
   EXPECT_EQ( r.out, line( 11 ) );
 }
 
-// -L is the longest-line flag (like `wc -L`): the most bytes on any one line.
+TEST( Cli, CharsLongFormCountsChars )
+{
+  CmdResult r = run( piped( "abcde", "--chars" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 5 ) );
+}
+
+// -L reports the longest line in bytes (like `wc -L`).
 TEST( CliShortFlags, DashLLongestLine )
 {
   CmdResult r = run( piped( "ab\\nabcd\\nx\\n", "-L" ) );  // "abcd" -> 4
@@ -183,33 +238,11 @@ TEST( CliShortFlags, DashLLongestLine )
   EXPECT_EQ( r.out, line( 4 ) );
 }
 
-TEST( CliShortFlags, DashRRecursesDirectory )
+TEST( Cli, MaxLineLengthLongForm )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_short_r" );
-  CmdResult r = run( kBin + " -r " + root );
-  std::system( ( "rm -rf " + root ).c_str() );
-
+  CmdResult r = run( piped( "a\\nbbbbb\\ncc\\n", "--max-line-length" ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_short_r/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_short_r/sub/mid.txt" ) +
-             line( 2, "/tmp/wcl_short_r/top.txt" ) +
-             line( 9, "total" ) );
-}
-
-TEST( CliShortFlags, ShortFlagsCombine )
-{
-  const std::string root = makeRecTree( "/tmp/wcl_short_rc" );
-  CmdResult r = run( kBin + " -c -r " + root );  // byte counts, recursive
-  std::system( ( "rm -rf " + root ).c_str() );
-
-  EXPECT_EQ( r.exitCode, 0 );
-  // Byte sizes: bottom.txt=8, mid.txt=6, top.txt=4 -> 18 total.
-  EXPECT_EQ( r.out,
-             line( 8, "/tmp/wcl_short_rc/sub/deep/bottom.txt" ) +
-             line( 6, "/tmp/wcl_short_rc/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_short_rc/top.txt" ) +
-             line( 18, "total" ) );
+  EXPECT_EQ( r.out, line( 5 ) );  // "bbbbb"
 }
 
 TEST( CliShortFlags, NoShortFormForBytesPerThread )
@@ -220,7 +253,7 @@ TEST( CliShortFlags, NoShortFormForBytesPerThread )
 }
 
 // ---------------------------------------------------------------------------
-// --char selects an arbitrary byte to count.
+// --char selects an arbitrary byte to count (a qwc extension, not in wc).
 // ---------------------------------------------------------------------------
 TEST( Cli, CharFlagSelectsTarget )
 {
@@ -248,153 +281,70 @@ TEST( Cli, CharFlagEmptyValueErrors )
   EXPECT_EQ( r.exitCode, 1 );
 }
 
-// ---------------------------------------------------------------------------
-// --chars counts bytes (like `wc -c`): the file's size, not its contents.
-// ---------------------------------------------------------------------------
-TEST( Cli, CharsFlagCountsBytesStdin )
-{
-  CmdResult r = run( piped( "abcde", "--chars" ) );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 5 ) );
-}
-
-TEST( Cli, CharsFlagCountsBytesFile )
-{
-  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_chars.txt && ";
-  CmdResult r = run( create + kBin + " --chars /tmp/wcl_chars.txt"
-                     "; rm -f /tmp/wcl_chars.txt" );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 6, "/tmp/wcl_chars.txt" ) );  // 6 bytes
-}
-
 TEST( Cli, CharsAndCharAreDistinct )
 {
-  // --char (with a value) counts a chosen byte; --chars counts the size. The
-  // shared prefix must not make the parser confuse them.
+  // --char (with a value) counts a chosen byte; --chars (no value) counts
+  // characters. The shared prefix must not make the parser confuse them.
   CmdResult r = run( piped( "a,b,c", "--char ," ) );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 2 ) );  // two commas, not the 5-byte size
+  EXPECT_EQ( r.out, line( 2 ) );  // two commas, not the 5-char count
 }
 
 // ---------------------------------------------------------------------------
-// --words counts whitespace-separated words (like `wc -w`).
-// ---------------------------------------------------------------------------
-TEST( Cli, WordsFlagStdin )
-{
-  CmdResult r = run( piped( "  the quick brown   fox\\n", "--words" ) );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 4 ) );
-}
-
-TEST( Cli, WordsFlagSingleFile )
-{
-  std::string create =
-      "printf '%b' 'one two\\nthree four five\\n' > /tmp/wcl_words.txt && ";
-  CmdResult r = run( create + kBin + " --words /tmp/wcl_words.txt"
-                     "; rm -f /tmp/wcl_words.txt" );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 5, "/tmp/wcl_words.txt" ) );
-}
-
-TEST( Cli, WordsFlagMultipleFiles )
-{
-  std::string setup =
-      "printf '%b' 'a b\\n'   > /tmp/wcl_w_a.txt && "
-      "printf '%b' 'x y z\\n' > /tmp/wcl_w_b.txt && ";
-  std::string teardown = "; rm -f /tmp/wcl_w_a.txt /tmp/wcl_w_b.txt";
-  CmdResult r = run( setup + kBin + " --words"
-                     " /tmp/wcl_w_a.txt /tmp/wcl_w_b.txt" + teardown );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_w_a.txt" ) +
-             line( 3, "/tmp/wcl_w_b.txt" ) +
-             line( 5, "total" ) );
-}
-
 // Word counting across a tiny bytes-per-thread, so the file is split into many
 // chunks: the per-chunk merge must not drop or double-count boundary words.
+// ---------------------------------------------------------------------------
 TEST( Cli, WordsFlagChunkedMatchesTotal )
 {
-  // Ten two-letter words separated by single spaces (29 bytes); -bpt 4 forces
-  // chunk edges to fall inside words and inside the separators.
   std::string create =
-      "printf '%b' 'aa bb cc dd ee ff gg hh ii jj' > /tmp/wcl_w_big.txt && ";
-  CmdResult r = run( create + kBin + " --words --bytes-per-thread 4"
-                     " /tmp/wcl_w_big.txt; rm -f /tmp/wcl_w_big.txt" );
+      "printf '%b' 'aa bb cc dd ee ff gg hh ii jj' > /tmp/qwc_w_big.txt && ";
+  CmdResult r = run( create + kBin + " -w --bytes-per-thread 4"
+                     " /tmp/qwc_w_big.txt; rm -f /tmp/qwc_w_big.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 10, "/tmp/wcl_w_big.txt" ) );
+  EXPECT_EQ( r.out, line( 10, "/tmp/qwc_w_big.txt" ) );
 }
 
 TEST( CliRecursive, ComposesWithWordsFlag )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_rec_words" );
+  const std::string root = makeRecTree( "/tmp/qwc_rec_words" );
   // One token per line: top=2 words, mid=3, bottom=4 -> 9 total.
-  CmdResult r = run( kBin + " --words --recursive " + root );
+  CmdResult r = run( kBin + " -w --recursive " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_rec_words/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_rec_words/sub/mid.txt" ) +
-             line( 2, "/tmp/wcl_rec_words/top.txt" ) +
+             line( 4, "/tmp/qwc_rec_words/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_rec_words/sub/mid.txt" ) +
+             line( 2, "/tmp/qwc_rec_words/top.txt" ) +
              line( 9, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
-// --multibyte-chars counts characters (like `wc -m`). The long form mirrors -m.
+// --max-line-length across files: the "total" is the maximum, not a sum.
 // ---------------------------------------------------------------------------
-TEST( Cli, MultibyteCharsFlagStdin )
-{
-  CmdResult r = run( piped( "abcde", "--multibyte-chars" ) );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 5 ) );
-}
-
-TEST( Cli, MultibyteCharsFlagSingleFile )
-{
-  std::string create = "printf '%b' 'abc\\n' > /tmp/wcl_m.txt && ";
-  CmdResult r = run( create + kBin + " --multibyte-chars /tmp/wcl_m.txt"
-                     "; rm -f /tmp/wcl_m.txt" );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 4, "/tmp/wcl_m.txt" ) );  // 4 ASCII bytes/chars
-}
-
-// ---------------------------------------------------------------------------
-// --max-line-length reports the longest line (like `wc -L`). The long form
-// mirrors -L, and across files the "total" is the maximum, not a sum.
-// ---------------------------------------------------------------------------
-TEST( Cli, MaxLineLengthLongForm )
-{
-  CmdResult r = run( piped( "a\\nbbbbb\\ncc\\n", "--max-line-length" ) );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 5 ) );  // "bbbbb"
-}
-
 TEST( Cli, MaxLineLengthMultiFileTotalIsMax )
 {
   std::string setup =
-      "printf '%b' 'a\\nbbb\\n'    > /tmp/wcl_L_a.txt && "  // longest line 3
-      "printf '%b' 'cccccc\\nd\\n' > /tmp/wcl_L_b.txt && ";  // longest line 6
-  std::string teardown = "; rm -f /tmp/wcl_L_a.txt /tmp/wcl_L_b.txt";
+      "printf '%b' 'a\\nbbb\\n'    > /tmp/qwc_L_a.txt && "  // longest line 3
+      "printf '%b' 'cccccc\\nd\\n' > /tmp/qwc_L_b.txt && ";  // longest line 6
+  std::string teardown = "; rm -f /tmp/qwc_L_a.txt /tmp/qwc_L_b.txt";
   CmdResult r = run( setup + kBin + " -L"
-                     " /tmp/wcl_L_a.txt /tmp/wcl_L_b.txt" + teardown );
+                     " /tmp/qwc_L_a.txt /tmp/qwc_L_b.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
-  // Total is the max (6), not the sum (9).
   EXPECT_EQ( r.out,
-             line( 3, "/tmp/wcl_L_a.txt" ) +
-             line( 6, "/tmp/wcl_L_b.txt" ) +
-             line( 6, "total" ) );
+             line( 3, "/tmp/qwc_L_a.txt" ) +
+             line( 6, "/tmp/qwc_L_b.txt" ) +
+             line( 6, "total" ) );  // max, not sum (9)
 }
 
-// Longest line split across many chunks: the per-chunk merge must reassemble it.
 TEST( Cli, MaxLineLengthChunkedMatchesTotal )
 {
   std::string create =
-      "printf '%b' 'aa\\nbbbbbbbbbbbbbbbbbbbb\\ncc' > /tmp/wcl_L_big.txt && ";
+      "printf '%b' 'aa\\nbbbbbbbbbbbbbbbbbbbb\\ncc' > /tmp/qwc_L_big.txt && ";
   CmdResult r = run( create + kBin + " -L --bytes-per-thread 4"
-                     " /tmp/wcl_L_big.txt; rm -f /tmp/wcl_L_big.txt" );
+                     " /tmp/qwc_L_big.txt; rm -f /tmp/qwc_L_big.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 20, "/tmp/wcl_L_big.txt" ) );  // the 20 b's
+  EXPECT_EQ( r.out, line( 20, "/tmp/qwc_L_big.txt" ) );  // the 20 b's
 }
 
 // ---------------------------------------------------------------------------
@@ -402,7 +352,7 @@ TEST( Cli, MaxLineLengthChunkedMatchesTotal )
 // ---------------------------------------------------------------------------
 TEST( Cli, BytesPerThreadAcceptedSmall )
 {
-  CmdResult r = run( piped( "a\\nb\\nc\\nd\\n", "--bytes-per-thread 2" ) );
+  CmdResult r = run( piped( "a\\nb\\nc\\nd\\n", "-l --bytes-per-thread 2" ) );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out, line( 4 ) );
 }
@@ -420,7 +370,8 @@ TEST( Cli, BytesPerThreadMissingValueErrors )
 }
 
 // ---------------------------------------------------------------------------
-// Unknown flags are rejected.
+// Unknown flags are rejected -- including -a, which qwc no longer has (bare
+// qwc is the lines/words/bytes view, exactly like wc).
 // ---------------------------------------------------------------------------
 TEST( Cli, UnknownFlagErrors )
 {
@@ -428,8 +379,14 @@ TEST( Cli, UnknownFlagErrors )
   EXPECT_EQ( r.exitCode, 1 );
 }
 
+TEST( Cli, DashAIsNotAFlag )
+{
+  CmdResult r = run( kBin + " -a </dev/null 2>/dev/null" );
+  EXPECT_EQ( r.exitCode, 1 );
+}
+
 // ---------------------------------------------------------------------------
-// Combined flags.
+// Combined options: a tuning flag plus a count flag.
 // ---------------------------------------------------------------------------
 TEST( Cli, CombinedFlags )
 {
@@ -440,14 +397,24 @@ TEST( Cli, CombinedFlags )
 
 // ---------------------------------------------------------------------------
 // Single file argument: one line with the count and the file name, no total --
-// exactly like `wc`.
+// exactly like `wc`. (-l keeps it a single column.)
 // ---------------------------------------------------------------------------
 TEST( Cli, SingleFileCountAndName )
 {
-  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_cli_one.txt && ";
-  CmdResult r = run( create + kBin + " /tmp/wcl_cli_one.txt; rm -f /tmp/wcl_cli_one.txt" );
+  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/qwc_cli_one.txt && ";
+  CmdResult r = run( create + kBin + " -l /tmp/qwc_cli_one.txt; rm -f /tmp/qwc_cli_one.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_cli_one.txt" ) );
+  EXPECT_EQ( r.out, line( 3, "/tmp/qwc_cli_one.txt" ) );
+}
+
+// Default (no flag) single file: three columns, then the name.
+TEST( Cli, SingleFileDefaultThreeColumns )
+{
+  std::string create = "printf '%b' 'a b\\nc\\n' > /tmp/qwc_cli_def.txt && ";
+  CmdResult r = run( create + kBin + " /tmp/qwc_cli_def.txt; rm -f /tmp/qwc_cli_def.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  // 2 lines, 3 words, 6 bytes.
+  EXPECT_EQ( r.out, allLine( 2, 3, 6, "/tmp/qwc_cli_def.txt" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -457,55 +424,55 @@ TEST( Cli, SingleFileCountAndName )
 TEST( Cli, MultipleFilesPerFileAndTotal )
 {
   std::string setup =
-      "printf '%b' 'a\\nb\\n' > /tmp/wcl_cli_a.txt && "
-      "printf '%b' 'x\\ny\\nz\\n' > /tmp/wcl_cli_b.txt && ";
-  std::string teardown = "; rm -f /tmp/wcl_cli_a.txt /tmp/wcl_cli_b.txt";
-  CmdResult r = run( setup + kBin +
-                     " /tmp/wcl_cli_a.txt /tmp/wcl_cli_b.txt" + teardown );
+      "printf '%b' 'a\\nb\\n' > /tmp/qwc_cli_a.txt && "
+      "printf '%b' 'x\\ny\\nz\\n' > /tmp/qwc_cli_b.txt && ";
+  std::string teardown = "; rm -f /tmp/qwc_cli_a.txt /tmp/qwc_cli_b.txt";
+  CmdResult r = run( setup + kBin + " -l"
+                     " /tmp/qwc_cli_a.txt /tmp/qwc_cli_b.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_cli_a.txt" ) +
-             line( 3, "/tmp/wcl_cli_b.txt" ) +
+             line( 2, "/tmp/qwc_cli_a.txt" ) +
+             line( 3, "/tmp/qwc_cli_b.txt" ) +
              line( 5, "total" ) );
 }
 
 // ---------------------------------------------------------------------------
 // --recursive: directory arguments expand to all regular files beneath them,
-// sorted, with a per-file line each and a grand total.
+// sorted, with a per-file line each and a grand total. (-l = line counts.)
 // ---------------------------------------------------------------------------
 TEST( CliRecursive, ExpandsDirectorySortedWithTotal )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_rec_cli" );
-  CmdResult r = run( kBin + " --recursive " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_rec_cli" );
+  CmdResult r = run( kBin + " -l --recursive " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_rec_cli/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_rec_cli/sub/mid.txt" ) +
-             line( 2, "/tmp/wcl_rec_cli/top.txt" ) +
+             line( 4, "/tmp/qwc_rec_cli/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_rec_cli/sub/mid.txt" ) +
+             line( 2, "/tmp/qwc_rec_cli/top.txt" ) +
              line( 9, "total" ) );
 }
 
 TEST( CliRecursive, ComposesWithCharFlag )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_rec_cli2" );
+  const std::string root = makeRecTree( "/tmp/qwc_rec_cli2" );
   CmdResult r = run( kBin + " --char x --recursive " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 0, "/tmp/wcl_rec_cli2/sub/deep/bottom.txt" ) +
-             line( 1, "/tmp/wcl_rec_cli2/sub/mid.txt" ) +
-             line( 0, "/tmp/wcl_rec_cli2/top.txt" ) +
+             line( 0, "/tmp/qwc_rec_cli2/sub/deep/bottom.txt" ) +
+             line( 1, "/tmp/qwc_rec_cli2/sub/mid.txt" ) +
+             line( 0, "/tmp/qwc_rec_cli2/top.txt" ) +
              line( 1, "total" ) );
 }
 
 TEST( CliRecursive, EmptyDirectoryPrintsZero )
 {
-  const std::string root = "/tmp/wcl_rec_cli_empty";
+  const std::string root = "/tmp/qwc_rec_cli_empty";
   std::system( ( "rm -rf " + root + " && mkdir -p " + root ).c_str() );
-  CmdResult r = run( kBin + " --recursive " + root );
+  CmdResult r = run( kBin + " -l --recursive " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
@@ -514,29 +481,36 @@ TEST( CliRecursive, EmptyDirectoryPrintsZero )
 
 TEST( CliRecursive, PreservesTopLevelOrderForMixedArgs )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_rec_cli3" );
+  const std::string root = makeRecTree( "/tmp/qwc_rec_cli3" );
   // A plain file first, then a directory: file stays first, dir expands sorted.
-  CmdResult r = run( kBin + " --recursive " + root + "/top.txt " + root + "/sub" );
+  CmdResult r = run( kBin + " -l --recursive " + root + "/top.txt " + root + "/sub" );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_rec_cli3/top.txt" ) +
-             line( 4, "/tmp/wcl_rec_cli3/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_rec_cli3/sub/mid.txt" ) +
+             line( 2, "/tmp/qwc_rec_cli3/top.txt" ) +
+             line( 4, "/tmp/qwc_rec_cli3/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_rec_cli3/sub/mid.txt" ) +
              line( 9, "total" ) );
+}
+
+TEST( CliRecursive, SingleFileArgNoTotalLine )
+{
+  // --recursive with a non-directory arg behaves like a normal single file.
+  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/qwc_rec_one.txt && ";
+  CmdResult r = run( create + kBin + " -l --recursive /tmp/qwc_rec_one.txt"
+                     "; rm -f /tmp/qwc_rec_one.txt" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, line( 3, "/tmp/qwc_rec_one.txt" ) );
 }
 
 // ---------------------------------------------------------------------------
 // --sort-by-count: orders the whole flat file list by count ascending (biggest
-// at the bottom, next to the grand total), tie-broken alphabetically.
+// at the bottom, next to the grand total), tie-broken alphabetically. Sorting
+// applies to the single-column views, so these run with -l.
 // ---------------------------------------------------------------------------
 namespace {
 
-// Tree with distinct counts spread across directories so a global (not
-// per-directory) sort is observable. top.txt=2, sub/mid.txt=3,
-// sub/deep/bottom.txt=4 (from makeRecTree) -- already strictly increasing,
-// so add a 1-line file to land first.
 std::string makeSortTree( const std::string& root )
 {
   makeRecTree( root );
@@ -549,74 +523,61 @@ std::string makeSortTree( const std::string& root )
 
 TEST( CliSortByCount, OrdersAscendingAcrossDirectories )
 {
-  const std::string root = makeSortTree( "/tmp/wcl_sort_cnt" );
-  CmdResult r = run( kBin + " --recursive --sort-by-count " + root );
+  const std::string root = makeSortTree( "/tmp/qwc_sort_cnt" );
+  CmdResult r = run( kBin + " -l --recursive --sort-by-count " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  // Counts: zzz_one=1, top=2, mid=3, bottom=4. Largest last, above total.
   EXPECT_EQ( r.out,
-             line( 1, "/tmp/wcl_sort_cnt/zzz_one.txt" ) +
-             line( 2, "/tmp/wcl_sort_cnt/top.txt" ) +
-             line( 3, "/tmp/wcl_sort_cnt/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_sort_cnt/sub/deep/bottom.txt" ) +
+             line( 1, "/tmp/qwc_sort_cnt/zzz_one.txt" ) +
+             line( 2, "/tmp/qwc_sort_cnt/top.txt" ) +
+             line( 3, "/tmp/qwc_sort_cnt/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_sort_cnt/sub/deep/bottom.txt" ) +
              line( 10, "total" ) );
 }
 
 TEST( CliSortByCount, WorksWithoutRecursive )
 {
   std::string setup =
-      "printf '%b' 'x\\ny\\nz\\nw\\n' > /tmp/wcl_sc_big.txt && "
-      "printf '%b' 'a\\nb\\n'         > /tmp/wcl_sc_small.txt && ";
-  std::string teardown = "; rm -f /tmp/wcl_sc_big.txt /tmp/wcl_sc_small.txt";
-  // Pass big first; sort must reorder so small comes first.
-  CmdResult r = run( setup + kBin + " --sort-by-count"
-                     " /tmp/wcl_sc_big.txt /tmp/wcl_sc_small.txt" + teardown );
+      "printf '%b' 'x\\ny\\nz\\nw\\n' > /tmp/qwc_sc_big.txt && "
+      "printf '%b' 'a\\nb\\n'         > /tmp/qwc_sc_small.txt && ";
+  std::string teardown = "; rm -f /tmp/qwc_sc_big.txt /tmp/qwc_sc_small.txt";
+  CmdResult r = run( setup + kBin + " -l --sort-by-count"
+                     " /tmp/qwc_sc_big.txt /tmp/qwc_sc_small.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_sc_small.txt" ) +
-             line( 4, "/tmp/wcl_sc_big.txt" ) +
+             line( 2, "/tmp/qwc_sc_small.txt" ) +
+             line( 4, "/tmp/qwc_sc_big.txt" ) +
              line( 6, "total" ) );
 }
 
 TEST( CliSortByCount, EqualCountsTieBreakAlphabetically )
 {
   std::string setup =
-      "printf '%b' 'a\\nb\\n' > /tmp/wcl_sc_charlie.txt && "
-      "printf '%b' 'a\\nb\\n' > /tmp/wcl_sc_alpha.txt && "
-      "printf '%b' 'a\\nb\\n' > /tmp/wcl_sc_bravo.txt && ";
+      "printf '%b' 'a\\nb\\n' > /tmp/qwc_sc_charlie.txt && "
+      "printf '%b' 'a\\nb\\n' > /tmp/qwc_sc_alpha.txt && "
+      "printf '%b' 'a\\nb\\n' > /tmp/qwc_sc_bravo.txt && ";
   std::string teardown =
-      "; rm -f /tmp/wcl_sc_charlie.txt /tmp/wcl_sc_alpha.txt "
-      "/tmp/wcl_sc_bravo.txt";
-  // Provide out of alphabetical order; equal counts must sort by name.
-  CmdResult r = run( setup + kBin + " --sort-by-count"
-                     " /tmp/wcl_sc_charlie.txt /tmp/wcl_sc_bravo.txt"
-                     " /tmp/wcl_sc_alpha.txt" + teardown );
+      "; rm -f /tmp/qwc_sc_charlie.txt /tmp/qwc_sc_alpha.txt "
+      "/tmp/qwc_sc_bravo.txt";
+  CmdResult r = run( setup + kBin + " -l --sort-by-count"
+                     " /tmp/qwc_sc_charlie.txt /tmp/qwc_sc_bravo.txt"
+                     " /tmp/qwc_sc_alpha.txt" + teardown );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_sc_alpha.txt" ) +
-             line( 2, "/tmp/wcl_sc_bravo.txt" ) +
-             line( 2, "/tmp/wcl_sc_charlie.txt" ) +
+             line( 2, "/tmp/qwc_sc_alpha.txt" ) +
+             line( 2, "/tmp/qwc_sc_bravo.txt" ) +
+             line( 2, "/tmp/qwc_sc_charlie.txt" ) +
              line( 6, "total" ) );
 }
 
 TEST( CliSortByCount, SingleFileNoTotalLine )
 {
-  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_sc_one.txt && ";
-  CmdResult r = run( create + kBin + " --sort-by-count /tmp/wcl_sc_one.txt"
-                     "; rm -f /tmp/wcl_sc_one.txt" );
+  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/qwc_sc_one.txt && ";
+  CmdResult r = run( create + kBin + " -l --sort-by-count /tmp/qwc_sc_one.txt"
+                     "; rm -f /tmp/qwc_sc_one.txt" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_sc_one.txt" ) );
-}
-
-TEST( CliRecursive, SingleFileArgNoTotalLine )
-{
-  // --recursive with a non-directory arg behaves like a normal single file.
-  std::string create = "printf '%b' 'a\\nb\\nc\\n' > /tmp/wcl_rec_one.txt && ";
-  CmdResult r = run( create + kBin + " --recursive /tmp/wcl_rec_one.txt"
-                     "; rm -f /tmp/wcl_rec_one.txt" );
-  EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, line( 3, "/tmp/wcl_rec_one.txt" ) );
+  EXPECT_EQ( r.out, line( 3, "/tmp/qwc_sc_one.txt" ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -628,29 +589,29 @@ TEST( CliRecursive, SingleFileArgNoTotalLine )
 // ---------------------------------------------------------------------------
 TEST( CliSort, ByNameAlphabetical )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_sort_name" );
-  CmdResult r = run( kBin + " -r --sort-by-name " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_sort_name" );
+  CmdResult r = run( kBin + " -l -r --sort-by-name " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_sort_name/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_sort_name/sub/mid.txt" ) +
-             line( 2, "/tmp/wcl_sort_name/top.txt" ) +
+             line( 4, "/tmp/qwc_sort_name/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_sort_name/sub/mid.txt" ) +
+             line( 2, "/tmp/qwc_sort_name/top.txt" ) +
              line( 9, "total" ) );
 }
 
 TEST( CliSort, BySizeAscending )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_sort_size" );
-  CmdResult r = run( kBin + " -r --sort-by-size " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_sort_size" );
+  CmdResult r = run( kBin + " -l -r --sort-by-size " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_sort_size/top.txt" ) +
-             line( 3, "/tmp/wcl_sort_size/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_sort_size/sub/deep/bottom.txt" ) +
+             line( 2, "/tmp/qwc_sort_size/top.txt" ) +
+             line( 3, "/tmp/qwc_sort_size/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_sort_size/sub/deep/bottom.txt" ) +
              line( 9, "total" ) );
 }
 
@@ -659,29 +620,29 @@ TEST( CliSort, BySizeAscending )
 // ---------------------------------------------------------------------------
 TEST( CliReverse, FlipsCountOrderBiggestFirst )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_rev_count" );
-  CmdResult r = run( kBin + " -r --sort-by-count --reverse " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_rev_count" );
+  CmdResult r = run( kBin + " -l -r --sort-by-count --reverse " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_rev_count/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_rev_count/sub/mid.txt" ) +
-             line( 2, "/tmp/wcl_rev_count/top.txt" ) +
+             line( 4, "/tmp/qwc_rev_count/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_rev_count/sub/mid.txt" ) +
+             line( 2, "/tmp/qwc_rev_count/top.txt" ) +
              line( 9, "total" ) );
 }
 
 TEST( CliReverse, AloneFlipsDefaultAlphabetical )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_rev_alpha" );
-  CmdResult r = run( kBin + " -r --reverse " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_rev_alpha" );
+  CmdResult r = run( kBin + " -l -r --reverse " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_rev_alpha/top.txt" ) +
-             line( 3, "/tmp/wcl_rev_alpha/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_rev_alpha/sub/deep/bottom.txt" ) +
+             line( 2, "/tmp/qwc_rev_alpha/top.txt" ) +
+             line( 3, "/tmp/qwc_rev_alpha/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_rev_alpha/sub/deep/bottom.txt" ) +
              line( 9, "total" ) );
 }
 
@@ -690,67 +651,67 @@ TEST( CliReverse, AloneFlipsDefaultAlphabetical )
 // ---------------------------------------------------------------------------
 TEST( CliTop, KeepsLargestByCountAscending )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_top_count" );
-  CmdResult r = run( kBin + " -r --top 2 " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_top_count" );
+  CmdResult r = run( kBin + " -l -r --top 2 " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 3, "/tmp/wcl_top_count/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_top_count/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_top_count/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_top_count/sub/deep/bottom.txt" ) +
              line( 9, "total" ) );  // total covers all three files
 }
 
 TEST( CliTop, WithReverseBiggestFirst )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_top_rev" );
-  CmdResult r = run( kBin + " -r --top 2 --reverse " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_top_rev" );
+  CmdResult r = run( kBin + " -l -r --top 2 --reverse " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_top_rev/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/wcl_top_rev/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_top_rev/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_top_rev/sub/mid.txt" ) +
              line( 9, "total" ) );
 }
 
 TEST( CliTop, OneFileTotalStillCoversAll )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_top_one" );
-  CmdResult r = run( kBin + " -r --top 1 " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_top_one" );
+  CmdResult r = run( kBin + " -l -r --top 1 " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 4, "/tmp/wcl_top_one/sub/deep/bottom.txt" ) +
+             line( 4, "/tmp/qwc_top_one/sub/deep/bottom.txt" ) +
              line( 9, "total" ) );
 }
 
 TEST( CliTop, LargerThanCountShowsAll )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_top_all" );
-  CmdResult r = run( kBin + " -r --top 99 " + root );
+  const std::string root = makeRecTree( "/tmp/qwc_top_all" );
+  CmdResult r = run( kBin + " -l -r --top 99 " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 2, "/tmp/wcl_top_all/top.txt" ) +
-             line( 3, "/tmp/wcl_top_all/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_top_all/sub/deep/bottom.txt" ) +
+             line( 2, "/tmp/qwc_top_all/top.txt" ) +
+             line( 3, "/tmp/qwc_top_all/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_top_all/sub/deep/bottom.txt" ) +
              line( 9, "total" ) );
 }
 
 TEST( CliTop, ComposesWithSortBySize )
 {
-  const std::string root = makeRecTree( "/tmp/wcl_top_size" );
+  const std::string root = makeRecTree( "/tmp/qwc_top_size" );
   // Two largest by size are mid (6B) and bottom (8B), shown ascending by size.
-  CmdResult r = run( kBin + " -r --sort-by-size --top 2 " + root );
+  CmdResult r = run( kBin + " -l -r --sort-by-size --top 2 " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out,
-             line( 3, "/tmp/wcl_top_size/sub/mid.txt" ) +
-             line( 4, "/tmp/wcl_top_size/sub/deep/bottom.txt" ) +
+             line( 3, "/tmp/qwc_top_size/sub/mid.txt" ) +
+             line( 4, "/tmp/qwc_top_size/sub/deep/bottom.txt" ) +
              line( 9, "total" ) );
 }
 
@@ -767,37 +728,37 @@ TEST( CliTop, MissingValueErrors )
 }
 
 // ---------------------------------------------------------------------------
-// Drop-in compatibility: with the system `wc` as the ground truth, wcl's output
-// must match byte-for-byte for the three core modes. wcl's default counts lines
-// (== wc -l); -w == wc -w; -c == wc -c. This guards the exact wc formatting
-// (leading space, min-width-7 field, filename, and the "total" line) without
-// the test re-implementing it.
+// Drop-in compatibility: with the system `wc` as the ground truth, qwc's output
+// must match byte-for-byte. Bare qwc == bare wc (lines, words, bytes); -l == wc
+// -l; -w == wc -w; -c == wc -c; -m == wc -m; -L == wc -L. This guards the exact
+// wc formatting (leading space, min-width-7 fields, filename, "total" line)
+// without the test re-implementing it.
 // ---------------------------------------------------------------------------
 namespace {
 
 struct Mode
 {
-  const char* wclFlag;  // how wcl selects this mode ("" == default, lines)
-  const char* wcFlag;   // the matching wc flag
+  const char* qwcFlag;  // how qwc selects this mode ("" == default: l w c)
+  const char* wcFlag;   // the matching wc flag ("" == bare wc)
 };
-// wcl's -a is bare wc; the rest map to a single wc flag.
-const Mode kCoreModes[] = { { "", "-l" },   { "-w", "-w" }, { "-c", "-c" },
-                            { "-m", "-m" },  { "-L", "-L" }, { "-a", "" } };
+const Mode kCoreModes[] = { { "", "" },     { "-l", "-l" }, { "-w", "-w" },
+                            { "-c", "-c" },  { "-m", "-m" }, { "-L", "-L" } };
 
 }  // namespace
 
 TEST( CliWcCompat, SingleFileMatchesWc )
 {
-  const std::string f = "/tmp/wcl_wc_one.txt";
-  // Mixed content: words, blank line, trailing newline.
+  const std::string f = "/tmp/qwc_wc_one.txt";
+  // Mixed content: words, blank line, trailing newline (ASCII, so -w/-m agree
+  // with wc under any locale).
   std::system(
       ( "printf '%b' 'alpha beta\\ngamma\\n\\nx y z\\n' > " + f ).c_str() );
   for ( const Mode& m : kCoreModes ) {
-    CmdResult got = run( kBin + " " + m.wclFlag + " " + f );
+    CmdResult got = run( kBin + " " + m.qwcFlag + " " + f );
     CmdResult exp = run( std::string( "wc " ) + m.wcFlag + " " + f );
     EXPECT_EQ( got.exitCode, 0 );
     EXPECT_EQ( got.out, exp.out )
-        << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
+        << "qwc '" << m.qwcFlag << "' vs wc '" << m.wcFlag << "'";
   }
   std::system( ( "rm -f " + f ).c_str() );
 }
@@ -806,21 +767,21 @@ TEST( CliWcCompat, StdinMatchesWc )
 {
   const std::string payload = "alpha beta\\ngamma\\n\\nx y z\\n";
   for ( const Mode& m : kCoreModes ) {
-    CmdResult got = run( piped( payload, m.wclFlag ) );
+    CmdResult got = run( piped( payload, m.qwcFlag ) );
     CmdResult exp =
         run( "printf '%b' '" + payload + "' | wc " + m.wcFlag );
     EXPECT_EQ( got.out, exp.out )
-        << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
+        << "qwc '" << m.qwcFlag << "' vs wc '" << m.wcFlag << "'";
   }
 }
 
-// Multibyte: wcl -m must match wc -m byte-for-byte on real UTF-8 content. Both
+// Multibyte: qwc -m must match wc -m byte-for-byte on real UTF-8 content. Both
 // honor the ambient locale (code points in a UTF-8 locale, bytes under C), so
 // they agree regardless of which locale the test happens to run under. The
 // payload is written as literal UTF-8 bytes to sidestep printf escape quirks.
 TEST( CliWcCompat, MultibyteCharsMatchWc )
 {
-  const std::string f = "/tmp/wcl_wc_utf8.txt";
+  const std::string f = "/tmp/qwc_wc_utf8.txt";
   // "héllo wörld ☃\n" -- accented letters (2 bytes each) and a snowman (3).
   std::system(
       ( "printf '%s\\n' 'h\xC3\xA9llo w\xC3\xB6rld \xE2\x98\x83' > " + f )
@@ -836,15 +797,15 @@ TEST( CliWcCompat, MultipleFilesMatchWcIncludingTotal )
 {
   // Differing magnitudes (one file >9 lines, one <9) prove the columns are not
   // globally aligned -- each line uses its own min-width-7, exactly like wc.
-  const std::string a = "/tmp/wcl_wc_a.txt", b = "/tmp/wcl_wc_b.txt";
+  const std::string a = "/tmp/qwc_wc_a.txt", b = "/tmp/qwc_wc_b.txt";
   std::system(
       ( "yes 'a b' | head -n 12 > " + a + " && printf '%b' 'd\\ne\\n' > " + b )
           .c_str() );
   for ( const Mode& m : kCoreModes ) {
-    CmdResult got = run( kBin + " " + m.wclFlag + " " + a + " " + b );
+    CmdResult got = run( kBin + " " + m.qwcFlag + " " + a + " " + b );
     CmdResult exp = run( std::string( "wc " ) + m.wcFlag + " " + a + " " + b );
     EXPECT_EQ( got.out, exp.out )
-        << "wcl '" << m.wclFlag << "' vs wc " << m.wcFlag;
+        << "qwc '" << m.qwcFlag << "' vs wc '" << m.wcFlag << "'";
   }
   std::system( ( "rm -f " + a + " " + b ).c_str() );
 }

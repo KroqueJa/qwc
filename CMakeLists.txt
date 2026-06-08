@@ -1,5 +1,5 @@
 cmake_minimum_required( VERSION 3.16 )
-project( wcl LANGUAGES CXX )
+project( qwc LANGUAGES CXX )
 
 
 # ---------------------------------------------------------------------------
@@ -24,77 +24,77 @@ set( CMAKE_CXX_EXTENSIONS OFF )
 # ---------------------------------------------------------------------------
 # Options
 # ---------------------------------------------------------------------------
-# Force scalar countlines for the main `wcl` target (old: `make SCALAR=1`).
-option( WCL_SCALAR "Use the portable scalar countlines for wcl" OFF )
+# Force scalar countlines for the main `qwc` target (old: `make SCALAR=1`).
+option( QWC_SCALAR "Use the portable scalar countlines for qwc" OFF )
 
 # Sanitizers. ASan+UBSan and TSan are mutually exclusive (can't combine in one
 # binary), so they're separate switches. Use these in dedicated CLion profiles
 # with their own build dirs, never in the benchmark profile.
-option( WCL_ASAN "Build with AddressSanitizer + UBSan" OFF )
-option( WCL_TSAN "Build with ThreadSanitizer"          OFF )
+option( QWC_ASAN "Build with AddressSanitizer + UBSan" OFF )
+option( QWC_TSAN "Build with ThreadSanitizer"          OFF )
 
-# Output-name suffix so multiple profiles can coexist without clobbering ./wcl.
-# Leave empty for the normal benchmark binary (-> ./wcl). For a sweep, set e.g.
-#   -DWCL_SUFFIX=la2   ->   ./wcl-la2
-set( WCL_SUFFIX "" CACHE STRING "Suffix for the wcl binary name (e.g. la2 -> wcl-la2)" )
+# Output-name suffix so multiple profiles can coexist without clobbering ./qwc.
+# Leave empty for the normal benchmark binary (-> ./qwc). For a sweep, set e.g.
+#   -DQWC_SUFFIX=la2   ->   ./qwc-la2
+set( QWC_SUFFIX "" CACHE STRING "Suffix for the qwc binary name (e.g. la2 -> qwc-la2)" )
 
 # Generic hook for sweeping compile-time parameters from a profile, mirroring
 # how you passed -DADVISE_LOOKAHEAD=N on the command line. Pass a semicolon- or
 # space-separated list, e.g.
-#   -DWCL_DEFINES=ADVISE_LOOKAHEAD=2;ADVISE_WINDOW_MIB=8
-set( WCL_DEFINES "" CACHE STRING "Extra compile definitions (NAME=VALUE list) for sweeps" )
+#   -DQWC_DEFINES=ADVISE_LOOKAHEAD=2;ADVISE_WINDOW_MIB=8
+set( QWC_DEFINES "" CACHE STRING "Extra compile definitions (NAME=VALUE list) for sweeps" )
 
 # Build the GoogleTest-based unit tests (under tests/). On by default for the
 # top-level build; harmless to leave on for benchmark profiles since the test
-# target is only built by `ctest`/explicit `--target wcl_tests`.
-option( WCL_BUILD_TESTS "Build unit tests (requires the tests/googletest submodule)" ON )
+# target is only built by `ctest`/explicit `--target qwc_tests`.
+option( QWC_BUILD_TESTS "Build unit tests (requires the tests/googletest submodule)" ON )
 
 # ---------------------------------------------------------------------------
 # Architecture dispatch (mirrors the Makefile's uname -m logic)
 # ---------------------------------------------------------------------------
-if( WCL_SCALAR )
-  set( WCL_COUNTLINES src/count_scalar.cpp)
-  set( WCL_WORDS src/words_scalar.cpp)
-  set( WCL_SIMD_FLAGS )
+if( QWC_SCALAR )
+  set( QWC_COUNTLINES src/count_scalar.cpp)
+  set( QWC_WORDS src/words_scalar.cpp)
+  set( QWC_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64" )
-  set( WCL_COUNTLINES src/count_neon.cpp)
-  set( WCL_WORDS src/words_neon.cpp)
+  set( QWC_COUNTLINES src/count_neon.cpp)
+  set( QWC_WORDS src/words_neon.cpp)
   # Bare like the old Makefile: Apple clang targets the native Apple Silicon
   # baseline (NEON included) with no flag. If you ever benchmarked with an
   # explicit -mcpu=apple-mN or -mcpu=native, add it here to match.
-  set( WCL_SIMD_FLAGS )
+  set( QWC_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64" )
-  set( WCL_COUNTLINES src/count_avx2.cpp)
-  set( WCL_WORDS src/words_scalar.cpp)  # no AVX2 words variant yet
-  set( WCL_SIMD_FLAGS -mavx2 )
+  set( QWC_COUNTLINES src/count_avx2.cpp)
+  set( QWC_WORDS src/words_scalar.cpp)  # no AVX2 words variant yet
+  set( QWC_SIMD_FLAGS -mavx2 )
 else()
-  set( WCL_COUNTLINES src/count_scalar.cpp)
-  set( WCL_WORDS src/words_scalar.cpp)
-  set( WCL_SIMD_FLAGS )
+  set( QWC_COUNTLINES src/count_scalar.cpp)
+  set( QWC_WORDS src/words_scalar.cpp)
+  set( QWC_SIMD_FLAGS )
 endif()
-message( STATUS "wcl: building ${WCL_COUNTLINES} and ${WCL_WORDS} for ${CMAKE_SYSTEM_PROCESSOR}" )
+message( STATUS "qwc: building ${QWC_COUNTLINES} and ${QWC_WORDS} for ${CMAKE_SYSTEM_PROCESSOR}" )
 
 # countlines and words are arch-dispatched above (SIMD where available, scalar
 # otherwise) and added to each target explicitly. chars and max-line-length are
 # scalar-only for now, so they always compile in here.
-set( WCL_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp src/chars_scalar.cpp src/maxlinelen_scalar.cpp )
+set( QWC_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp src/chars_scalar.cpp src/maxlinelen_scalar.cpp )
 
 # ---------------------------------------------------------------------------
 # Shared config applied to a target
 # ---------------------------------------------------------------------------
-function( wcl_configure target )
+function( qwc_configure target )
   target_include_directories( ${target} PRIVATE include )
 
-  if( WCL_DEFINES )
-    target_compile_definitions( ${target} PRIVATE ${WCL_DEFINES} )
+  if( QWC_DEFINES )
+    target_compile_definitions( ${target} PRIVATE ${QWC_DEFINES} )
   endif()
 
-  if( WCL_ASAN AND WCL_TSAN )
-    message( FATAL_ERROR "WCL_ASAN and WCL_TSAN cannot be enabled together." )
-  elseif( WCL_ASAN )
+  if( QWC_ASAN AND QWC_TSAN )
+    message( FATAL_ERROR "QWC_ASAN and QWC_TSAN cannot be enabled together." )
+  elseif( QWC_ASAN )
     target_compile_options( ${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer -g )
     target_link_options(    ${target} PRIVATE -fsanitize=address,undefined )
-  elseif( WCL_TSAN )
+  elseif( QWC_TSAN )
     target_compile_options( ${target} PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g )
     target_link_options(    ${target} PRIVATE -fsanitize=thread )
   endif()
@@ -107,26 +107,26 @@ endfunction()
 # ---------------------------------------------------------------------------
 # Main target
 # ---------------------------------------------------------------------------
-if( WCL_SUFFIX STREQUAL "" )
-  set( WCL_OUTPUT_NAME "wcl" )
+if( QWC_SUFFIX STREQUAL "" )
+  set( QWC_OUTPUT_NAME "qwc" )
 else()
-  set( WCL_OUTPUT_NAME "wcl-${WCL_SUFFIX}" )
+  set( QWC_OUTPUT_NAME "qwc-${QWC_SUFFIX}" )
 endif()
 
-add_executable( wcl ${WCL_COMMON_SOURCES} ${WCL_COUNTLINES} ${WCL_WORDS} )
-set_target_properties( wcl PROPERTIES OUTPUT_NAME ${WCL_OUTPUT_NAME} )
-target_compile_options( wcl PRIVATE ${WCL_SIMD_FLAGS} )
-wcl_configure( wcl )
-message( STATUS "wcl: output binary -> ${CMAKE_SOURCE_DIR}/${WCL_OUTPUT_NAME}" )
+add_executable( qwc ${QWC_COMMON_SOURCES} ${QWC_COUNTLINES} ${QWC_WORDS} )
+set_target_properties( qwc PROPERTIES OUTPUT_NAME ${QWC_OUTPUT_NAME} )
+target_compile_options( qwc PRIVATE ${QWC_SIMD_FLAGS} )
+qwc_configure( qwc )
+message( STATUS "qwc: output binary -> ${CMAKE_SOURCE_DIR}/${QWC_OUTPUT_NAME}" )
 
-# Portable scalar build, on demand (old: `make wcl-scalar`). Uses the scalar
+# Portable scalar build, on demand (old: `make qwc-scalar`). Uses the scalar
 # implementation of every algorithm -- countlines and words included -- so it
 # serves as the baseline the SIMD build is benchmarked against. Built with
-# `cmake --build <dir> --target wcl-scalar`; emits ./wcl-scalar.
-add_executable( wcl-scalar EXCLUDE_FROM_ALL
-  ${WCL_COMMON_SOURCES} src/count_scalar.cpp src/words_scalar.cpp )
-wcl_configure( wcl-scalar )
-target_compile_options( wcl PRIVATE -Wall -Wextra -Wpedantic )
+# `cmake --build <dir> --target qwc-scalar`; emits ./qwc-scalar.
+add_executable( qwc-scalar EXCLUDE_FROM_ALL
+  ${QWC_COMMON_SOURCES} src/count_scalar.cpp src/words_scalar.cpp )
+qwc_configure( qwc-scalar )
+target_compile_options( qwc PRIVATE -Wall -Wextra -Wpedantic )
 
 # ---------------------------------------------------------------------------
 # Convenience targets wrapping the Python helpers, run from the project root.
@@ -139,13 +139,13 @@ add_custom_target( gen-test-data
 add_custom_target( bench
         COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench.py
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-        DEPENDS wcl
+        DEPENDS qwc
         USES_TERMINAL )
 
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-if( WCL_BUILD_TESTS )
+if( QWC_BUILD_TESTS )
   enable_testing()
   add_subdirectory( tests )
 endif()

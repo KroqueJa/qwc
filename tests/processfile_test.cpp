@@ -13,10 +13,10 @@
 #include "processfile.h"
 #include "test_util.h"
 
-using wcltest::refChars;
-using wcltest::refCount;
-using wcltest::refMaxLineLen;
-using wcltest::refWords;
+using qwctest::refChars;
+using qwctest::refCount;
+using qwctest::refMaxLineLen;
+using qwctest::refWords;
 
 namespace {
 
@@ -27,7 +27,7 @@ class TempFile
  public:
   explicit TempFile( const std::string& contents )
   {
-    char tmpl[] = "/tmp/wcl_pf_test_XXXXXX";
+    char tmpl[] = "/tmp/qwc_pf_test_XXXXXX";
     int fd = mkstemp( tmpl );
     if ( fd < 0 ) std::abort();
     path_ = tmpl;
@@ -362,7 +362,7 @@ TEST( ProcessFileMaxLine, Deterministic )
 }
 
 // ---------------------------------------------------------------------------
-// processFileAll: lines, words and bytes in one pass (the bare-wc / --all mode).
+// processFileAll: lines, words and bytes in one pass (the bare-wc / no-flag mode).
 // ---------------------------------------------------------------------------
 TEST( ProcessFileAll, EmptyFile )
 {
@@ -488,7 +488,7 @@ TEST( ProcessFile, Deterministic )
 TEST( ProcessFileDeathTest, MissingFileExitsWithCode1 )
 {
   EXPECT_EXIT(
-      processFile( "/nonexistent/wcl/path/should/not/exist_zzz" ),
+      processFile( "/nonexistent/qwc/path/should/not/exist_zzz" ),
       ::testing::ExitedWithCode( 1 ), "Error opening file" );
 }
 

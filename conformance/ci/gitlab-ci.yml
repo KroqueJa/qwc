@@ -1,4 +1,4 @@
-# wcl ↔ wc conformance for GitLab CI.
+# qwc ↔ wc conformance for GitLab CI.
 #
 # Copy to .gitlab-ci.yml, or `include:` it from your pipeline. Uses a Debian/
 # Ubuntu-based image (GNU wc -> the suite compares parsed numbers; exact-byte
@@ -8,12 +8,12 @@ conformance:
   image: ubuntu:24.04
   variables:
     DEBIAN_FRONTEND: noninteractive
-    WCL_CONF_UTF8_LOCALE: "C.UTF-8"
+    QWC_CONF_UTF8_LOCALE: "C.UTF-8"
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq build-essential cmake git python3 locales
     - locale-gen C.UTF-8 || true
   script:
-    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWCL_BUILD_TESTS=OFF
-    - cmake --build build --target wcl
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQWC_BUILD_TESTS=OFF
+    - cmake --build build --target qwc
     - python3 conformance/run.py --fuzz 1000

@@ -17,9 +17,9 @@ enum class SortMode { None, Count, Name, Size };
 struct Options
 {
   usize bytesPerThread = 64 * 1024 * 1024;
-  char target = '\n';            // byte to count; '\n' counts lines
-  CountMode mode = CountMode::Target;  // --chars switches to byte counting
-  bool all = false;              // --all: lines, words and bytes, like bare wc
+  char target = '\n';            // byte to count; '\n' counts lines (-l)
+  CountMode mode = CountMode::Target;  // set by -l/-w/-c/-m/-L (and --char)
+  bool all = false;              // no count flag: lines+words+bytes, like bare wc
   bool recursive = false;        // expand directory arguments
   SortMode sortMode = SortMode::None;
   bool reverse = false;          // flip the display order
@@ -42,7 +42,7 @@ bool collectFiles( Options& opt );
 
 // Print one BSD-wc-style count line: a leading space, `count` right-justified
 // to a minimum width of 7, and -- when `name` is non-null -- a space and the
-// name. Matches `wc`'s `" %7ju %s\n"` (and `" %7ju\n"` for stdin) so wcl drops
+// name. Matches `wc`'s `" %7ju %s\n"` (and `" %7ju\n"` for stdin) so qwc drops
 // in for wc.
 void printCountLine( usize count, const char* name );
 
@@ -55,7 +55,7 @@ void printAllLine( const Counts& c, const char* name );
 // file was counted. A single file prints just its own line, like wc.
 void printResults( const Options& opt, const std::vector<Result>& output );
 
-// --all variant: one "<lines> <words> <bytes> <name>" line per file in the
-// collected order, plus a summed "total" line when more than one file was
-// counted (matching bare `wc`). Sorting/--top do not apply here.
+// Bare-`wc` variant (qwc with no count flag): one "<lines> <words> <bytes>
+// <name>" line per file in the collected order, plus a summed "total" line when
+// more than one file was counted. Sorting/--top do not apply here.
 void printResultsAll( const Options& opt, const std::vector<Counts>& output );

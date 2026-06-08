@@ -1,4 +1,4 @@
-# WCL
+# QWC
 
 A very fast line and char counter.
 

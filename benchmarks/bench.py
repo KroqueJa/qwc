@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Benchmark wcl vs wc -l on benchmarks/test-data/*.
+Benchmark qwc vs wc -l on benchmarks/test-data/*.
 
 Runs both commands against the same file list, times them, parses their
 output, and verifies that every per-file count and the grand total agree.
@@ -24,13 +24,13 @@ import time
 SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT     = os.path.dirname(SCRIPT_DIR)
 TEST_DATA_DIR = os.path.join(SCRIPT_DIR, "test-data")
-WCL_BIN       = os.path.join(REPO_ROOT, "wcl")
+QWC_BIN       = os.path.join(REPO_ROOT, "qwc")
 LOG_FILE      = os.path.join(SCRIPT_DIR, "benchmarks.log")
 
 LOG_HEADER = (
     "timestamp|commit_sha|file_count|total_bytes"
-    "|wc_time_s|wc_mbs|wcl_time_s|wcl_mbs"
-    "|total_lines|match|wcl_faster_pct"
+    "|wc_time_s|wc_mbs|qwc_time_s|qwc_mbs"
+    "|total_lines|match|qwc_faster_pct"
 )
 
 
@@ -83,7 +83,7 @@ def append_log(
     file_count: int,
     total_bytes: int,
     wc_time: float,
-    wcl_time: float,
+    qwc_time: float,
     total_lines: int,
     match: bool,
 ) -> None:
@@ -91,8 +91,8 @@ def append_log(
     write_header = not os.path.exists(LOG_FILE)
     ts      = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     wc_mbs  = total_bytes / wc_time  / 1e6
-    wcl_mbs = total_bytes / wcl_time / 1e6
-    wcl_faster_pct = (wc_time - wcl_time) / wc_time * 100   # negative = wcl slower
+    qwc_mbs = total_bytes / qwc_time / 1e6
+    qwc_faster_pct = (wc_time - qwc_time) / wc_time * 100   # negative = qwc slower
 
     row = "|".join([
         ts,
@@ -101,11 +101,11 @@ def append_log(
         str(total_bytes),
         f"{wc_time:.4f}",
         f"{wc_mbs:.1f}",
-        f"{wcl_time:.4f}",
-        f"{wcl_mbs:.1f}",
+        f"{qwc_time:.4f}",
+        f"{qwc_mbs:.1f}",
         str(total_lines),
         "yes" if match else "no",
-        f"{wcl_faster_pct:.2f}",
+        f"{qwc_faster_pct:.2f}",
     ])
 
     with open(LOG_FILE, "a") as f:
@@ -148,9 +148,9 @@ def parse_wc(stdout: str) -> tuple[dict[str, int], int]:
     return counts, total
 
 
-def parse_wcl(stdout: str) -> tuple[dict[str, int], int]:
+def parse_qwc(stdout: str) -> tuple[dict[str, int], int]:
     """
-    Parse `wcl` output.
+    Parse `qwc` output.
 
     Format (multiple files):
         <count> <path>
@@ -182,9 +182,9 @@ def parse_wcl(stdout: str) -> tuple[dict[str, int], int]:
 # Main
 # ---------------------------------------------------------------------------
 def main() -> int:
-    if not os.path.isfile(WCL_BIN):
+    if not os.path.isfile(QWC_BIN):
         sys.exit(
-            f"wcl binary not found at {WCL_BIN}\n"
+            f"qwc binary not found at {QWC_BIN}\n"
             "Run 'cmake -S . -B build && cmake --build build' first."
         )
 
@@ -204,42 +204,43 @@ def main() -> int:
     run_cmd(["wc", "-l"] + files)
     print("done")
 
-    print("Warming up wcl   …", end="  ", flush=True)
-    run_cmd([WCL_BIN] + files)
+    print("Warming up qwc   …", end="  ", flush=True)
+    run_cmd([QWC_BIN, "-l"] + files)
     print("done\n")
 
-    # Timed runs (both with warm cache).
+    # Timed runs (both with warm cache). Bare qwc now prints lines, words and
+    # bytes like wc, so benchmark line counting explicitly with `qwc -l`.
     print("Running wc -l …", end="  ", flush=True)
     wc_out,  wc_time  = run_timed(["wc", "-l"] + files)
     print(f"{wc_time:.3f} s")
 
-    print("Running wcl   …", end="  ", flush=True)
-    wcl_out, wcl_time = run_timed([WCL_BIN] + files)
-    print(f"{wcl_time:.3f} s")
+    print("Running qwc   …", end="  ", flush=True)
+    qwc_out, qwc_time = run_timed([QWC_BIN, "-l"] + files)
+    print(f"{qwc_time:.3f} s")
 
     # ---------------------------------------------------------------------------
     # Parse
     # ---------------------------------------------------------------------------
     wc_counts,  wc_total  = parse_wc(wc_out)
-    wcl_counts, wcl_total = parse_wcl(wcl_out)
+    qwc_counts, qwc_total = parse_qwc(qwc_out)
 
     # ---------------------------------------------------------------------------
     # Verify totals
     # ---------------------------------------------------------------------------
     print()
-    if wcl_total == wc_total:
-        print(f"Grand total : {wcl_total:,} lines  [MATCH]")
+    if qwc_total == wc_total:
+        print(f"Grand total : {qwc_total:,} lines  [MATCH]")
     else:
         print(
             f"GRAND TOTAL MISMATCH\n"
             f"  wc -l : {wc_total:,}\n"
-            f"  wcl   : {wcl_total:,}",
+            f"  qwc   : {qwc_total:,}",
             file=sys.stderr,
         )
         append_log(
             sha=sha, file_count=len(files), total_bytes=total_bytes,
-            wc_time=wc_time, wcl_time=wcl_time,
-            total_lines=wcl_total, match=False,
+            wc_time=wc_time, qwc_time=qwc_time,
+            total_lines=qwc_total, match=False,
         )
         return 1
 
@@ -249,23 +250,23 @@ def main() -> int:
     mismatches: list[tuple[str, int | None, int | None]] = []
     for path in files:
         wc_n  = wc_counts.get(path)
-        wcl_n = wcl_counts.get(path)
-        if wc_n != wcl_n:
-            mismatches.append((path, wc_n, wcl_n))
+        qwc_n = qwc_counts.get(path)
+        if wc_n != qwc_n:
+            mismatches.append((path, wc_n, qwc_n))
 
     if mismatches:
         print(f"\nPer-file mismatches ({len(mismatches)}):", file=sys.stderr)
-        for path, wc_n, wcl_n in mismatches[:20]:
+        for path, wc_n, qwc_n in mismatches[:20]:
             print(
-                f"  {os.path.basename(path)}: wc -l={wc_n}  wcl={wcl_n}",
+                f"  {os.path.basename(path)}: wc -l={wc_n}  qwc={qwc_n}",
                 file=sys.stderr,
             )
         if len(mismatches) > 20:
             print(f"  … and {len(mismatches) - 20} more", file=sys.stderr)
         append_log(
             sha=sha, file_count=len(files), total_bytes=total_bytes,
-            wc_time=wc_time, wcl_time=wcl_time,
-            total_lines=wcl_total, match=False,
+            wc_time=wc_time, qwc_time=qwc_time,
+            total_lines=qwc_total, match=False,
         )
         return 1
 
@@ -277,17 +278,17 @@ def main() -> int:
     print()
     print(f"  {'command':<8}  {'time':>8}  {'MB/s':>8}")
     print(f"  {'-------':<8}  {'----':>8}  {'----':>8}")
-    for label, t in [("wc -l", wc_time), ("wcl", wcl_time)]:
+    for label, t in [("wc -l", wc_time), ("qwc", qwc_time)]:
         mbs = total_bytes / t / 1e6
         print(f"  {label:<8}  {t:>7.3f}s  {mbs:>7.0f}")
 
     print()
-    if wcl_time < wc_time:
-        pct = (wc_time - wcl_time) / wc_time * 100
-        print(f"wcl is {pct:.1f} % faster than wc -l")
+    if qwc_time < wc_time:
+        pct = (wc_time - qwc_time) / wc_time * 100
+        print(f"qwc is {pct:.1f} % faster than wc -l")
     else:
-        pct = (wcl_time - wc_time) / wc_time * 100
-        print(f"wcl is {pct:.1f} % slower than wc -l")
+        pct = (qwc_time - wc_time) / wc_time * 100
+        print(f"qwc is {pct:.1f} % slower than wc -l")
 
     # ---------------------------------------------------------------------------
     # Append to log
@@ -297,8 +298,8 @@ def main() -> int:
         file_count=len(files),
         total_bytes=total_bytes,
         wc_time=wc_time,
-        wcl_time=wcl_time,
-        total_lines=wcl_total,
+        qwc_time=qwc_time,
+        total_lines=qwc_total,
         match=True,
     )
 

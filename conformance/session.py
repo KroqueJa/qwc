@@ -1,7 +1,7 @@
 """
 Environment discovery shared by run.py and test_conformance.py: where is the
-`wcl` binary, is `wc` present, which locales can we exercise, and does the local
-`wc` format its output the way wcl does.
+`qwc` binary, is `wc` present, which locales can we exercise, and does the local
+`wc` format its output the way qwc does.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Locale candidates to probe for a working multibyte (UTF-8) locale. The bare
 # "UTF-8" entry is the macOS form; the others are the usual Linux names.
 UTF8_LOCALE_CANDIDATES = (
-    os.environ.get("WCL_CONF_UTF8_LOCALE", ""),
+    os.environ.get("QWC_CONF_UTF8_LOCALE", ""),
     "C.UTF-8",
     "C.utf8",
     "en_US.UTF-8",
@@ -30,7 +30,7 @@ UTF8_LOCALE_CANDIDATES = (
 
 @dataclasses.dataclass(frozen=True)
 class Session:
-    wcl_bin: str
+    qwc_bin: str
     c_locale: str               # always "C"
     utf8_locale: Optional[str]  # None if no multibyte locale is available
     exact_format: bool          # local `wc` is byte-for-byte format-compatible
@@ -43,22 +43,22 @@ class Session:
         return out
 
 
-def find_wcl() -> str:
-    """Locate the wcl binary: $WCL_BIN, then the repo root, then $PATH."""
-    env = os.environ.get("WCL_BIN")
+def find_qwc() -> str:
+    """Locate the qwc binary: $QWC_BIN, then the repo root, then $PATH."""
+    env = os.environ.get("QWC_BIN")
     if env:
         if not os.path.isfile(env):
-            raise SystemExit(f"WCL_BIN={env!r} is not a file")
+            raise SystemExit(f"QWC_BIN={env!r} is not a file")
         return os.path.abspath(env)
-    candidate = os.path.join(REPO_ROOT, "wcl")
+    candidate = os.path.join(REPO_ROOT, "qwc")
     if os.path.isfile(candidate):
         return candidate
-    found = shutil.which("wcl")
+    found = shutil.which("qwc")
     if found:
         return found
     raise SystemExit(
-        "Could not find the wcl binary. Build it first "
-        "(cmake --build <dir> --target wcl) or set WCL_BIN."
+        "Could not find the qwc binary. Build it first "
+        "(cmake --build <dir> --target qwc) or set QWC_BIN."
     )
 
 
@@ -99,14 +99,14 @@ def pick_utf8_locale() -> Optional[str]:
     return None
 
 
-def detect_exact_format(wcl_bin: str) -> bool:
+def detect_exact_format(qwc_bin: str) -> bool:
     """
-    True when the local `wc` pads/formats its output exactly like wcl (BSD/macOS
+    True when the local `wc` pads/formats its output exactly like qwc (BSD/macOS
     `wc`). GNU `wc` uses a different field width, so on Linux this is False and
     the suite compares parsed numbers instead of raw bytes.
     """
     with tempfile.NamedTemporaryFile(
-        prefix="wcl_conf_fmt_", suffix=".txt", delete=False
+        prefix="qwc_conf_fmt_", suffix=".txt", delete=False
     ) as fh:
         fh.write(b"alpha beta\ngamma\n\nx y z\n")
         path = fh.name
@@ -114,24 +114,25 @@ def detect_exact_format(wcl_bin: str) -> bool:
         env = dict(os.environ)
         env["LC_ALL"] = "C"
         env["LANG"] = "C"
+        # Bare `wc` and bare `qwc` both print lines, words and bytes.
         wc_out = subprocess.run(
             ["wc", path], capture_output=True, env=env
         ).stdout
-        wcl_out = subprocess.run(
-            [wcl_bin, "-a", path], capture_output=True, env=env
+        qwc_out = subprocess.run(
+            [qwc_bin, path], capture_output=True, env=env
         ).stdout
-        return wc_out == wcl_out
+        return wc_out == qwc_out
     finally:
         os.unlink(path)
 
 
 def build_session() -> Session:
     _wc_present()
-    wcl_bin = find_wcl()
-    utf8 = None if os.environ.get("WCL_CONF_NO_UTF8") else pick_utf8_locale()
+    qwc_bin = find_qwc()
+    utf8 = None if os.environ.get("QWC_CONF_NO_UTF8") else pick_utf8_locale()
     return Session(
-        wcl_bin=wcl_bin,
+        qwc_bin=qwc_bin,
         c_locale="C",
         utf8_locale=utf8,
-        exact_format=detect_exact_format(wcl_bin),
+        exact_format=detect_exact_format(qwc_bin),
     )

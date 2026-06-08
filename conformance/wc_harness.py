@@ -1,35 +1,35 @@
 """
-Core engine for the wcl-vs-wc conformance suite.
+Core engine for the qwc-vs-wc conformance suite.
 
-The whole purpose of wcl is to be a drop-in replacement for `wc`, so "correct"
+The whole purpose of qwc is to be a drop-in replacement for `wc`, so "correct"
 is defined as "produces the same counts as the system `wc`" -- with one carve-out
 the task allows: on binary / invalid-UTF-8 input, where `wc`'s own behaviour is
-locale-dependent and not byte-defined, wcl is permitted its own interpretation.
+locale-dependent and not byte-defined, qwc is permitted its own interpretation.
 
 This module knows nothing about *which* inputs to run; it just runs one `wc` and
-one `wcl` invocation, parses both, and decides whether they are required to agree.
+one `qwc` invocation, parses both, and decides whether they are required to agree.
 corpus.py supplies the inputs; run.py and test_conformance.py drive it.
 
 ----------------------------------------------------------------------------
 The parity policy (derived empirically -- see conformance/README.md)
 ----------------------------------------------------------------------------
 Everything hinges on the locale, because `wc` counts words and characters
-through the locale's multibyte/`iswspace` machinery while wcl counts bytes (for
+through the locale's multibyte/`iswspace` machinery while qwc counts bytes (for
 words) and UTF-8 code points (for chars):
 
-* Under the C/POSIX locale `wc` is itself byte-defined, so wcl matches it on
+* Under the C/POSIX locale `wc` is itself byte-defined, so qwc matches it on
   EVERY mode and EVERY input, binary included. This is the strongest invariant
   and the backbone of the suite.
 
 * Under a UTF-8 locale:
     - byte-defined modes  (lines, bytes, max-line-length) match on every input;
-    - chars (`-m`)        match on valid UTF-8 (ASCII included), and wcl may
+    - chars (`-m`)        match on valid UTF-8 (ASCII included), and qwc may
                           diverge on invalid UTF-8 (where `wc` may also error);
     - words (`-w`) and    match on pure-ASCII input; on any non-ASCII input
-      bare-wc (`-a`)      wcl's C-locale byte semantics may legitimately differ
+      bare-wc (`-a`)      qwc's C-locale byte semantics may legitimately differ
                           from `wc`'s wide-char `iswspace` splitting.
 
-When a comparison is not *required*, the suite still checks that wcl ran
+When a comparison is not *required*, the suite still checks that qwc ran
 cleanly and produced well-formed output -- garbage in must not mean a crash out.
 """
 
@@ -42,25 +42,25 @@ from typing import Optional
 
 
 # ---------------------------------------------------------------------------
-# Modes: every `wc` flag wcl claims to replicate. `wc` with no flag (lines,
-# words, bytes) is wcl's `-a`. `kind` selects the parity rule above.
+# Modes: every `wc` flag qwc claims to replicate. `wc` with no flag (lines,
+# words, bytes) is qwc's `-a`. `kind` selects the parity rule above.
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
 class Mode:
     name: str
-    wcl: tuple[str, ...]  # flags passed to wcl
+    qwc: tuple[str, ...]  # flags passed to qwc
     wc: tuple[str, ...]   # flags passed to wc
     kind: str             # "byte" | "char" | "word"
     ncols: int            # how many integer columns the output has
 
 
 MODES: tuple[Mode, ...] = (
-    Mode("lines",   (),       ("-l",), "byte", 1),  # wcl default == wc -l
-    Mode("words",   ("-w",),  ("-w",), "word", 1),
-    Mode("bytes",   ("-c",),  ("-c",), "byte", 1),
-    Mode("chars",   ("-m",),  ("-m",), "char", 1),
-    Mode("maxline", ("-L",),  ("-L",), "byte", 1),
-    Mode("all",     ("-a",),  (),      "word", 3),  # bare wc: lines words bytes
+    Mode("lines",   ("-l",), ("-l",), "byte", 1),
+    Mode("words",   ("-w",), ("-w",), "word", 1),
+    Mode("bytes",   ("-c",), ("-c",), "byte", 1),
+    Mode("chars",   ("-m",), ("-m",), "char", 1),
+    Mode("maxline", ("-L",), ("-L",), "byte", 1),
+    Mode("all",     (),      (),      "word", 3),  # bare qwc == bare wc: l w b
 )
 
 MODE_BY_NAME = {m.name: m for m in MODES}
@@ -96,7 +96,7 @@ def combine(metas: list[Meta]) -> Meta:
 
 
 def required_to_match(regime: str, mode: Mode, meta: Meta, wc_ok: bool) -> bool:
-    """Should wcl be required to reproduce `wc` exactly for this case?"""
+    """Should qwc be required to reproduce `wc` exactly for this case?"""
     if not wc_ok:
         # `wc` itself failed (e.g. -m on invalid UTF-8): our interpretation is
         # allowed, so do not demand agreement.
@@ -132,10 +132,10 @@ def run_tool(
     bytes_per_thread: Optional[int] = None,
     locale: str,
 ) -> ToolRun:
-    """Run one `wc`/`wcl` invocation under a fixed locale."""
+    """Run one `wc`/`qwc` invocation under a fixed locale."""
     argv = [binary, *flags]
-    # --bytes-per-thread is a wcl-only knob used to force chunk boundaries; it
-    # never changes the counts, only how wcl splits the work across threads.
+    # --bytes-per-thread is a qwc-only knob used to force chunk boundaries; it
+    # never changes the counts, only how qwc splits the work across threads.
     if bytes_per_thread is not None:
         argv += ["--bytes-per-thread", str(bytes_per_thread)]
     if files:
@@ -167,7 +167,7 @@ class Parsed:
 
 def parse_output(stdout: bytes) -> Parsed:
     """
-    Parse `wc`/`wcl` output into structured counts, tolerant of both BSD's
+    Parse `wc`/`qwc` output into structured counts, tolerant of both BSD's
     fixed-width padding and GNU's dynamic width (we compare numbers, not bytes,
     for portability -- exact-byte equality is checked separately when the local
     `wc` is format-compatible).
@@ -209,20 +209,20 @@ class Result:
         return self.status != "fail"
 
 
-def _check_wcl_sane(run: ToolRun, mode: Mode) -> Optional[str]:
-    """wcl must never crash or emit malformed output, even on binary garbage."""
+def _check_qwc_sane(run: ToolRun, mode: Mode) -> Optional[str]:
+    """qwc must never crash or emit malformed output, even on binary garbage."""
     if run.returncode != 0:
-        return f"wcl exited {run.returncode}; stderr={run.stderr!r}"
+        return f"qwc exited {run.returncode}; stderr={run.stderr!r}"
     parsed = parse_output(run.stdout)
     rows = list(parsed.records.values())
     if parsed.total is not None:
         rows.append(parsed.total)
     if not rows:
-        return f"wcl produced no parseable count line: {run.stdout!r}"
+        return f"qwc produced no parseable count line: {run.stdout!r}"
     for row in rows:
         if len(row) != mode.ncols:
             return (
-                f"wcl produced {len(row)} columns, expected {mode.ncols}: "
+                f"qwc produced {len(row)} columns, expected {mode.ncols}: "
                 f"{run.stdout!r}"
             )
     return None
@@ -230,7 +230,7 @@ def _check_wcl_sane(run: ToolRun, mode: Mode) -> Optional[str]:
 
 def compare(
     *,
-    wcl_bin: str,
+    qwc_bin: str,
     mode: Mode,
     regime: str,
     locale: str,
@@ -240,17 +240,17 @@ def compare(
     bytes_per_thread: Optional[int] = None,
     exact_format: bool = False,
 ) -> Result:
-    """Run one wcl invocation and the matching wc invocation, then judge them."""
+    """Run one qwc invocation and the matching wc invocation, then judge them."""
     wc_run = run_tool(
         "wc", mode.wc, files=files, stdin=stdin, locale=locale
     )
-    wcl_run = run_tool(
-        wcl_bin, mode.wcl, files=files, stdin=stdin,
+    qwc_run = run_tool(
+        qwc_bin, mode.qwc, files=files, stdin=stdin,
         bytes_per_thread=bytes_per_thread, locale=locale,
     )
 
-    # wcl robustness is non-negotiable regardless of whether we compare to wc.
-    sane = _check_wcl_sane(wcl_run, mode)
+    # qwc robustness is non-negotiable regardless of whether we compare to wc.
+    sane = _check_qwc_sane(qwc_run, mode)
     if sane is not None:
         return Result("fail", sane)
 
@@ -259,26 +259,26 @@ def compare(
         return Result("skip", "parity not required for this locale/mode/input")
 
     # Exact byte-for-byte output (formatting included) -- only when the local
-    # `wc` formats the way wcl does (BSD/macOS). On GNU `wc` we fall back to the
+    # `wc` formats the way qwc does (BSD/macOS). On GNU `wc` we fall back to the
     # numeric comparison below, which is the portable correctness signal.
-    if exact_format and wcl_run.stdout != wc_run.stdout:
+    if exact_format and qwc_run.stdout != wc_run.stdout:
         return Result(
             "fail",
             "exact output mismatch\n"
             f"  wc : {wc_run.stdout!r}\n"
-            f"  wcl: {wcl_run.stdout!r}",
+            f"  qwc: {qwc_run.stdout!r}",
         )
 
     wc_parsed = parse_output(wc_run.stdout)
-    wcl_parsed = parse_output(wcl_run.stdout)
+    qwc_parsed = parse_output(qwc_run.stdout)
 
-    if wc_parsed.records != wcl_parsed.records or wc_parsed.total != wcl_parsed.total:
+    if wc_parsed.records != qwc_parsed.records or wc_parsed.total != qwc_parsed.total:
         return Result(
             "fail",
             "count mismatch\n"
             f"  wc  records={wc_parsed.records} total={wc_parsed.total}\n"
-            f"  wcl records={wcl_parsed.records} total={wcl_parsed.total}\n"
+            f"  qwc records={qwc_parsed.records} total={qwc_parsed.total}\n"
             f"  wc stdout={wc_run.stdout!r}\n"
-            f"  wcl stdout={wcl_run.stdout!r}",
+            f"  qwc stdout={qwc_run.stdout!r}",
         )
     return Result("match")
