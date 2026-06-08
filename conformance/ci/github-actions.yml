@@ -1,0 +1,44 @@
+# wcl ↔ wc conformance.
+#
+# Copy to .github/workflows/conformance.yml to enable. Runs on Linux (GNU wc,
+# numeric comparison) and macOS (BSD wc, byte-for-byte comparison) so both
+# formatting regimes are covered.
+
+name: conformance
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  conformance:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build wcl
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWCL_BUILD_TESTS=OFF
+          cmake --build build --target wcl
+
+      # A UTF-8 locale lets the suite exercise the multibyte (-m) path against
+      # wc. C.UTF-8 ships on ubuntu-latest; macOS already has UTF-8 locales.
+      - name: Ensure a UTF-8 locale (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo locale-gen C.UTF-8 || true
+          echo "WCL_CONF_UTF8_LOCALE=C.UTF-8" >> "$GITHUB_ENV"
+
+      - name: Run conformance suite
+        run: python3 conformance/run.py --fuzz 1000

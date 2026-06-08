@@ -1,0 +1,4 @@
+# The standalone runner (conformance/run.py) needs nothing beyond the Python
+# standard library. pytest is only required for the test_conformance.py
+# front-end, which is optional.
+pytest>=7.0

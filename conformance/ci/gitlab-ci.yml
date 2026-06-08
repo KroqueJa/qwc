@@ -1,0 +1,19 @@
+# wcl ↔ wc conformance for GitLab CI.
+#
+# Copy to .gitlab-ci.yml, or `include:` it from your pipeline. Uses a Debian/
+# Ubuntu-based image (GNU wc -> the suite compares parsed numbers; exact-byte
+# formatting parity is covered by the macOS GitHub Actions job and the C++ tests).
+
+conformance:
+  image: ubuntu:24.04
+  variables:
+    DEBIAN_FRONTEND: noninteractive
+    WCL_CONF_UTF8_LOCALE: "C.UTF-8"
+  before_script:
+    - apt-get update -qq
+    - apt-get install -y -qq build-essential cmake git python3 locales
+    - locale-gen C.UTF-8 || true
+  script:
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DWCL_BUILD_TESTS=OFF
+    - cmake --build build --target wcl
+    - python3 conformance/run.py --fuzz 1000

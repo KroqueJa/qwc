@@ -1,0 +1,137 @@
+"""
+Environment discovery shared by run.py and test_conformance.py: where is the
+`wcl` binary, is `wc` present, which locales can we exercise, and does the local
+`wc` format its output the way wcl does.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import os
+import shutil
+import subprocess
+import tempfile
+from typing import Optional
+
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Locale candidates to probe for a working multibyte (UTF-8) locale. The bare
+# "UTF-8" entry is the macOS form; the others are the usual Linux names.
+UTF8_LOCALE_CANDIDATES = (
+    os.environ.get("WCL_CONF_UTF8_LOCALE", ""),
+    "C.UTF-8",
+    "C.utf8",
+    "en_US.UTF-8",
+    "en_US.utf8",
+    "UTF-8",
+)
+
+
+@dataclasses.dataclass(frozen=True)
+class Session:
+    wcl_bin: str
+    c_locale: str               # always "C"
+    utf8_locale: Optional[str]  # None if no multibyte locale is available
+    exact_format: bool          # local `wc` is byte-for-byte format-compatible
+
+    def regimes(self) -> list[tuple[str, str]]:
+        """(regime-name, locale) pairs to run every case under."""
+        out = [("C", self.c_locale)]
+        if self.utf8_locale is not None:
+            out.append(("UTF8", self.utf8_locale))
+        return out
+
+
+def find_wcl() -> str:
+    """Locate the wcl binary: $WCL_BIN, then the repo root, then $PATH."""
+    env = os.environ.get("WCL_BIN")
+    if env:
+        if not os.path.isfile(env):
+            raise SystemExit(f"WCL_BIN={env!r} is not a file")
+        return os.path.abspath(env)
+    candidate = os.path.join(REPO_ROOT, "wcl")
+    if os.path.isfile(candidate):
+        return candidate
+    found = shutil.which("wcl")
+    if found:
+        return found
+    raise SystemExit(
+        "Could not find the wcl binary. Build it first "
+        "(cmake --build <dir> --target wcl) or set WCL_BIN."
+    )
+
+
+def _wc_present() -> None:
+    if shutil.which("wc") is None:
+        raise SystemExit("System `wc` not found on PATH; it is the oracle.")
+
+
+def _wc_char_count(text: bytes, locale: str) -> Optional[int]:
+    """Return `wc -m` for *text* under *locale*, or None on failure."""
+    env = dict(os.environ)
+    env["LC_ALL"] = locale
+    env["LANG"] = locale
+    try:
+        proc = subprocess.run(
+            ["wc", "-m"], input=text, capture_output=True, env=env
+        )
+    except OSError:
+        return None
+    if proc.returncode != 0:
+        return None
+    toks = proc.stdout.split()
+    return int(toks[0]) if toks and toks[0].isdigit() else None
+
+
+def pick_utf8_locale() -> Optional[str]:
+    """
+    Find a locale in which `wc` actually does multibyte counting. We probe
+    functionally rather than trusting names: feed the 2-byte sequence for "é"
+    and accept the locale only if `wc -m` reports 1 character, not 2 bytes.
+    """
+    two_byte_e = b"\xc3\xa9"  # U+00E9, one character / two bytes
+    for cand in UTF8_LOCALE_CANDIDATES:
+        if not cand:
+            continue
+        if _wc_char_count(two_byte_e, cand) == 1:
+            return cand
+    return None
+
+
+def detect_exact_format(wcl_bin: str) -> bool:
+    """
+    True when the local `wc` pads/formats its output exactly like wcl (BSD/macOS
+    `wc`). GNU `wc` uses a different field width, so on Linux this is False and
+    the suite compares parsed numbers instead of raw bytes.
+    """
+    with tempfile.NamedTemporaryFile(
+        prefix="wcl_conf_fmt_", suffix=".txt", delete=False
+    ) as fh:
+        fh.write(b"alpha beta\ngamma\n\nx y z\n")
+        path = fh.name
+    try:
+        env = dict(os.environ)
+        env["LC_ALL"] = "C"
+        env["LANG"] = "C"
+        wc_out = subprocess.run(
+            ["wc", path], capture_output=True, env=env
+        ).stdout
+        wcl_out = subprocess.run(
+            [wcl_bin, "-a", path], capture_output=True, env=env
+        ).stdout
+        return wc_out == wcl_out
+    finally:
+        os.unlink(path)
+
+
+def build_session() -> Session:
+    _wc_present()
+    wcl_bin = find_wcl()
+    utf8 = None if os.environ.get("WCL_CONF_NO_UTF8") else pick_utf8_locale()
+    return Session(
+        wcl_bin=wcl_bin,
+        c_locale="C",
+        utf8_locale=utf8,
+        exact_format=detect_exact_format(wcl_bin),
+    )
