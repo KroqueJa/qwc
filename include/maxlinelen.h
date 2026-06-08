@@ -24,8 +24,14 @@ struct LineScan
 
 // Scan `length` bytes, updating `s`. A newline closes the current line (a
 // candidate for the longest) and opens a fresh one; the newline byte itself is
-// not counted, exactly like `wc -L`. Tabs and control bytes count as one each --
-// `wc -L` on this platform measures bytes, with no tab-stop expansion. Each byte
-// is classified on its own, so feeding a stream in pieces yields the same state
-// as one shot, which is what lets a chunk be read buffer by buffer.
-void maxLineLen( const char* buffer, usize length, LineScan& s );
+// not counted, exactly like `wc -L`. There is no tab-stop expansion.
+//
+// `countChars` chooses the unit, mirroring wc: by default a line's length is its
+// byte count, but when wc's char/byte column is counting characters (-m active
+// in a multibyte locale) `wc -L` measures the longest line in characters too.
+// In that mode UTF-8 continuation bytes (0x80-0xBF) don't advance the length, so
+// each code point counts once. Either way every byte is classified on its own,
+// so feeding a stream in pieces matches one shot -- what lets a chunk be read
+// buffer by buffer and split anywhere, mid-character included.
+void maxLineLen( const char* buffer, usize length, LineScan& s,
+                 bool countChars = false );

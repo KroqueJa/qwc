@@ -1,30 +1,47 @@
 #pragma once
 #include "typedef.h"
 
-// What processFile tallies for a file. Target counts occurrences of a chosen
-// byte (newlines by default, like `wc -l`); Bytes reports the file's size in
-// bytes, like `wc -c` -- the size is already known from fstat, so no scan is
-// needed; Words counts whitespace-separated words, like `wc -w`; Chars counts
-// UTF-8 characters (code points), like `wc -m` in a multibyte locale;
-// MaxLineLength reports the length in bytes of the longest line, like `wc -L`.
-enum class CountMode { Target, Bytes, Words, Chars, MaxLineLength };
-
-usize processFile(
-    const char* filename, usize bytesPerThread = 64 * 1024 * 1024,
-    char target = '\n', CountMode mode = CountMode::Target
-);
-
-// Lines, words and bytes for one input -- the trio `wc` prints by default.
-struct Counts
+// Which counts to produce for an input. The frontend sets these from the command
+// line once, up front, and a single pass computes every requested counter at
+// once -- so `qwc -l -w -m -L` reads the data once, not four times.
+//
+// `bytes` and `chars` are never both set: wc shows a single char/byte column and
+// the frontend picks which (-c => bytes, -m => chars). `target` is the qwc-only
+// `--char` extension (count occurrences of `targetByte`).
+struct Workload
 {
-  usize lines;
-  usize words;
-  usize bytes;
+  bool lines = false;
+  bool words = false;
+  bool bytes = false;
+  bool chars = false;
+  bool maxLine = false;
+  bool maxLineInChars = false;  // -L measures characters (when -m is active), not bytes
+  bool target = false;
+  char targetByte = '\n';
+
+  // Does anything here require scanning the file contents? Bytes alone come from
+  // fstat, so a pure `-c` needs no scan at all.
+  bool needsScan() const { return lines || words || chars || maxLine || target; }
 };
 
-// Count lines, words and bytes in a single pass (the bare-`wc` / no-flag mode).
-// Doing all three at once is what lets it read stdin, which can only be consumed
-// once. An empty filename reads standard input, matching processFile.
-Counts processFileAll(
-    const char* filename, usize bytesPerThread = 64 * 1024 * 1024
+// Every count qwc can produce for one input. Only the fields the Workload asked
+// for are populated; the rest stay zero.
+struct Counts
+{
+  usize lines = 0;
+  usize words = 0;
+  usize bytes = 0;
+  usize chars = 0;
+  usize maxLine = 0;
+  usize target = 0;
+};
+
+// Compute the requested counts for `filename` (an empty name reads standard
+// input) in one pass. Bytes come straight from fstat; the scanned counters are
+// computed in parallel across chunks of the file, with words and the longest
+// line stitched back together across chunk boundaries. Every requested counter
+// shares the same read of the data.
+Counts processFile(
+    const char* filename, const Workload& work,
+    usize bytesPerThread = 64 * 1024 * 1024
 );

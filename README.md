@@ -8,7 +8,7 @@ This allows it to be substantially faster than its two big brothers for this par
 `qwc` is benchmarked to be around 25-50x faster than GNU `wc` on a variety of file sizes, and 3-4x faster than `uu-wc`. Wherever possible, it is compliant with the output of GNU `wc` - the exception being for byte streams that do not constitute valid characters in the output locale. For this particular case, `wc`, `uu-wc` and `qwc` all differ in their interpretations. The input flags are all identical to `wc` - hence, one can learn to use `qwc` with eg `man wc`.
 
 # Roadmap
-- [ ] Combined flags (`-L -m` etc)
+- [x] Combined flags (`-L -m` etc)
 - [x] Fuzzy correctness suite
 - [ ] Comprehensive multi-system performance benchmarking
 - [ ] Vectorized versions of the scalar algorithms

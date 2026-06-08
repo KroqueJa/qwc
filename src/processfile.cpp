@@ -17,36 +17,69 @@
 
 static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 
-usize processFile(
-    const char* filename, const usize bytesPerThread, char target,
-    const CountMode mode
+namespace {
+
+// Per-stream/per-chunk running state for every scanned counter. `inWord` and
+// `line` carry across the successive read buffers of one byte range; the
+// startsInWord/endsInWord edges let neighbouring chunks be stitched.
+struct ScanState
+{
+  usize lines = 0;
+  usize words = 0;
+  usize chars = 0;
+  usize target = 0;
+  bool inWord = false;       // word-counting carry within this range
+  bool startsInWord = false; // first byte non-whitespace (for cross-chunk stitch)
+  bool sawFirst = false;
+  LineScan line;             // longest-line carry within this range
+};
+
+// Run every requested counter over one buffer, threading the carries in `s`.
+// Each counter scans the (cache-resident) buffer independently; the data is read
+// from the file only once, by the caller.
+inline void scanBuffer(
+    const char* buf, usize g, const Workload& w, ScanState& s
 )
 {
-  if ( filename[0] == '\0' ) {
-    thread_local char buffer[128 * 4096];
-    isize bytesRead;
-    usize total = 0;
-    bool inWord = false;  // carried across reads for word counting
-    LineScan ls;          // carried across reads for max-line-length
-    while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
-      const auto got = static_cast<usize>( bytesRead );
-      if ( mode == CountMode::Bytes )
-        total += got;
-      else if ( mode == CountMode::Words )
-        total += words( buffer, got, inWord );
-      else if ( mode == CountMode::Chars )
-        total += chars( buffer, got );
-      else if ( mode == CountMode::MaxLineLength )
-        maxLineLen( buffer, got, ls );
-      else
-        total += count( buffer, got, target );
-    }
-    // One sequential stream: the longest line is the largest newline-terminated
-    // line. `wc -L` ignores a trailing line with no final newline, so `ls.cur`
-    // is intentionally dropped.
-    if ( mode == CountMode::MaxLineLength ) return ls.maxComplete;
-    return total;
+  if ( w.lines ) s.lines += count( buf, g, '\n' );
+  if ( w.target ) s.target += count( buf, g, w.targetByte );
+  if ( w.chars ) s.chars += chars( buf, g );
+  if ( w.words ) {
+    if ( !s.sawFirst && g > 0 ) s.startsInWord = !isWordSpace( buf[0] );
+    s.words += words( buf, g, s.inWord );
   }
+  if ( w.maxLine ) maxLineLen( buf, g, s.line, w.maxLineInChars );
+  if ( g > 0 ) s.sawFirst = true;
+}
+
+// Standard input: one sequential pass, since fd 0 can only be consumed once.
+Counts processStdin( const Workload& w )
+{
+  thread_local char buffer[128 * 4096];
+  ScanState s;
+  Counts c{};
+  isize bytesRead;
+  while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
+    const auto g = static_cast<usize>( bytesRead );
+    if ( w.bytes ) c.bytes += g;  // no fstat for a pipe; tally as we read
+    scanBuffer( buffer, g, w, s );
+  }
+  c.lines = s.lines;
+  c.words = s.words;
+  c.chars = s.chars;
+  c.target = s.target;
+  // wc -L ignores a trailing line with no final newline, so drop the open run.
+  if ( w.maxLine ) c.maxLine = s.line.maxComplete;
+  return c;
+}
+
+}  // namespace
+
+Counts processFile(
+    const char* filename, const Workload& work, const usize bytesPerThread
+)
+{
+  if ( filename[0] == '\0' ) return processStdin( work );
 
   int fd = open( filename, O_RDONLY );
   if ( fd < 0 ) {
@@ -61,22 +94,19 @@ usize processFile(
   }
   const usize fileSize = st.st_size;
 
-  // Byte counting (`wc -c`) needs nothing but the size we just stat'd: skip the
-  // readahead and the parallel scan entirely.
-  if ( mode == CountMode::Bytes ) {
+  Counts result{};
+  if ( work.bytes ) result.bytes = fileSize;  // bytes come straight from fstat
+
+  // Nothing to scan (e.g. a bare `-c`), or an empty file: we are done.
+  if ( !work.needsScan() || fileSize == 0 ) {
     close( fd );
-    return fileSize;
+    return result;
   }
 
-  if ( fileSize == 0 ) {
-    close( fd );
-    return 0;
-  }
-
-  // We will read every byte sequentially, so ask the kernel to start
-  // pulling the whole file into the page cache up front. On macOS F_RDADVISE
-  // is the most effective hint for this (MADV_WILLNEED is largely a no-op).
-  // radvisory::ra_count is an int, so issue the advice in <=INT_MAX chunks.
+  // We will read every byte sequentially, so ask the kernel to start pulling the
+  // whole file into the page cache up front. On macOS F_RDADVISE is the most
+  // effective hint (MADV_WILLNEED is largely a no-op). radvisory::ra_count is an
+  // int, so issue the advice in <=INT_MAX chunks.
   for ( usize off = 0; off < fileSize; ) {
     usize remaining = fileSize - off;
     radvisory ra{};
@@ -96,219 +126,72 @@ usize processFile(
 
   const usize chunkSize = fileSize / numThreads;
 
-  // Per-chunk tally. `count` is what the chunk found scanning in isolation (as
-  // if preceded by whitespace). For word counting we also record the edge
-  // states so neighboring chunks can be stitched: `startsInWord` (first byte
-  // is non-whitespace) and `endsInWord` (last byte is non-whitespace -- the
-  // carry handed to the next chunk). Both are unused for line/byte counting.
-  struct ChunkTally
-  {
-    usize count = 0;
-    bool startsInWord = false;
-    bool endsInWord = false;
-    LineScan line;  // per-chunk scan state for max-line-length mode
-  };
-  std::vector<ChunkTally> results( numThreads );
+  std::vector<ScanState> results( numThreads );
   std::vector<std::thread> threads;
   threads.reserve( numThreads );
 
   // Each thread streams its byte range with pread() into a private, reused
   // buffer rather than faulting an mmap page-by-page. pread() is thread-safe
-  // (the offset is per-call, not shared via fd), so a single fd serves all
-  // threads, and the kernel bulk-copies straight from the warmed page cache.
+  // (the offset is per-call, not shared via fd), so one fd serves all threads
+  // and the kernel bulk-copies straight from the warmed page cache. The whole
+  // workload is computed on each buffer before moving on -- one read, every
+  // requested counter.
   for ( u32 i = 0; i < numThreads; ++i ) {
     usize start = i * chunkSize;
     usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
-    threads.emplace_back( [fd, start, size, &results, i, target, mode]() {
+    threads.emplace_back( [fd, start, size, &results, i, &work]() {
       static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
       std::vector<char> buffer( BUF_SIZE );
-      ChunkTally r;
-      bool inWord = false;  // carried across this chunk's own buffers
-      bool first = true;
+      ScanState s;
       usize remaining = size;
       usize pos = start;
       while ( remaining > 0 ) {
         const usize want = std::min( BUF_SIZE, remaining );
-        const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
+        const isize got =
+            pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
         if ( got <= 0 ) break;
         const auto g = static_cast<usize>( got );
-        if ( mode == CountMode::Words ) {
-          if ( first ) r.startsInWord = !isWordSpace( buffer[0] );
-          r.count += words( buffer.data(), g, inWord );
-        } else if ( mode == CountMode::Chars ) {
-          r.count += chars( buffer.data(), g );
-        } else if ( mode == CountMode::MaxLineLength ) {
-          maxLineLen( buffer.data(), g, r.line );
-        } else {
-          r.count += count( buffer.data(), g, target );
-        }
-        first = false;
+        scanBuffer( buffer.data(), g, work, s );
         remaining -= g;
         pos += g;
       }
-      if ( mode == CountMode::Words ) r.endsInWord = inWord;
-      results[i] = r;
+      results[i] = s;
     } );
   }
 
   for ( auto& t: threads ) t.join();
   close( fd );
 
-  if ( mode == CountMode::Words ) {
-    // Stitch the chunks back together in order. Each chunk counted as if a
-    // whitespace preceded it, so a word straddling a boundary is counted twice:
-    // once as the tail of the left chunk, once as a fresh word starting the
-    // right chunk. `carry` tracks whether the previous chunk ended mid-word; if
-    // it did and this chunk also starts mid-word, the two are halves of one
-    // word -- drop the duplicate. (Chunks are non-empty here, since numThreads
-    // never exceeds fileSize, so the carry never has to skip past a chunk.)
-    usize total = 0;
-    bool carry = false;
-    for ( const auto& [count, startsInWord, endsInWord, line]: results ) {
-      total += count;
-      if ( carry && startsInWord ) --total;
-      carry = endsInWord;
+  // Lines, chars and target just sum. Words need a boundary stitch: each chunk
+  // counted as if whitespace preceded it, so a word straddling a boundary is
+  // counted twice (tail of the left chunk, fresh start of the right). When the
+  // previous chunk ended mid-word and this one starts mid-word, drop the dupe.
+  bool wordCarry = false;
+  for ( const ScanState& s: results ) {
+    result.lines += s.lines;
+    result.chars += s.chars;
+    result.target += s.target;
+    result.words += s.words;
+    if ( wordCarry && s.startsInWord ) --result.words;
+    wordCarry = s.inWord;
+  }
+
+  // Longest line: a line split across a boundary is the previous chunk's open
+  // run (`carry`) plus this chunk's prefix (bytes up to its first newline), but
+  // only a newline realizes it as a counted line. The run still open after the
+  // last chunk has no terminating newline, so -- like wc -L -- it is dropped.
+  usize maxLen = 0;
+  usize lineCarry = 0;
+  for ( const ScanState& s: results ) {
+    maxLen = std::max( maxLen, s.line.maxComplete );
+    if ( s.line.hasNewline ) {
+      maxLen = std::max( maxLen, lineCarry + s.line.prefixLen );
+      lineCarry = s.line.cur;
+    } else {
+      lineCarry += s.line.cur;
     }
-    return total;
   }
+  result.maxLine = maxLen;
 
-  if ( mode == CountMode::MaxLineLength ) {
-    // Stitch the per-chunk scans in order. A line split across a boundary is the
-    // previous chunk's open run (`carry`) plus this chunk's prefix (the bytes up
-    // to its first newline) -- but only a newline realizes it as a counted line.
-    // Candidates for the longest are that joined length and each chunk's
-    // newline-terminated lines (`maxComplete`); a chunk with no newline just
-    // extends the open run. The run still open after the last chunk has no
-    // terminating newline, so -- like `wc -L` -- it is dropped, not reported.
-    usize maxLen = 0;
-    usize carry = 0;
-    for ( const ChunkTally& r: results ) {
-      maxLen = std::max( maxLen, r.line.maxComplete );
-      if ( r.line.hasNewline ) {
-        maxLen = std::max( maxLen, carry + r.line.prefixLen );
-        carry = r.line.cur;  // this chunk's trailing open run
-      } else {
-        carry += r.line.cur;  // whole chunk continues the open run
-      }
-    }
-    return maxLen;
-  }
-
-  usize total = 0;
-  for ( const ChunkTally& r: results ) total += r.count;
-  return total;
-}
-
-Counts processFileAll( const char* filename, const usize bytesPerThread )
-{
-  // stdin: a single sequential pass tallies all three at once -- it has to,
-  // since fd 0 can only be read once.
-  if ( filename[0] == '\0' ) {
-    thread_local char buffer[128 * 4096];
-    isize bytesRead;
-    Counts c{};
-    bool inWord = false;  // carried across reads for word counting
-    while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
-      const auto got = static_cast<usize>( bytesRead );
-      c.lines += count( buffer, got, '\n' );
-      c.words += words( buffer, got, inWord );
-      c.bytes += got;
-    }
-    return c;
-  }
-
-  int fd = open( filename, O_RDONLY );
-  if ( fd < 0 ) {
-    std::cerr << "Error opening file: " << filename << '\n';
-    exit( 1 );
-  }
-
-  struct stat st{};
-  if ( fstat( fd, &st ) < 0 ) {
-    std::cerr << "Error stating file: " << filename << '\n';
-    exit( 1 );
-  }
-
-  Counts result{};
-  result.bytes = st.st_size;  // bytes come straight from the stat
-  if ( result.bytes == 0 ) {
-    close( fd );
-    return result;
-  }
-  const usize fileSize = result.bytes;
-
-  // Warm the page cache up front (see processFile for the F_RDADVISE rationale).
-  for ( usize off = 0; off < fileSize; ) {
-    usize remaining = fileSize - off;
-    radvisory ra{};
-    ra.ra_offset = static_cast<i64>( off );
-    ra.ra_count = static_cast<int>(
-        std::min( remaining, static_cast<usize>( INT_MAX ) )
-    );
-    fcntl( fd, F_RDADVISE, &ra );
-    off += static_cast<usize>( ra.ra_count );
-  }
-
-  u32 numThreads = static_cast<u32>( std::min(
-      static_cast<usize>( MAX_THREADS ),
-      ( fileSize + bytesPerThread - 1 ) / bytesPerThread
-  ) );
-  numThreads = std::max( numThreads, 1u );
-
-  const usize chunkSize = fileSize / numThreads;
-
-  // Per-chunk lines and words, plus the word-edge flags used to stitch words
-  // across chunk boundaries (see processFile's word path).
-  struct AllTally
-  {
-    usize lines = 0;
-    usize words = 0;
-    bool startsInWord = false;
-    bool endsInWord = false;
-  };
-  std::vector<AllTally> results( numThreads );
-  std::vector<std::thread> threads;
-  threads.reserve( numThreads );
-
-  for ( u32 i = 0; i < numThreads; ++i ) {
-    usize start = i * chunkSize;
-    usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
-    threads.emplace_back( [fd, start, size, &results, i]() {
-      static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
-      std::vector<char> buffer( BUF_SIZE );
-      AllTally t;
-      bool inWord = false;  // carried across this chunk's own buffers
-      bool first = true;
-      usize remaining = size;
-      usize pos = start;
-      while ( remaining > 0 ) {
-        const usize want = std::min( BUF_SIZE, remaining );
-        const isize got = pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
-        if ( got <= 0 ) break;
-        const auto g = static_cast<usize>( got );
-        t.lines += count( buffer.data(), g, '\n' );
-        if ( first ) t.startsInWord = !isWordSpace( buffer[0] );
-        t.words += words( buffer.data(), g, inWord );
-        first = false;
-        remaining -= g;
-        pos += g;
-      }
-      t.endsInWord = inWord;
-      results[i] = t;
-    } );
-  }
-
-  for ( auto& t: threads ) t.join();
-  close( fd );
-
-  // Lines and bytes just sum; words need the same boundary stitch as the
-  // word-only path (drop a word split across two chunks, counted twice).
-  bool carry = false;
-  for ( const AllTally& t: results ) {
-    result.lines += t.lines;
-    result.words += t.words;
-    if ( carry && t.startsInWord ) --result.words;
-    carry = t.endsInWord;
-  }
   return result;
 }

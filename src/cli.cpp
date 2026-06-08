@@ -29,8 +29,9 @@ void printHelp()
       "If you don't name any files, qwc reads from standard input - so you can\n"
       "pipe data straight into it, e.g.  cat access.log | qwc\n"
       "\n"
-      "Count flags (give one; with none, qwc prints lines, words and bytes like\n"
-      "bare `wc`):\n"
+      "Count flags (combine freely, e.g. -lw or -l -w; their order never changes\n"
+      "the column order. With none, qwc prints lines, words and bytes like bare\n"
+      "`wc`. -c and -m share one column; whichever comes last wins):\n"
       "  -l, --lines           Count lines (newline characters), like `wc -l`.\n"
       "  -w, --words           Count whitespace-separated words, like `wc -w`.\n"
       "  -c, --bytes           Count bytes, like `wc -c`. The size is read\n"
@@ -93,107 +94,159 @@ void printHelp()
 
 std::optional<int> parseArgs( int argc, char** argv, Options& opt )
 {
-  auto isFlag = []( const char* arg, const char* shortName,
-                    const char* longName ) {
-    return std::strcmp( arg, shortName ) == 0 ||
-           std::strcmp( arg, longName ) == 0;
-  };
-
   // Track whether any count flag was given. With none, qwc prints lines, words
-  // and bytes -- the three columns bare `wc` shows.
+  // and bytes -- the three columns bare `wc` shows. Count flags accumulate (and
+  // their order never affects the column order), so `-l -w` and `-lw` and `-wl`
+  // are all "lines and words".
   bool countFlag = false;
 
-  // Parse leading "-flag [value]" options; the first non-flag argument begins
-  // the file list. A bare "-" is treated as a file, not a flag.
+  // Apply one short count flag letter. Returns false if the letter is unknown.
+  auto applyShort = [&]( char c ) -> bool {
+    switch ( c ) {
+      case 'l': opt.lines = true; countFlag = true; return true;
+      case 'w': opt.words = true; countFlag = true; return true;
+      case 'c': opt.charByte = true; opt.charsNotBytes = false; countFlag = true;
+        return true;
+      case 'm': opt.charByte = true; opt.charsNotBytes = true; countFlag = true;
+        return true;
+      case 'L': opt.maxLine = true; countFlag = true; return true;
+      case 'r': opt.recursive = true; return true;
+      default: return false;
+    }
+  };
+
+  // Parse leading options; the first non-flag argument begins the file list. A
+  // bare "-" is treated as a file, not a flag.
   int fileStart = 1;
   while ( fileStart < argc && argv[fileStart][0] == '-' &&
           argv[fileStart][1] != '\0' ) {
-    if ( std::strcmp( argv[fileStart], "--bytes-per-thread" ) == 0 ) {
-      if ( fileStart + 1 >= argc ) {
-        std::cerr << "Error: --bytes-per-thread requires a value\n";
+    const char* arg = argv[fileStart];
+    if ( arg[1] == '-' ) {
+      // Long options.
+      if ( std::strcmp( arg, "--bytes-per-thread" ) == 0 ) {
+        if ( fileStart + 1 >= argc ) {
+          std::cerr << "Error: --bytes-per-thread requires a value\n";
+          return 1;
+        }
+        opt.bytesPerThread = std::strtoull( argv[fileStart + 1], nullptr, 10 );
+        if ( opt.bytesPerThread == 0 ) {
+          std::cerr << "Error: --bytes-per-thread must be > 0\n";
+          return 1;
+        }
+        fileStart += 2;
+      } else if ( std::strcmp( arg, "--char" ) == 0 ) {
+        if ( fileStart + 1 >= argc || argv[fileStart + 1][0] == '\0' ) {
+          std::cerr << "Error: --char requires a single-character value\n";
+          return 1;
+        }
+        opt.target = true;
+        opt.targetByte = argv[fileStart + 1][0];
+        countFlag = true;
+        fileStart += 2;
+      } else if ( std::strcmp( arg, "--lines" ) == 0 ) {
+        opt.lines = true;
+        countFlag = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--words" ) == 0 ) {
+        opt.words = true;
+        countFlag = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--bytes" ) == 0 ) {
+        opt.charByte = true;
+        opt.charsNotBytes = false;
+        countFlag = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--chars" ) == 0 ) {
+        opt.charByte = true;
+        opt.charsNotBytes = true;
+        countFlag = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--max-line-length" ) == 0 ) {
+        opt.maxLine = true;
+        countFlag = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--recursive" ) == 0 ) {
+        opt.recursive = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--sort-by-count" ) == 0 ) {
+        opt.sortMode = SortMode::Count;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--sort-by-name" ) == 0 ) {
+        opt.sortMode = SortMode::Name;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--sort-by-size" ) == 0 ) {
+        opt.sortMode = SortMode::Size;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--reverse" ) == 0 ) {
+        opt.reverse = true;
+        fileStart += 1;
+      } else if ( std::strcmp( arg, "--top" ) == 0 ) {
+        if ( fileStart + 1 >= argc ) {
+          std::cerr << "Error: --top requires a value\n";
+          return 1;
+        }
+        opt.topN = std::strtoull( argv[fileStart + 1], nullptr, 10 );
+        if ( opt.topN == 0 ) {
+          std::cerr << "Error: --top must be > 0\n";
+          return 1;
+        }
+        fileStart += 2;
+      } else if ( std::strcmp( arg, "--help" ) == 0 ) {
+        printHelp();
+        return 0;
+      } else {
+        std::cerr << "Error: unknown flag " << arg << '\n';
         return 1;
       }
-      opt.bytesPerThread = std::strtoull( argv[fileStart + 1], nullptr, 10 );
-      if ( opt.bytesPerThread == 0 ) {
-        std::cerr << "Error: --bytes-per-thread must be > 0\n";
-        return 1;
-      }
-      fileStart += 2;
-    } else if ( std::strcmp( argv[fileStart], "--char" ) == 0 ) {
-      if ( fileStart + 1 >= argc || argv[fileStart + 1][0] == '\0' ) {
-        std::cerr << "Error: --char requires a single-character value\n";
-        return 1;
-      }
-      opt.target = argv[fileStart + 1][0];
-      opt.mode = CountMode::Target;
-      countFlag = true;
-      fileStart += 2;
-    } else if ( isFlag( argv[fileStart], "-l", "--lines" ) ) {
-      opt.mode = CountMode::Target;
-      opt.target = '\n';
-      countFlag = true;
-      fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-w", "--words" ) ) {
-      opt.mode = CountMode::Words;
-      countFlag = true;
-      fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-c", "--bytes" ) ) {
-      opt.mode = CountMode::Bytes;
-      countFlag = true;
-      fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-m", "--chars" ) ) {
-      opt.mode = CountMode::Chars;
-      countFlag = true;
-      fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-L", "--max-line-length" ) ) {
-      opt.mode = CountMode::MaxLineLength;
-      countFlag = true;
-      fileStart += 1;
-    } else if ( isFlag( argv[fileStart], "-r", "--recursive" ) ) {
-      opt.recursive = true;
-      fileStart += 1;
-    } else if ( std::strcmp( argv[fileStart], "--sort-by-count" ) == 0 ) {
-      opt.sortMode = SortMode::Count;
-      fileStart += 1;
-    } else if ( std::strcmp( argv[fileStart], "--sort-by-name" ) == 0 ) {
-      opt.sortMode = SortMode::Name;
-      fileStart += 1;
-    } else if ( std::strcmp( argv[fileStart], "--sort-by-size" ) == 0 ) {
-      opt.sortMode = SortMode::Size;
-      fileStart += 1;
-    } else if ( std::strcmp( argv[fileStart], "--reverse" ) == 0 ) {
-      opt.reverse = true;
-      fileStart += 1;
-    } else if ( std::strcmp( argv[fileStart], "--top" ) == 0 ) {
-      if ( fileStart + 1 >= argc ) {
-        std::cerr << "Error: --top requires a value\n";
-        return 1;
-      }
-      opt.topN = std::strtoull( argv[fileStart + 1], nullptr, 10 );
-      if ( opt.topN == 0 ) {
-        std::cerr << "Error: --top must be > 0\n";
-        return 1;
-      }
-      fileStart += 2;
-    } else if ( isFlag( argv[fileStart], "-h", "--help" ) ) {
+    } else if ( std::strcmp( arg, "-h" ) == 0 ) {
       printHelp();
       return 0;
     } else {
-      std::cerr << "Error: unknown flag " << argv[fileStart] << '\n';
-      return 1;
+      // A bundle of short flags, e.g. "-l", "-lw", "-lwcmL". Each letter is its
+      // own count/option flag; wc allows them stacked, so we do too.
+      for ( const char* p = arg + 1; *p != '\0'; ++p ) {
+        if ( !applyShort( *p ) ) {
+          std::cerr << "Error: unknown flag -" << *p << '\n';
+          return 1;
+        }
+      }
+      fileStart += 1;
     }
   }
 
   // --top needs a ranking criterion; default it to counts when none was asked
-  // for, so `qwc --top 10 ...` means "the 10 files with the most lines".
+  // for, so `qwc -l --top 10 ...` means "the 10 files with the most lines".
   if ( opt.topN > 0 && opt.sortMode == SortMode::None )
     opt.sortMode = SortMode::Count;
 
   // No count flag means the bare-`wc` view: lines, words and bytes together.
-  opt.all = !countFlag;
+  if ( !countFlag ) {
+    opt.lines = true;
+    opt.words = true;
+    opt.charByte = true;
+    opt.charsNotBytes = false;  // the char/byte column defaults to bytes
+  }
 
   for ( int i = fileStart; i < argc; ++i ) opt.files.emplace_back( argv[i] );
   return std::nullopt;
+}
+
+Workload Options::workload() const
+{
+  Workload w;
+  w.lines = lines;
+  w.words = words;
+  w.maxLine = maxLine;
+  w.target = target;
+  w.targetByte = targetByte;
+  if ( charByte ) {
+    w.chars = charsNotBytes;
+    w.bytes = !charsNotBytes;
+  }
+  // wc measures the longest line in the same unit as the active char/byte
+  // column: characters when -m is in effect, bytes otherwise.
+  w.maxLineInChars = charByte && charsNotBytes;
+  return w;
 }
 
 bool collectFiles( Options& opt )
@@ -232,43 +285,74 @@ bool collectFiles( Options& opt )
   return true;
 }
 
-void printCountLine( const usize count, const char* name )
+namespace {
+
+// qwc's output columns, in wc's fixed order. The --char tally (qwc-only) has no
+// wc counterpart, so it is appended last.
+enum class Column { Lines, Words, CharByte, MaxLine, Target };
+
+std::vector<Column> selectedColumns( const Options& opt )
 {
-  // " %7ju %s\n" -- a leading space, the count right-justified to a minimum
-  // field of 7 (it grows for larger counts, exactly as wc does), then the name.
-  std::cout << ' ' << std::setw( 7 ) << count;
+  std::vector<Column> cols;
+  if ( opt.lines ) cols.push_back( Column::Lines );
+  if ( opt.words ) cols.push_back( Column::Words );
+  if ( opt.charByte ) cols.push_back( Column::CharByte );
+  if ( opt.maxLine ) cols.push_back( Column::MaxLine );
+  if ( opt.target ) cols.push_back( Column::Target );
+  return cols;
+}
+
+usize columnValue( const Counts& c, const Column col, const Options& opt )
+{
+  switch ( col ) {
+    case Column::Lines: return c.lines;
+    case Column::Words: return c.words;
+    case Column::CharByte: return opt.charsNotBytes ? c.chars : c.bytes;
+    case Column::MaxLine: return c.maxLine;
+    case Column::Target: return c.target;
+  }
+  return 0;
+}
+
+}  // namespace
+
+void printCounts( const Options& opt, const Counts& c, const char* name )
+{
+  // Each selected column right-justified in a min-width-7 field (" %7ju", which
+  // grows for larger counts exactly as wc does), then the optional name.
+  for ( const Column col: selectedColumns( opt ) )
+    std::cout << ' ' << std::setw( 7 ) << columnValue( c, col, opt );
   if ( name ) std::cout << ' ' << name;
   std::cout << '\n';
 }
 
-void printAllLine( const Counts& c, const char* name )
-{
-  // Bare wc's layout: " %7ju %7ju %7ju %s\n" -- lines, words, bytes, name.
-  std::cout << ' ' << std::setw( 7 ) << c.lines << ' ' << std::setw( 7 )
-            << c.words << ' ' << std::setw( 7 ) << c.bytes;
-  if ( name ) std::cout << ' ' << name;
-  std::cout << '\n';
-}
-
-void printResults( const Options& opt, const std::vector<Result>& output )
+void printResults( const Options& opt, const std::vector<Counts>& output )
 {
   const usize numFiles = output.size();
 
-  // The grand total always covers every file, independent of sorting or --top.
-  // For --max-line-length the "total" is the longest line across all files (a
-  // maximum), matching `wc -L`; every other mode sums the per-file counts.
-  usize total = 0;
-  if ( opt.mode == CountMode::MaxLineLength )
-    for ( const Result& result: output ) total = std::max( total, result.count );
-  else
-    for ( const Result& result: output ) total += result.count;
+  // The grand total covers every file, independent of sorting or --top. Each
+  // column sums, except the longest line, which is a maximum (matching wc -L).
+  Counts total{};
+  for ( const Counts& c: output ) {
+    total.lines += c.lines;
+    total.words += c.words;
+    total.bytes += c.bytes;
+    total.chars += c.chars;
+    total.target += c.target;
+    total.maxLine = std::max( total.maxLine, c.maxLine );
+  }
 
-  // Decide the display order via an index permutation, leaving `output` (and the
-  // total) untouched. Default order is the order files were collected in.
+  // Display order via an index permutation, leaving `output` untouched. Sorting,
+  // --top and --reverse only apply to a single-column listing -- there is no one
+  // value to rank by otherwise -- so bare/multi-column qwc keeps the collected
+  // order, exactly like wc.
   std::vector<usize> order( numFiles );
   std::iota( order.begin(), order.end(), 0 );
 
-  if ( opt.sortMode != SortMode::None ) {
+  const bool single = opt.columnCount() == 1;
+  if ( single && opt.sortMode != SortMode::None ) {
+    const Column col = selectedColumns( opt ).front();
+
     // File sizes are only needed for --sort-by-size, so fetch them lazily.
     std::vector<std::uintmax_t> sizes;
     if ( opt.sortMode == SortMode::Size ) {
@@ -285,55 +369,35 @@ void printResults( const Options& opt, const std::vector<Result>& output )
     std::sort(
         order.begin(), order.end(),
         [&]( const usize a, const usize b ) {
-          if ( opt.sortMode == SortMode::Count &&
-               output[a].count != output[b].count )
-            return output[a].count < output[b].count;
-          if ( opt.sortMode == SortMode::Size && sizes[a] != sizes[b] )
+          if ( opt.sortMode == SortMode::Count ) {
+            const usize va = columnValue( output[a], col, opt );
+            const usize vb = columnValue( output[b], col, opt );
+            if ( va != vb ) return va < vb;
+          } else if ( opt.sortMode == SortMode::Size && sizes[a] != sizes[b] ) {
             return sizes[a] < sizes[b];
+          }
           return opt.files[a] < opt.files[b];
         }
     );
   }
 
   // --top N keeps the N highest-ranked files: the tail of the ascending order.
-  if ( opt.topN > 0 && opt.topN < order.size() )
+  if ( single && opt.topN > 0 && opt.topN < order.size() )
     order.erase( order.begin(), order.end() - static_cast<isize>( opt.topN ) );
 
   // --reverse flips the final display order (e.g. biggest counts first).
-  if ( opt.reverse ) std::reverse( order.begin(), order.end() );
+  if ( single && opt.reverse ) std::reverse( order.begin(), order.end() );
 
-  // wc prints one line per file -- including for a single file (with its name).
+  // wc prints one row per file -- including for a single file (with its name).
   for ( const usize i: order )
-    printCountLine( output[i].count, opt.files[i].c_str() );
+    printCounts( opt, output[i], opt.files[i].c_str() );
 
-  // The "<total> total" line appears only when more than one file was counted,
-  // matching wc. (--top may narrow the listing above, but the total still
-  // covers every file.) A recursive walk that matched no files has nothing to
-  // name, so it just prints a bare zero rather than nothing at all.
+  // The "total" row appears only when more than one file was counted, matching
+  // wc. (--top may narrow the listing above, but the total still covers every
+  // file.) A recursive walk that matched no files has nothing to name, so it
+  // just prints a bare zero row rather than nothing at all.
   if ( numFiles > 1 )
-    printCountLine( total, "total" );
+    printCounts( opt, total, "total" );
   else if ( numFiles == 0 )
-    printCountLine( total, nullptr );
-}
-
-void printResultsAll( const Options& opt, const std::vector<Counts>& output )
-{
-  const usize numFiles = output.size();
-
-  Counts total{};
-  for ( const Counts& c: output ) {
-    total.lines += c.lines;
-    total.words += c.words;
-    total.bytes += c.bytes;
-  }
-
-  // wc has no sorting or --top, so the bare (no count flag) view keeps the
-  // collected file order.
-  for ( usize i = 0; i < numFiles; ++i )
-    printAllLine( output[i], opt.files[i].c_str() );
-
-  if ( numFiles > 1 )
-    printAllLine( total, "total" );
-  else if ( numFiles == 0 )
-    printAllLine( total, nullptr );
+    printCounts( opt, total, nullptr );
 }

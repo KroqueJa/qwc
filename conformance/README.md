@@ -71,9 +71,26 @@ Every mode `wc` and qwc have in common:
 | `-m` | `-m` | characters (code points in a UTF-8 locale) |
 | `-L` | `-L` | length of the longest line |
 
+**Combinations** are tested too (`-lw`, `-lwc`, `-lwcL`, `-cm`, `-mc`, …): `wc`
+prints the selected columns in a fixed order — lines, words, char/byte, longest
+line — regardless of the order the flags were given. `-c` and `-m` share one
+column and the last of the two wins (`-cm` counts characters, `-mc` counts
+bytes), and the longest-line column is measured in that same unit (characters
+when `-m` is in effect, bytes otherwise). The suite assigns a combination the
+most restrictive parity rule of its parts, since every column must agree for the
+row to match.
+
 qwc-only features (`--char`, `-r`/`--recursive`, `--sort-*`, `--reverse`,
 `--top`, `--bytes-per-thread`) have no `wc` counterpart, so they are not a
 conformance concern; they are covered by the C++ unit tests under `tests/`.
+
+### A `wc` bug we deliberately do not replicate
+
+macOS/BSD `wc` mis-totals the character column when `-m` and `-L` are given
+together: the multi-file `total` line prints `0` for characters (the per-file
+values, and `wc -m` on its own, are correct). qwc reports the correct total, so
+for that one combination the suite compares the per-file rows but not the buggy
+`total`.
 
 ## Where qwc is allowed to differ, and why
 
@@ -81,9 +98,11 @@ The boundary between "must match" and "may differ" is not arbitrary — it falls
 exactly where `wc` stops being byte-defined and starts depending on the locale's
 text-decoding machinery:
 
-* **Bytes (`-c`)**, **lines (`-l`)** and **longest line (`-L`)** are pure byte
-  operations. `wc` computes them the same way in every locale, so qwc must match
-  them on **every input, binary included**. No latitude.
+* **Bytes (`-c`)**, **lines (`-l`)** and **longest line (`-L`, on its own)** are
+  pure byte operations. `wc` computes them the same way in every locale, so qwc
+  must match them on **every input, binary included**. No latitude. (When `-L`
+  rides along with `-m` it measures characters instead, and inherits the char
+  rule below.)
 
 * **Characters (`-m`)** counts code points. On **valid UTF-8** (ASCII is a
   subset) qwc and `wc` agree. On **invalid UTF-8** there is no right answer:

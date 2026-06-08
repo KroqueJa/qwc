@@ -42,8 +42,12 @@ from typing import Optional
 
 
 # ---------------------------------------------------------------------------
-# Modes: every `wc` flag qwc claims to replicate. `wc` with no flag (lines,
-# words, bytes) is qwc's `-a`. `kind` selects the parity rule above.
+# Modes: every `wc` flag (and combination) qwc claims to replicate. Bare `wc`
+# (lines, words, bytes) is qwc with no count flag. `kind` selects the parity
+# rule above; for a combination it is the most restrictive of its parts (a
+# words column forces "word", else a chars column forces "char", else "byte"),
+# because every selected column must agree for the row to match. `ncols` counts
+# the output columns -- note -c and -m share one column (last wins).
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
 class Mode:
@@ -52,15 +56,34 @@ class Mode:
     wc: tuple[str, ...]   # flags passed to wc
     kind: str             # "byte" | "char" | "word"
     ncols: int            # how many integer columns the output has
+    # macOS/BSD `wc` has a bug: with -m AND -L together, the multi-file char
+    # total prints as 0 (per-file values are fine; `wc -m` alone is fine). qwc
+    # computes the correct total and we will not replicate the defect, so for
+    # such a mode the per-file rows are still compared but the "total" is not.
+    compare_total: bool = True
 
 
 MODES: tuple[Mode, ...] = (
+    # Single counters.
     Mode("lines",   ("-l",), ("-l",), "byte", 1),
     Mode("words",   ("-w",), ("-w",), "word", 1),
     Mode("bytes",   ("-c",), ("-c",), "byte", 1),
     Mode("chars",   ("-m",), ("-m",), "char", 1),
     Mode("maxline", ("-L",), ("-L",), "byte", 1),
     Mode("all",     (),      (),      "word", 3),  # bare qwc == bare wc: l w b
+    # Combinations: wc prints a fixed column order regardless of flag order.
+    Mode("l+w",     ("-l", "-w"),             ("-l", "-w"),             "word", 2),
+    Mode("l+c",     ("-l", "-c"),             ("-l", "-c"),             "byte", 2),
+    Mode("l+L",     ("-l", "-L"),             ("-l", "-L"),             "byte", 2),
+    Mode("w+c",     ("-w", "-c"),             ("-w", "-c"),             "word", 2),
+    Mode("m+L",     ("-m", "-L"),             ("-m", "-L"),             "char", 2,
+         compare_total=False),  # wc's char total is buggy with -m and -L
+    Mode("l+w+c",   ("-l", "-w", "-c"),       ("-l", "-w", "-c"),       "word", 3),
+    Mode("l+w+c+L", ("-l", "-w", "-c", "-L"), ("-l", "-w", "-c", "-L"), "word", 4),
+    # -c and -m share one column; the last flag wins, so -c -m counts chars and
+    # -m -c counts bytes.
+    Mode("c+m",     ("-c", "-m"),             ("-c", "-m"),             "char", 1),
+    Mode("m+c",     ("-m", "-c"),             ("-m", "-c"),             "byte", 1),
 )
 
 MODE_BY_NAME = {m.name: m for m in MODES}
@@ -260,8 +283,10 @@ def compare(
 
     # Exact byte-for-byte output (formatting included) -- only when the local
     # `wc` formats the way qwc does (BSD/macOS). On GNU `wc` we fall back to the
-    # numeric comparison below, which is the portable correctness signal.
-    if exact_format and qwc_run.stdout != wc_run.stdout:
+    # numeric comparison below, which is the portable correctness signal. Modes
+    # where wc's total is buggy can't be byte-compared (the total line differs),
+    # so they take the numeric path and skip the total there.
+    if exact_format and mode.compare_total and qwc_run.stdout != wc_run.stdout:
         return Result(
             "fail",
             "exact output mismatch\n"
@@ -272,7 +297,9 @@ def compare(
     wc_parsed = parse_output(wc_run.stdout)
     qwc_parsed = parse_output(qwc_run.stdout)
 
-    if wc_parsed.records != qwc_parsed.records or wc_parsed.total != qwc_parsed.total:
+    records_differ = wc_parsed.records != qwc_parsed.records
+    total_differs = mode.compare_total and wc_parsed.total != qwc_parsed.total
+    if records_differ or total_differs:
         return Result(
             "fail",
             "count mismatch\n"

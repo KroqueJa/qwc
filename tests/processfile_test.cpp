@@ -5,14 +5,18 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
 #include <memory>
-#include <random>
 #include <string>
 
 #include "processfile.h"
 #include "test_util.h"
 
+using qwctest::pfBytes;
+using qwctest::pfChars;
+using qwctest::pfLines;
+using qwctest::pfMaxLine;
+using qwctest::pfTarget;
+using qwctest::pfWords;
 using qwctest::refChars;
 using qwctest::refCount;
 using qwctest::refMaxLineLen;
@@ -59,106 +63,89 @@ std::string makePattern( size_t len, size_t every, char target = '\n' )
 }  // namespace
 
 // ---------------------------------------------------------------------------
-// File path
+// Line counting (-l): counts newline bytes.
 // ---------------------------------------------------------------------------
-TEST( ProcessFile, EmptyFile )
+TEST( ProcessFileLines, EmptyFile )
 {
   TempFile f( "" );
-  EXPECT_EQ( processFile( f.path() ), 0u );
+  EXPECT_EQ( pfLines( f.path() ), 0u );
 }
 
-TEST( ProcessFile, SingleNewline )
+TEST( ProcessFileLines, SingleNewline )
 {
   TempFile f( "\n" );
-  EXPECT_EQ( processFile( f.path() ), 1u );
+  EXPECT_EQ( pfLines( f.path() ), 1u );
 }
 
-TEST( ProcessFile, SmallKnownCount )
+TEST( ProcessFileLines, SmallKnownCount )
 {
   TempFile f( "a\nb\nc\n" );
-  EXPECT_EQ( processFile( f.path() ), 3u );
+  EXPECT_EQ( pfLines( f.path() ), 3u );
 }
 
-TEST( ProcessFile, NoTrailingNewline )
+TEST( ProcessFileLines, NoTrailingNewline )
 {
   TempFile f( "a\nb\nc" );
-  EXPECT_EQ( processFile( f.path() ), 2u );
-}
-
-TEST( ProcessFile, CustomTarget )
-{
-  TempFile f( "a,b,c,d,e" );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, ',' ), 4u );
+  EXPECT_EQ( pfLines( f.path() ), 2u );
 }
 
 // ---------------------------------------------------------------------------
-// Byte counting (CountMode::Bytes, like `wc -c`): returns the file size, taken
-// straight from fstat without scanning. The target byte is irrelevant.
+// --char: count occurrences of an arbitrary byte (the qwc extension).
+// ---------------------------------------------------------------------------
+TEST( ProcessFileTarget, CustomTarget )
+{
+  TempFile f( "a,b,c,d,e" );
+  EXPECT_EQ( pfTarget( f.path(), ',' ), 4u );
+}
+
+// ---------------------------------------------------------------------------
+// Byte counting (-c): the file size from fstat, no scan.
 // ---------------------------------------------------------------------------
 TEST( ProcessFileBytes, CountsFileSize )
 {
   TempFile f( "hello\nworld" );  // 11 bytes
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Bytes ),
-             11u );
+  EXPECT_EQ( pfBytes( f.path() ), 11u );
 }
 
 TEST( ProcessFileBytes, EmptyFileIsZero )
 {
   TempFile f( "" );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Bytes ),
-             0u );
-}
-
-TEST( ProcessFileBytes, TargetDoesNotAffectByteCount )
-{
-  const std::string content( 1234, 'x' );
-  TempFile f( content );
-  // Whatever the target, byte mode reports the size.
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, 'x', CountMode::Bytes ),
-             content.size() );
+  EXPECT_EQ( pfBytes( f.path() ), 0u );
 }
 
 TEST( ProcessFileBytes, LargeFileSize )
 {
   const std::string content = makePattern( 5 * 1024 * 1024, 100 );
   TempFile f( content );
-  EXPECT_EQ( processFile( f.path(), 256 * 1024, '\n', CountMode::Bytes ),
-             content.size() );
+  EXPECT_EQ( pfBytes( f.path(), 256 * 1024 ), content.size() );
 }
 
 // ---------------------------------------------------------------------------
-// Word counting (CountMode::Words, like `wc -w`).
+// Word counting (-w, like `wc -w`).
 // ---------------------------------------------------------------------------
 TEST( ProcessFileWords, EmptyFile )
 {
   TempFile f( "" );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
-             0u );
+  EXPECT_EQ( pfWords( f.path() ), 0u );
 }
 
 TEST( ProcessFileWords, OnlyWhitespace )
 {
   TempFile f( "   \n\t \n" );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
-             0u );
+  EXPECT_EQ( pfWords( f.path() ), 0u );
 }
 
 TEST( ProcessFileWords, SmallKnownCount )
 {
   TempFile f( "  the quick brown   fox\n" );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
-             4u );
+  EXPECT_EQ( pfWords( f.path() ), 4u );
 }
 
-// ---------------------------------------------------------------------------
 // The critical chunk-stitching test: a small bytesPerThread forces many chunks
 // so word boundaries fall across splits. The merge must neither drop a word nor
 // double-count one straddling a boundary, for every chunk size.
-// ---------------------------------------------------------------------------
 TEST( ProcessFileWords, ChunkBoundariesDoNotMiscount )
 {
-  // Long non-whitespace runs interspersed with single spaces, so many words
-  // straddle chunk edges.
   std::string content;
   for ( int i = 0; i < 4000; ++i ) content += "wordword ";
   content += "tail";  // no trailing whitespace
@@ -168,37 +155,29 @@ TEST( ProcessFileWords, ChunkBoundariesDoNotMiscount )
   for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
                        size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
                        size_t( 64 * 1024 * 1024 ) } ) {
-    EXPECT_EQ( processFile( f.path(), bpt, '\n', CountMode::Words ), expected )
-        << "bytesPerThread=" << bpt;
+    EXPECT_EQ( pfWords( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
   }
 }
 
 TEST( ProcessFileWords, BoundaryInsideWhitespaceRun )
 {
-  // A long whitespace run between words: chunk edges may land inside it, which
-  // must not invent or drop a word.
   std::string content = "alpha";
   content += std::string( 500, ' ' );
   content += "beta";
   const size_t expected = refWords( content );  // 2
   TempFile f( content );
   for ( size_t bpt : { size_t( 1 ), size_t( 8 ), size_t( 64 ), size_t( 256 ) } )
-    EXPECT_EQ( processFile( f.path(), bpt, '\n', CountMode::Words ), expected )
-        << "bytesPerThread=" << bpt;
+    EXPECT_EQ( pfWords( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
 }
 
 TEST( ProcessFileWords, LargerThanReadBuffer )
 {
-  // Exceeds the 1 MiB per-thread read buffer, exercising the streaming loop and
-  // the carry across read buffers within a single chunk.
   std::string content;
   while ( content.size() < 5 * 1024 * 1024 ) content += "lorem ipsum dolor ";
   const size_t expected = refWords( content );
   TempFile f( content );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Words ),
-             expected );
-  EXPECT_EQ( processFile( f.path(), 256 * 1024, '\n', CountMode::Words ),
-             expected );  // many chunks
+  EXPECT_EQ( pfWords( f.path() ), expected );
+  EXPECT_EQ( pfWords( f.path(), 256 * 1024 ), expected );  // many chunks
 }
 
 TEST( ProcessFileWords, Deterministic )
@@ -208,25 +187,22 @@ TEST( ProcessFileWords, Deterministic )
   const size_t expected = refWords( content );
   TempFile f( content );
   for ( int i = 0; i < 8; ++i )
-    EXPECT_EQ( processFile( f.path(), 4096, '\n', CountMode::Words ), expected )
-        << "run " << i;
+    EXPECT_EQ( pfWords( f.path(), 4096 ), expected ) << "run " << i;
 }
 
 // ---------------------------------------------------------------------------
-// Character counting (CountMode::Chars, like `wc -m`): UTF-8 code points.
+// Character counting (-m, like `wc -m`): UTF-8 code points.
 // ---------------------------------------------------------------------------
 TEST( ProcessFileChars, EmptyFile )
 {
   TempFile f( "" );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
-             0u );
+  EXPECT_EQ( pfChars( f.path() ), 0u );
 }
 
 TEST( ProcessFileChars, AsciiCountsLikeBytes )
 {
   TempFile f( "hello\nworld" );  // 11 bytes, all single-byte
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
-             11u );
+  EXPECT_EQ( pfChars( f.path() ), 11u );
 }
 
 TEST( ProcessFileChars, MultibyteCountsCodePoints )
@@ -234,13 +210,9 @@ TEST( ProcessFileChars, MultibyteCountsCodePoints )
   // "héllo wörld\n" -> 12 characters, 14 bytes.
   const std::string content = "h\xC3\xA9llo w\xC3\xB6rld\n";
   TempFile f( content );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
-             12u );
+  EXPECT_EQ( pfChars( f.path() ), 12u );
 }
 
-// Like the word path, a small bytesPerThread forces many chunks so multibyte
-// sequences straddle splits. Unlike words there is no stitching: each chunk's
-// non-continuation-byte count simply sums, and must equal the whole-file count.
 TEST( ProcessFileChars, ChunkBoundariesDoNotMiscount )
 {
   std::string content;
@@ -251,8 +223,7 @@ TEST( ProcessFileChars, ChunkBoundariesDoNotMiscount )
   for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
                        size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
                        size_t( 64 * 1024 * 1024 ) } ) {
-    EXPECT_EQ( processFile( f.path(), bpt, '\n', CountMode::Chars ), expected )
-        << "bytesPerThread=" << bpt;
+    EXPECT_EQ( pfChars( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
   }
 }
 
@@ -262,29 +233,23 @@ TEST( ProcessFileChars, LargerThanReadBuffer )
   while ( content.size() < 5 * 1024 * 1024 ) content += "lorem \xE2\x98\x83 ip ";
   const size_t expected = refChars( content );
   TempFile f( content );
-  EXPECT_EQ( processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::Chars ),
-             expected );
-  EXPECT_EQ( processFile( f.path(), 256 * 1024, '\n', CountMode::Chars ),
-             expected );  // many chunks
+  EXPECT_EQ( pfChars( f.path() ), expected );
+  EXPECT_EQ( pfChars( f.path(), 256 * 1024 ), expected );  // many chunks
 }
 
 // ---------------------------------------------------------------------------
-// Longest-line length (CountMode::MaxLineLength, like `wc -L`).
+// Longest-line length (-L, like `wc -L`).
 // ---------------------------------------------------------------------------
 TEST( ProcessFileMaxLine, EmptyFile )
 {
   TempFile f( "" );
-  EXPECT_EQ(
-      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
-      0u );
+  EXPECT_EQ( pfMaxLine( f.path() ), 0u );
 }
 
 TEST( ProcessFileMaxLine, SmallKnownLength )
 {
   TempFile f( "ab\nabcd\nx\n" );  // longest line "abcd" -> 4
-  EXPECT_EQ(
-      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
-      4u );
+  EXPECT_EQ( pfMaxLine( f.path() ), 4u );
 }
 
 TEST( ProcessFileMaxLine, UnterminatedFinalLineIgnored )
@@ -292,9 +257,7 @@ TEST( ProcessFileMaxLine, UnterminatedFinalLineIgnored )
   // The final line "ccccc" has no trailing newline, so wc -L ignores it; the
   // longest terminated line is "bb" -> 2.
   TempFile f( "a\nbb\nccccc" );
-  EXPECT_EQ(
-      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
-      2u );
+  EXPECT_EQ( pfMaxLine( f.path() ), 2u );
 }
 
 // The critical stitch test: a small bytesPerThread forces many chunks, so the
@@ -302,7 +265,6 @@ TEST( ProcessFileMaxLine, UnterminatedFinalLineIgnored )
 // prefix) and never under- or over-count, for every chunk size.
 TEST( ProcessFileMaxLine, ChunkBoundariesDoNotMiscount )
 {
-  // Short lines around one very long line, so the long line spans many chunks.
   std::string content = "aa\nbb\n";
   content += std::string( 9000, 'x' );  // the longest line, no newline yet
   content += "\ncc\n";
@@ -313,13 +275,11 @@ TEST( ProcessFileMaxLine, ChunkBoundariesDoNotMiscount )
   for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
                        size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
                        size_t( 64 * 1024 * 1024 ) } ) {
-    EXPECT_EQ(
-        processFile( f.path(), bpt, '\n', CountMode::MaxLineLength ), expected )
+    EXPECT_EQ( pfMaxLine( f.path(), bpt ), expected )
         << "bytesPerThread=" << bpt;
   }
 }
 
-// A boundary landing exactly on a newline must not drop or merge lines.
 TEST( ProcessFileMaxLine, BoundaryOnNewline )
 {
   std::string content;
@@ -327,107 +287,25 @@ TEST( ProcessFileMaxLine, BoundaryOnNewline )
   const size_t expected = refMaxLineLen( content );      // 4
   TempFile f( content );
   for ( size_t bpt : { size_t( 1 ), size_t( 5 ), size_t( 64 ), size_t( 256 ) } )
-    EXPECT_EQ(
-        processFile( f.path(), bpt, '\n', CountMode::MaxLineLength ), expected )
+    EXPECT_EQ( pfMaxLine( f.path(), bpt ), expected )
         << "bytesPerThread=" << bpt;
 }
 
 TEST( ProcessFileMaxLine, LargerThanReadBuffer )
 {
-  // A line longer than the 1 MiB per-thread read buffer, exercising the carry
-  // across read buffers within a single chunk.
   std::string content = "tiny\n";
   content += std::string( 3 * 1024 * 1024, 'y' );  // the longest line
   content += "\ntiny\n";
   const size_t expected = refMaxLineLen( content );
   TempFile f( content );
-  EXPECT_EQ(
-      processFile( f.path(), 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
-      expected );
-  EXPECT_EQ(
-      processFile( f.path(), 256 * 1024, '\n', CountMode::MaxLineLength ),
-      expected );  // many chunks
-}
-
-TEST( ProcessFileMaxLine, Deterministic )
-{
-  std::string content;
-  for ( int i = 0; i < 1000; ++i ) content += "a bb ccc dddd\n";
-  const size_t expected = refMaxLineLen( content );
-  TempFile f( content );
-  for ( int i = 0; i < 8; ++i )
-    EXPECT_EQ(
-        processFile( f.path(), 4096, '\n', CountMode::MaxLineLength ), expected )
-        << "run " << i;
+  EXPECT_EQ( pfMaxLine( f.path() ), expected );
+  EXPECT_EQ( pfMaxLine( f.path(), 256 * 1024 ), expected );  // many chunks
 }
 
 // ---------------------------------------------------------------------------
-// processFileAll: lines, words and bytes in one pass (the bare-wc / no-flag mode).
+// Line counting under heavy chunking and large inputs.
 // ---------------------------------------------------------------------------
-TEST( ProcessFileAll, EmptyFile )
-{
-  TempFile f( "" );
-  const Counts c = processFileAll( f.path() );
-  EXPECT_EQ( c.lines, 0u );
-  EXPECT_EQ( c.words, 0u );
-  EXPECT_EQ( c.bytes, 0u );
-}
-
-TEST( ProcessFileAll, SmallKnownCounts )
-{
-  TempFile f( "alpha beta\ngamma\n\nx y z\n" );  // 4 lines, 6 words, 24 bytes
-  const Counts c = processFileAll( f.path() );
-  EXPECT_EQ( c.lines, 4u );
-  EXPECT_EQ( c.words, 6u );
-  EXPECT_EQ( c.bytes, 24u );
-}
-
-TEST( ProcessFileAll, NoTrailingNewline )
-{
-  TempFile f( "a b\nc d" );  // 1 line, 4 words, 7 bytes
-  const Counts c = processFileAll( f.path() );
-  EXPECT_EQ( c.lines, 1u );
-  EXPECT_EQ( c.words, 4u );
-  EXPECT_EQ( c.bytes, 7u );
-}
-
-// The all-pass shares the word-stitching logic, so verify it across chunk sizes
-// against the same oracle used for the word-only path.
-TEST( ProcessFileAll, ChunkBoundariesMatchOracles )
-{
-  std::string content;
-  for ( int i = 0; i < 4000; ++i ) content += "wordword ";
-  content += "tail";
-  const size_t expWords = refWords( content );
-  const size_t expLines = refCount( content, '\n' );
-  TempFile f( content );
-
-  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 4096 ),
-                       size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
-    const Counts c = processFileAll( f.path(), bpt );
-    EXPECT_EQ( c.lines, expLines ) << "bytesPerThread=" << bpt;
-    EXPECT_EQ( c.words, expWords ) << "bytesPerThread=" << bpt;
-    EXPECT_EQ( c.bytes, content.size() ) << "bytesPerThread=" << bpt;
-  }
-}
-
-TEST( ProcessFileAll, LargerThanReadBuffer )
-{
-  std::string content;
-  while ( content.size() < 5 * 1024 * 1024 ) content += "lorem ipsum dolor\n";
-  TempFile f( content );
-  const Counts c = processFileAll( f.path(), 256 * 1024 );  // many chunks
-  EXPECT_EQ( c.lines, refCount( content, '\n' ) );
-  EXPECT_EQ( c.words, refWords( content ) );
-  EXPECT_EQ( c.bytes, content.size() );
-}
-
-// ---------------------------------------------------------------------------
-// Multi-threaded chunking: a small bytesPerThread forces many threads, so line
-// boundaries fall across chunk splits. Because we count bytes (not lines),
-// splits must neither drop nor double-count targets.
-// ---------------------------------------------------------------------------
-TEST( ProcessFile, ChunkBoundariesDoNotMiscount )
+TEST( ProcessFileLines, ChunkBoundariesDoNotMiscount )
 {
   const std::string content = makePattern( 200000, 5 );
   const size_t expected = refCount( content, '\n' );
@@ -436,50 +314,87 @@ TEST( ProcessFile, ChunkBoundariesDoNotMiscount )
   for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 1024 ),
                        size_t( 4096 ), size_t( 100000 ),
                        size_t( 64 * 1024 * 1024 ) } ) {
-    EXPECT_EQ( processFile( f.path(), bpt, '\n' ), expected )
+    EXPECT_EQ( pfLines( f.path(), bpt ), expected )
         << "bytesPerThread=" << bpt;
   }
 }
 
-TEST( ProcessFile, TargetsExactlyOnChunkSplits )
+TEST( ProcessFileLines, NewlinesExactlyOnChunkSplits )
 {
-  // bytesPerThread chosen so chunk edges land right on target bytes.
   const size_t len = 8192;
   std::string content( len, 'x' );
   for ( size_t i = 0; i < len; i += 64 ) content[i] = '\n';
   TempFile f( content );
   const size_t expected = refCount( content, '\n' );
-  EXPECT_EQ( processFile( f.path(), 64, '\n' ), expected );
-  EXPECT_EQ( processFile( f.path(), 128, '\n' ), expected );
+  EXPECT_EQ( pfLines( f.path(), 64 ), expected );
+  EXPECT_EQ( pfLines( f.path(), 128 ), expected );
 }
 
-// ---------------------------------------------------------------------------
-// Large file: exceeds the 1 MiB per-thread read buffer, exercising the pread
-// streaming loop within a chunk.
-// ---------------------------------------------------------------------------
-TEST( ProcessFile, LargerThanReadBuffer )
+TEST( ProcessFileLines, LargerThanReadBuffer )
 {
   const std::string content = makePattern( 5 * 1024 * 1024, 100 );
   const size_t expected = refCount( content, '\n' );
   TempFile f( content );
-  EXPECT_EQ( processFile( f.path() ), expected );
-  EXPECT_EQ( processFile( f.path(), 256 * 1024 ), expected );  // many threads
+  EXPECT_EQ( pfLines( f.path() ), expected );
+  EXPECT_EQ( pfLines( f.path(), 256 * 1024 ), expected );  // many threads
 }
 
-TEST( ProcessFile, DenseLargeFile )
+TEST( ProcessFileLines, DenseLargeFile )
 {
   const std::string content( 3 * 1024 * 1024, '\n' );
   TempFile f( content );
-  EXPECT_EQ( processFile( f.path() ), content.size() );
+  EXPECT_EQ( pfLines( f.path() ), content.size() );
 }
 
-TEST( ProcessFile, Deterministic )
+TEST( ProcessFileLines, Deterministic )
 {
   const std::string content = makePattern( 500000, 11 );
   const size_t expected = refCount( content, '\n' );
   TempFile f( content );
   for ( int i = 0; i < 8; ++i )
-    EXPECT_EQ( processFile( f.path(), 4096 ), expected ) << "run " << i;
+    EXPECT_EQ( pfLines( f.path(), 4096 ), expected ) << "run " << i;
+}
+
+// ---------------------------------------------------------------------------
+// The fused engine: a Workload requesting several counts computes them all in
+// one pass, and each must equal the single-counter result -- across chunk sizes,
+// so the words/longest-line stitching survives alongside the others.
+// ---------------------------------------------------------------------------
+TEST( ProcessFileFused, AllCountersMatchIndividualPasses )
+{
+  std::string content;
+  for ( int i = 0; i < 3000; ++i ) content += "h\xC3\xA9llo w\xC3\xB6rld foo\n";
+  content += "a very long trailing line with no newline at the end";
+  TempFile f( content );
+
+  Workload w;
+  w.lines = w.words = w.bytes = w.chars = w.maxLine = w.target = true;
+  w.targetByte = 'o';
+
+  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 4096 ),
+                       size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
+    const Counts c = processFile( f.path(), w, bpt );
+    EXPECT_EQ( c.lines, pfLines( f.path(), bpt ) ) << "bpt=" << bpt;
+    EXPECT_EQ( c.words, pfWords( f.path(), bpt ) ) << "bpt=" << bpt;
+    EXPECT_EQ( c.bytes, pfBytes( f.path(), bpt ) ) << "bpt=" << bpt;
+    EXPECT_EQ( c.chars, pfChars( f.path(), bpt ) ) << "bpt=" << bpt;
+    EXPECT_EQ( c.maxLine, pfMaxLine( f.path(), bpt ) ) << "bpt=" << bpt;
+    EXPECT_EQ( c.target, pfTarget( f.path(), 'o', bpt ) ) << "bpt=" << bpt;
+  }
+}
+
+TEST( ProcessFileFused, DefaultTrioMatchesKnownCounts )
+{
+  TempFile f( "alpha beta\ngamma\n\nx y z\n" );  // 4 lines, 6 words, 24 bytes
+  Workload w;
+  w.lines = w.words = w.bytes = true;
+  const Counts c = processFile( f.path(), w );
+  EXPECT_EQ( c.lines, 4u );
+  EXPECT_EQ( c.words, 6u );
+  EXPECT_EQ( c.bytes, 24u );
+  // Unrequested counters stay zero.
+  EXPECT_EQ( c.chars, 0u );
+  EXPECT_EQ( c.maxLine, 0u );
 }
 
 // ---------------------------------------------------------------------------
@@ -488,7 +403,7 @@ TEST( ProcessFile, Deterministic )
 TEST( ProcessFileDeathTest, MissingFileExitsWithCode1 )
 {
   EXPECT_EXIT(
-      processFile( "/nonexistent/qwc/path/should/not/exist_zzz" ),
+      pfLines( "/nonexistent/qwc/path/should/not/exist_zzz" ),
       ::testing::ExitedWithCode( 1 ), "Error opening file" );
 }
 
@@ -522,61 +437,57 @@ class StdinFixture : public ::testing::Test
   std::unique_ptr<TempFile> tmp_;
 };
 
-TEST_F( StdinFixture, CountsFromStdin )
+TEST_F( StdinFixture, CountsLinesFromStdin )
 {
   feedStdin( "one\ntwo\nthree\n" );
-  EXPECT_EQ( processFile( "" ), 3u );
+  EXPECT_EQ( pfLines( "" ), 3u );
 }
 
 TEST_F( StdinFixture, EmptyStdin )
 {
   feedStdin( "" );
-  EXPECT_EQ( processFile( "" ), 0u );
+  EXPECT_EQ( pfLines( "" ), 0u );
 }
 
 TEST_F( StdinFixture, StdinLargerThanReadBuffer )
 {
-  // The stdin path reads in 128*4096 = 512 KiB chunks; exceed that.
   const std::string content = makePattern( 2 * 1024 * 1024, 50 );
   const size_t expected = refCount( content, '\n' );
   feedStdin( content );
-  EXPECT_EQ( processFile( "" ), expected );
+  EXPECT_EQ( pfLines( "" ), expected );
 }
 
 TEST_F( StdinFixture, StdinCustomTarget )
 {
   feedStdin( "a;b;c;" );
-  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, ';' ), 3u );
+  EXPECT_EQ( pfTarget( "", ';' ), 3u );
 }
 
 TEST_F( StdinFixture, StdinByteCount )
 {
   feedStdin( "hello world" );  // 11 bytes
-  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Bytes ), 11u );
+  EXPECT_EQ( pfBytes( "" ), 11u );
 }
 
 TEST_F( StdinFixture, StdinWordCount )
 {
   feedStdin( "  the quick brown   fox\n" );
-  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Words ), 4u );
+  EXPECT_EQ( pfWords( "" ), 4u );
 }
 
 TEST_F( StdinFixture, StdinWordsLargerThanReadBuffer )
 {
-  // The stdin path reads in 128*4096 = 512 KiB chunks; exceed that so the
-  // in-word state must carry across reads.
   std::string content;
   while ( content.size() < 2 * 1024 * 1024 ) content += "lorem ipsum dolor ";
   const size_t expected = refWords( content );
   feedStdin( content );
-  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Words ),
-             expected );
+  EXPECT_EQ( pfWords( "" ), expected );
 }
 
 TEST_F( StdinFixture, StdinCharCount )
 {
   feedStdin( "h\xC3\xA9llo w\xC3\xB6rld\n" );  // 12 chars, 14 bytes
-  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Chars ), 12u );
+  EXPECT_EQ( pfChars( "" ), 12u );
 }
 
 TEST_F( StdinFixture, StdinCharsLargerThanReadBuffer )
@@ -585,46 +496,44 @@ TEST_F( StdinFixture, StdinCharsLargerThanReadBuffer )
   while ( content.size() < 2 * 1024 * 1024 ) content += "lorem \xE2\x98\x83 ip ";
   const size_t expected = refChars( content );
   feedStdin( content );
-  EXPECT_EQ( processFile( "", 64 * 1024 * 1024, '\n', CountMode::Chars ),
-             expected );
+  EXPECT_EQ( pfChars( "" ), expected );
 }
 
 TEST_F( StdinFixture, StdinMaxLineLength )
 {
   feedStdin( "ab\nabcd\nx\n" );  // longest line "abcd" -> 4
-  EXPECT_EQ(
-      processFile( "", 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ), 4u );
+  EXPECT_EQ( pfMaxLine( "" ), 4u );
 }
 
 TEST_F( StdinFixture, StdinMaxLineLengthLargerThanReadBuffer )
 {
-  // The stdin path reads in 128*4096 = 512 KiB chunks; a line longer than that
-  // forces the open-run length to carry across reads.
   std::string content = "tiny\n";
   content += std::string( 2 * 1024 * 1024, 'z' );
   content += "\ntiny\n";
   const size_t expected = refMaxLineLen( content );
   feedStdin( content );
-  EXPECT_EQ(
-      processFile( "", 64 * 1024 * 1024, '\n', CountMode::MaxLineLength ),
-      expected );
+  EXPECT_EQ( pfMaxLine( "" ), expected );
 }
 
-TEST_F( StdinFixture, StdinAllCounts )
+TEST_F( StdinFixture, StdinFusedAllCounts )
 {
   feedStdin( "alpha beta\ngamma\n\nx y z\n" );  // 4 lines, 6 words, 24 bytes
-  const Counts c = processFileAll( "" );
+  Workload w;
+  w.lines = w.words = w.bytes = true;
+  const Counts c = processFile( "", w );
   EXPECT_EQ( c.lines, 4u );
   EXPECT_EQ( c.words, 6u );
   EXPECT_EQ( c.bytes, 24u );
 }
 
-TEST_F( StdinFixture, StdinAllLargerThanReadBuffer )
+TEST_F( StdinFixture, StdinFusedLargerThanReadBuffer )
 {
   std::string content;
   while ( content.size() < 2 * 1024 * 1024 ) content += "lorem ipsum\ndolor\n";
   feedStdin( content );
-  const Counts c = processFileAll( "" );
+  Workload w;
+  w.lines = w.words = w.bytes = true;
+  const Counts c = processFile( "", w );
   EXPECT_EQ( c.lines, refCount( content, '\n' ) );
   EXPECT_EQ( c.words, refWords( content ) );
   EXPECT_EQ( c.bytes, content.size() );

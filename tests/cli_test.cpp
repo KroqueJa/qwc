@@ -87,6 +87,17 @@ std::string allLine( uintmax_t l, uintmax_t w, uintmax_t b,
   return os.str();
 }
 
+// An arbitrary number of columns, each in a min-width-7 field, then the name.
+std::string cols( std::initializer_list<uintmax_t> vals,
+                  const std::string& name = "" )
+{
+  std::ostringstream os;
+  for ( const uintmax_t v: vals ) os << ' ' << std::setw( 7 ) << v;
+  if ( !name.empty() ) os << ' ' << name;
+  os << '\n';
+  return os.str();
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -345,6 +356,63 @@ TEST( Cli, MaxLineLengthChunkedMatchesTotal )
                      " /tmp/qwc_L_big.txt; rm -f /tmp/qwc_L_big.txt" );
   EXPECT_EQ( r.exitCode, 0 );
   EXPECT_EQ( r.out, line( 20, "/tmp/qwc_L_big.txt" ) );  // the 20 b's
+}
+
+// ---------------------------------------------------------------------------
+// Combined count flags. wc prints the selected columns in a fixed order --
+// lines, words, char/byte, longest line -- regardless of the order (or bundling)
+// of the flags. -c and -m share one column; whichever is last wins.
+// ---------------------------------------------------------------------------
+TEST( CliCombined, BundledShortFlags )
+{
+  CmdResult r = run( piped( "a b\\nc\\n", "-lw" ) );  // 2 lines, 3 words
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, cols( { 2, 3 } ) );
+}
+
+TEST( CliCombined, SeparateFlagsSameAsBundled )
+{
+  CmdResult bundled = run( piped( "a b\\nc\\n", "-lw" ) );
+  CmdResult separate = run( piped( "a b\\nc\\n", "-l -w" ) );
+  EXPECT_EQ( separate.exitCode, 0 );
+  EXPECT_EQ( separate.out, bundled.out );
+  EXPECT_EQ( separate.out, cols( { 2, 3 } ) );
+}
+
+TEST( CliCombined, FlagOrderDoesNotChangeColumnOrder )
+{
+  // -wl must still print lines first, then words (wc's fixed column order).
+  CmdResult lw = run( piped( "a b\\nc\\n", "-lw" ) );
+  CmdResult wl = run( piped( "a b\\nc\\n", "-wl" ) );
+  EXPECT_EQ( lw.out, wl.out );
+  EXPECT_EQ( lw.out, cols( { 2, 3 } ) );
+}
+
+TEST( CliCombined, FourColumns )
+{
+  // -lwcL: lines, words, bytes, longest line. "a b\nc\n" = 2 lines, 3 words,
+  // 6 bytes, longest line "a b" = 3.
+  CmdResult r = run( piped( "a b\\nc\\n", "-lwcL" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, cols( { 2, 3, 6, 3 } ) );
+}
+
+TEST( CliCombined, CharByteLastWinsBytes )
+{
+  // -mc: -c is last, so the shared column counts bytes. ASCII keeps it locale-
+  // independent ("abcde" -> 5 either way, but the column must be present once).
+  CmdResult r = run( piped( "abcde", "-mc" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, cols( { 5 } ) );  // exactly one column, not two
+}
+
+TEST( CliCombined, CharExtensionCombinesAndComesLast )
+{
+  // The qwc-only --char column appends after the wc columns: lines, then the
+  // comma tally. "a,b\nc,d,e\n" -> 2 lines, 3 commas.
+  CmdResult r = run( piped( "a,b\\nc,d,e\\n", "-l --char ," ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, cols( { 2, 3 } ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -741,8 +809,13 @@ struct Mode
   const char* qwcFlag;  // how qwc selects this mode ("" == default: l w c)
   const char* wcFlag;   // the matching wc flag ("" == bare wc)
 };
-const Mode kCoreModes[] = { { "", "" },     { "-l", "-l" }, { "-w", "-w" },
-                            { "-c", "-c" },  { "-m", "-m" }, { "-L", "-L" } };
+const Mode kCoreModes[] = {
+    { "", "" },        { "-l", "-l" },     { "-w", "-w" },
+    { "-c", "-c" },    { "-m", "-m" },     { "-L", "-L" },
+    // Combinations: column order and selection must match wc exactly.
+    { "-lw", "-lw" },  { "-lc", "-lc" },   { "-wc", "-wc" },
+    { "-lwc", "-lwc" },{ "-lwcL", "-lwcL" },
+    { "-cm", "-cm" },  { "-mc", "-mc" } };
 
 }  // namespace
 

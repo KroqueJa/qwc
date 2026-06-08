@@ -8,10 +8,54 @@
 #include "chars.h"
 #include "countlines.h"
 #include "maxlinelen.h"
+#include "processfile.h"
 #include "typedef.h"
 #include "words.h"
 
 namespace qwctest {
+
+// Default bytes-per-thread, matching processFile's own default.
+inline constexpr usize kDefaultBpt = 64u * 1024 * 1024;
+
+// Single-counter convenience wrappers around the unified processFile, so tests
+// can ask for one count without spelling out a Workload each time.
+inline usize pfLines( const char* path, usize bpt = kDefaultBpt )
+{
+  Workload w;
+  w.lines = true;
+  return processFile( path, w, bpt ).lines;
+}
+inline usize pfWords( const char* path, usize bpt = kDefaultBpt )
+{
+  Workload w;
+  w.words = true;
+  return processFile( path, w, bpt ).words;
+}
+inline usize pfBytes( const char* path, usize bpt = kDefaultBpt )
+{
+  Workload w;
+  w.bytes = true;
+  return processFile( path, w, bpt ).bytes;
+}
+inline usize pfChars( const char* path, usize bpt = kDefaultBpt )
+{
+  Workload w;
+  w.chars = true;
+  return processFile( path, w, bpt ).chars;
+}
+inline usize pfMaxLine( const char* path, usize bpt = kDefaultBpt )
+{
+  Workload w;
+  w.maxLine = true;
+  return processFile( path, w, bpt ).maxLine;
+}
+inline usize pfTarget( const char* path, char target, usize bpt = kDefaultBpt )
+{
+  Workload w;
+  w.target = true;
+  w.targetByte = target;
+  return processFile( path, w, bpt ).target;
+}
 
 // Independent, obviously-correct reference implementation of `count`, used as
 // the oracle for the SIMD/scalar implementation under test. Compares at the
