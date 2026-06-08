@@ -49,6 +49,23 @@ set( QWC_DEFINES "" CACHE STRING "Extra compile definitions (NAME=VALUE list) fo
 # target is only built by `ctest`/explicit `--target qwc_tests`.
 option( QWC_BUILD_TESTS "Build unit tests (requires the tests/googletest submodule)" ON )
 
+# Opt-in clang-tidy gate. When ON, clang-tidy runs on qwc's own translation
+# units during the build (never the vendored googletest) and fails the build on
+# any finding. Off by default so normal and benchmark builds stay fast and
+# unencumbered. The check list lives in .clang-tidy; CI flips this on.
+option( QWC_CLANG_TIDY "Run clang-tidy on qwc sources during the build (gate)" OFF )
+if( QWC_CLANG_TIDY )
+  find_program( QWC_CLANG_TIDY_EXE NAMES clang-tidy )
+  if( NOT QWC_CLANG_TIDY_EXE )
+    message( FATAL_ERROR "QWC_CLANG_TIDY=ON but clang-tidy was not found on PATH." )
+  endif()
+  message( STATUS "qwc: clang-tidy gate enabled (${QWC_CLANG_TIDY_EXE})" )
+endif()
+
+# Always emit compile_commands.json so clang-tidy, clangd and other tooling can
+# find the exact flags for each translation unit. Costs nothing at build time.
+set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
+
 # ---------------------------------------------------------------------------
 # Architecture dispatch (mirrors the Makefile's uname -m logic)
 # ---------------------------------------------------------------------------
@@ -97,6 +114,14 @@ function( qwc_configure target )
   elseif( QWC_TSAN )
     target_compile_options( ${target} PRIVATE -fsanitize=thread -fno-omit-frame-pointer -g )
     target_link_options(    ${target} PRIVATE -fsanitize=thread )
+  endif()
+
+  # Run the clang-tidy gate on this target's own sources (set per-target, not
+  # globally, so the vendored googletest is never linted). --warnings-as-errors
+  # makes any finding fail the build.
+  if( QWC_CLANG_TIDY AND QWC_CLANG_TIDY_EXE )
+    set_target_properties( ${target} PROPERTIES
+      CXX_CLANG_TIDY "${QWC_CLANG_TIDY_EXE};--warnings-as-errors=*" )
   endif()
 
   # Emit into the project root so benchmark scripts keep finding the binary

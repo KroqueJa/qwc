@@ -1,0 +1,52 @@
+# clang-tidy configuration for qwc.
+#
+# qwc is hand-written SIMD over raw buffers: reinterpret_cast on every vector
+# load, pointer arithmetic in the alignment prologues, a C array for the stdin
+# buffer, and "magic" constants (0xC0, the 255-iteration drain) that are
+# intrinsic to the algorithms. So we deliberately enable the bug-, performance-,
+# concurrency- and portability-focused checks and the clang static analyzer --
+# the families that catch real defects (fd leaks, null derefs, data-race-prone
+# code) -- while disabling the ones that would fight vectorized, low-level code
+# and bury the signal.
+#
+# A few project-specific opt-outs: portability-avoid-pragma-once (we use
+# `#pragma once` everywhere on purpose), performance-enum-size (the CLI enums are
+# scalars, never packed in arrays, so a smaller base type buys nothing), and
+# portability-simd-intrinsics (the entire point of count_neon/avx2).
+#
+# Advisory by default (WarningsAsErrors empty), so editors/IDEs surface findings
+# without nagging. CI turns it into a gate by passing --warnings-as-errors=*
+# (see CMake's QWC_CLANG_TIDY option and .github/workflows/analysis.yml).
+
+Checks: >
+  -*,
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -bugprone-exception-escape,
+  clang-analyzer-*,
+  concurrency-*,
+  performance-*,
+  -performance-enum-size,
+  portability-*,
+  -portability-simd-intrinsics,
+  -portability-avoid-pragma-once,
+  misc-redundant-expression,
+  misc-misplaced-const,
+  misc-unused-parameters,
+  misc-unused-using-decls,
+  modernize-use-override,
+  modernize-use-nullptr,
+  modernize-use-using,
+  modernize-use-equals-default,
+  modernize-loop-convert,
+  modernize-make-unique
+
+WarningsAsErrors: ''
+
+# Diagnose our own headers (include/*.h, tests/test_util.h) but not the vendored
+# googletest, whose headers always sit under a nested include/<gtest|gmock>/...
+# directory and so never match this flat-header pattern.
+HeaderFilterRegex: '(include|tests|src)/[^/]+\.(h|hpp)$'
+
+FormatStyle: file

@@ -23,7 +23,7 @@ enum class SortMode
 // order the flags were given: lines, words, char/byte, longest line.
 struct Options
 {
-  usize bytesPerThread = 64 * 1024 * 1024;
+  usize bytesPerThread = 64ull * 1024 * 1024;
 
   // Selected columns. With no count flag at all, qwc shows lines, words and
   // bytes -- exactly like bare `wc`.

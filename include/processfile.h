@@ -46,5 +46,5 @@ struct Counts
 // shares the same read of the data.
 Counts processFile(
     const char* filename, const Workload& work,
-    usize bytesPerThread = 64 * 1024 * 1024
+    usize bytesPerThread = 64ull * 1024 * 1024
 );

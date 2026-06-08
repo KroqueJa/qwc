@@ -1,0 +1,114 @@
+# Static & dynamic analysis gate for qwc.
+#
+# Four independent checks, none of which touch the benchmark build:
+#   * clang-tidy  -- the curated static-analysis gate (.clang-tidy), run on both
+#                    Linux (AVX2 + scalar sources) and macOS (NEON sources), since
+#                    each SIMD translation unit only compiles on its own arch.
+#   * asan/ubsan  -- the unit tests and the wc-conformance suite run under
+#                    Address/UB sanitizer: out-of-bounds SIMD reads, bad casts.
+#   * tsan        -- same suites under ThreadSanitizer: data races in the
+#                    parallel chunked counting (the architecture's hot path).
+#   * gcc -fanalyzer -- a second, independent static engine over the fd/syscall
+#                    code paths (open/pread/close, error exits).
+#
+# These are what static analysis on a hand-vectorized, threaded, syscall-heavy
+# codebase actually needs; clang-tidy alone can't see the races or OOB reads.
+
+name: analysis
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: analysis-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang-tidy:
+    name: clang-tidy (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4  # no submodules: tests are off for this gate
+
+      - name: Install clang-tidy (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang-tidy
+
+      # On macOS, use brew LLVM's clang++ *and* clang-tidy together so the
+      # toolchain and the analyzer agree on flags and builtin headers.
+      - name: Install LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "$(brew --prefix llvm)/bin" >> "$GITHUB_PATH"
+          echo "CXX=$(brew --prefix llvm)/bin/clang++" >> "$GITHUB_ENV"
+          echo "SDKROOT=$(xcrun --show-sdk-path)" >> "$GITHUB_ENV"
+
+      - name: Configure + run the clang-tidy gate
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DQWC_BUILD_TESTS=OFF -DQWC_CLANG_TIDY=ON
+          # Building qwc and qwc-scalar runs clang-tidy on every production TU for
+          # this arch (SIMD + scalar). --warnings-as-errors makes findings fail.
+          cmake --build build --target qwc qwc-scalar
+
+  sanitizers:
+    name: ${{ matrix.san }} (tests + conformance)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - san: asan+ubsan
+            flag: -DQWC_ASAN=ON
+          - san: tsan
+            flag: -DQWC_TSAN=ON
+    env:
+      # Make any sanitizer finding abort with a non-zero status so it fails the
+      # step (these are harmless for whichever sanitizer is not active).
+      ASAN_OPTIONS: abort_on_error=1:halt_on_error=1:detect_leaks=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      TSAN_OPTIONS: halt_on_error=1
+      QWC_CONF_UTF8_LOCALE: C.UTF-8
+      QWC_BIN: ./qwc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive  # tests need the googletest submodule
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build qwc + tests under ${{ matrix.san }}
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo ${{ matrix.flag }}
+          cmake --build build --target qwc qwc_tests
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Conformance suite (sanitized qwc vs wc)
+        run: python3 conformance/run.py --fuzz 80
+
+  gcc-analyzer:
+    name: gcc -fanalyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build with GCC -fanalyzer and fail on any analyzer finding
+        run: |
+          set -eo pipefail
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQWC_BUILD_TESTS=OFF \
+            -DCMAKE_CXX_COMPILER=g++ -DCMAKE_CXX_FLAGS="-fanalyzer"
+          cmake --build build --target qwc qwc-scalar 2>&1 | tee build.log
+          if grep -q '\-Wanalyzer' build.log; then
+            echo "::error::GCC -fanalyzer reported findings (see log above)"
+            exit 1
+          fi
