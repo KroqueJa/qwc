@@ -35,7 +35,7 @@ add_executable( qwc_tests
   ${CMAKE_SOURCE_DIR}/src/processfile.cpp
   ${CMAKE_SOURCE_DIR}/${QWC_WORDS}
   ${CMAKE_SOURCE_DIR}/src/chars_scalar.cpp
-  ${CMAKE_SOURCE_DIR}/src/maxlinelen_scalar.cpp
+  ${CMAKE_SOURCE_DIR}/${QWC_MAXLINE}
   ${CMAKE_SOURCE_DIR}/${QWC_COUNTLINES}
 )
 target_include_directories( qwc_tests PRIVATE ${CMAKE_SOURCE_DIR}/include )

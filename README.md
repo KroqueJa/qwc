@@ -17,7 +17,7 @@ This allows it to be substantially faster than its two big brothers for this par
     - [x] NEON
   - [ ] Max line length
     - [ ] AVX2
-    - [ ] NEON
+    - [x] NEON
   - [ ] Words
     - [ ] AVX2
     - [x] NEON
