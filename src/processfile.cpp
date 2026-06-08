@@ -28,15 +28,16 @@ struct ScanState
   usize words = 0;
   usize chars = 0;
   usize target = 0;
-  bool inWord = false;       // word-counting carry within this range
-  bool startsInWord = false; // first byte non-whitespace (for cross-chunk stitch)
+  bool inWord = false;  // word-counting carry within this range
+  bool startsInWord =
+      false;  // first byte non-whitespace (for cross-chunk stitch)
   bool sawFirst = false;
-  LineScan line;             // longest-line carry within this range
+  LineScan line;  // longest-line carry within this range
 };
 
 // Run every requested counter over one buffer, threading the carries in `s`.
-// Each counter scans the (cache-resident) buffer independently; the data is read
-// from the file only once, by the caller.
+// Each counter scans the (cache-resident) buffer independently; the data is
+// read from the file only once, by the caller.
 inline void scanBuffer(
     const char* buf, usize g, const Workload& w, ScanState& s
 )
@@ -103,10 +104,10 @@ Counts processFile(
     return result;
   }
 
-  // We will read every byte sequentially, so ask the kernel to start pulling the
-  // whole file into the page cache up front. On macOS F_RDADVISE is the most
-  // effective hint (MADV_WILLNEED is largely a no-op). radvisory::ra_count is an
-  // int, so issue the advice in <=INT_MAX chunks.
+  // We will read every byte sequentially, so ask the kernel to start pulling
+  // the whole file into the page cache up front. On macOS F_RDADVISE is the
+  // most effective hint (MADV_WILLNEED is largely a no-op). radvisory::ra_count
+  // is an int, so issue the advice in <=INT_MAX chunks.
   for ( usize off = 0; off < fileSize; ) {
     usize remaining = fileSize - off;
     radvisory ra{};

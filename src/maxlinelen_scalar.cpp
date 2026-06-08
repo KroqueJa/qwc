@@ -3,8 +3,9 @@
 // Naive, scalar longest-line scanner. Like words_scalar and chars_scalar it is
 // unvectorised by hand; the parallel chunking in processFile supplies the
 // throughput, and the per-chunk results are stitched there.
-void maxLineLen( const char* buffer, const usize length, LineScan& s,
-                 const bool countChars )
+void maxLineLen(
+    const char* buffer, const usize length, LineScan& s, const bool countChars
+)
 {
   for ( usize i = 0; i < length; ++i ) {
     if ( buffer[i] == '\n' ) {
@@ -16,8 +17,9 @@ void maxLineLen( const char* buffer, const usize length, LineScan& s,
       }
       if ( s.cur > s.maxComplete ) s.maxComplete = s.cur;
       s.cur = 0;  // the newline is not counted; start the next line
-    } else if ( countChars &&
-                ( static_cast<unsigned char>( buffer[i] ) & 0xC0 ) == 0x80 ) {
+    } else if (
+        countChars && ( static_cast<unsigned char>( buffer[i] ) & 0xC0 ) == 0x80
+    ) {
       // A UTF-8 continuation byte continues the current character; in character
       // mode it does not advance the line length.
       continue;

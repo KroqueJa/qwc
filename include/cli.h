@@ -10,10 +10,16 @@
 // How to order the per-file output list. The chosen key governs both the
 // display order and which files --top keeps; ordering is ascending by default
 // (so the largest land at the bottom), and --reverse flips it.
-enum class SortMode { None, Count, Name, Size };
+enum class SortMode
+{
+  None,
+  Count,
+  Name,
+  Size
+};
 
-// Everything the frontend parses out of the command line. The count flags map to
-// wc's output columns, which always print in a fixed order regardless of the
+// Everything the frontend parses out of the command line. The count flags map
+// to wc's output columns, which always print in a fixed order regardless of the
 // order the flags were given: lines, words, char/byte, longest line.
 struct Options
 {
@@ -21,18 +27,19 @@ struct Options
 
   // Selected columns. With no count flag at all, qwc shows lines, words and
   // bytes -- exactly like bare `wc`.
-  bool lines = false;          // -l
-  bool words = false;          // -w
-  bool charByte = false;       // -c or -m: the single shared char/byte column
-  bool charsNotBytes = false;  // within charByte: -m counts chars, -c counts bytes
-  bool maxLine = false;        // -L
-  bool target = false;         // --char: qwc extension (counts targetByte)
+  bool lines = false;     // -l
+  bool words = false;     // -w
+  bool charByte = false;  // -c or -m: the single shared char/byte column
+  bool charsNotBytes =
+      false;             // within charByte: -m counts chars, -c counts bytes
+  bool maxLine = false;  // -L
+  bool target = false;   // --char: qwc extension (counts targetByte)
   char targetByte = '\n';
 
-  bool recursive = false;        // expand directory arguments
+  bool recursive = false;  // expand directory arguments
   SortMode sortMode = SortMode::None;
-  bool reverse = false;          // flip the display order
-  usize topN = 0;                // keep only the highest N (0 == show all)
+  bool reverse = false;            // flip the display order
+  usize topN = 0;                  // keep only the highest N (0 == show all)
   std::vector<std::string> files;  // positional args; expanded by collectFiles
 
   // How many output columns are selected.
@@ -68,6 +75,6 @@ void printCounts( const Options& opt, const Counts& c, const char* name );
 
 // Render the counted files in wc's layout: one row per file (selected columns +
 // name), plus a trailing "total" row when more than one file was counted. With
-// exactly one column selected the listing honours --sort-*/--top/--reverse; with
-// several columns it keeps the collected order, like bare `wc`.
+// exactly one column selected the listing honours --sort-*/--top/--reverse;
+// with several columns it keeps the collected order, like bare `wc`.
 void printResults( const Options& opt, const std::vector<Counts>& output );
