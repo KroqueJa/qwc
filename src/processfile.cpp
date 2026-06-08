@@ -44,12 +44,23 @@ inline void scanBuffer(
 {
   if ( w.lines ) s.lines += count( buf, g, '\n' );
   if ( w.target ) s.target += count( buf, g, w.targetByte );
-  if ( w.chars ) s.chars += chars( buf, g );
   if ( w.words ) {
     if ( !s.sawFirst && g > 0 ) s.startsInWord = !isWordSpace( buf[0] );
     s.words += words( buf, g, s.inWord );
   }
-  if ( w.maxLine ) maxLineLen( buf, g, s.line, w.maxLineInChars );
+
+  // chars and the longest line interact: `wc -L -m` measures the longest line in
+  // characters, and that count and the character total walk the same UTF-8
+  // continuation bytes. When both are wanted, one fused pass produces both;
+  // otherwise each is computed on its own. (w.maxLineInChars implies w.chars --
+  // both are set exactly by -m -- so the fused path covers the char total.)
+  if ( w.maxLine && w.maxLineInChars ) {
+    maxLineLenChars( buf, g, s.line, s.chars );
+  } else {
+    if ( w.chars ) s.chars += chars( buf, g );
+    if ( w.maxLine ) maxLineLen( buf, g, s.line, w.maxLineInChars );
+  }
+
   if ( g > 0 ) s.sawFirst = true;
 }
 

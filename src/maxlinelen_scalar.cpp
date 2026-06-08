@@ -28,3 +28,26 @@ void maxLineLen(
     }
   }
 }
+
+void maxLineLenChars(
+    const char* buffer, const usize length, LineScan& s, usize& charCount
+)
+{
+  for ( usize i = 0; i < length; ++i ) {
+    const unsigned char c = static_cast<unsigned char>( buffer[i] );
+    if ( c == '\n' ) {
+      ++charCount;  // the newline is itself a character...
+      if ( !s.hasNewline ) {
+        s.prefixLen = s.cur;
+        s.hasNewline = true;
+      }
+      if ( s.cur > s.maxComplete ) s.maxComplete = s.cur;
+      s.cur = 0;  // ...but it does not extend the line's character length
+    } else if ( ( c & 0xC0 ) == 0x80 ) {
+      // UTF-8 continuation byte: neither a new character nor a length advance.
+    } else {
+      ++charCount;
+      ++s.cur;
+    }
+  }
+}

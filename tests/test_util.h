@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "chars.h"
@@ -186,6 +187,38 @@ inline usize maxLineLenChunked( const std::string& s, size_t chunk )
   for ( size_t i = 0; i < s.size(); i += chunk )
     maxLineLen( s.data() + i, std::min( chunk, s.size() - i ), ls );
   return ls.maxComplete;
+}
+
+// Longest line measured in characters, via the dedicated maxLineLen in
+// character mode -- the reference the fused -L -m scanner must match.
+inline usize charModeMaxLine( const std::string& s )
+{
+  LineScan ls;
+  maxLineLen( s.data(), s.size(), ls, /*countChars=*/true );
+  return ls.maxComplete;
+}
+
+// The fused `-L -m` scanner over the whole string: returns {longest line in
+// characters, character total}.
+inline std::pair<usize, usize> fusedLineChars( const std::string& s )
+{
+  LineScan ls;
+  usize cc = 0;
+  maxLineLenChars( s.data(), s.size(), ls, cc );
+  return { ls.maxComplete, cc };
+}
+
+// Same, fed in fixed-size pieces with state carried across them -- the way one
+// thread streams successive read buffers within a chunk.
+inline std::pair<usize, usize> fusedLineCharsChunked(
+    const std::string& s, size_t chunk
+)
+{
+  LineScan ls;
+  usize cc = 0;
+  for ( size_t i = 0; i < s.size(); i += chunk )
+    maxLineLenChars( s.data() + i, std::min( chunk, s.size() - i ), ls, cc );
+  return { ls.maxComplete, cc };
 }
 
 // Run `words` feeding the string in fixed-size pieces, carrying in-word state

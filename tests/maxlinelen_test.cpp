@@ -6,6 +6,10 @@
 #include "maxlinelen.h"
 #include "test_util.h"
 
+using qwctest::charModeMaxLine;
+using qwctest::charsStr;
+using qwctest::fusedLineChars;
+using qwctest::fusedLineCharsChunked;
 using qwctest::maxLineLenChunked;
 using qwctest::maxLineLenStr;
 using qwctest::refMaxLineLen;
@@ -124,5 +128,60 @@ TEST( MaxLineLen, FuzzAgainstReference )
     std::uniform_int_distribution<size_t> splitDist( 1, len + 1 );
     EXPECT_EQ( maxLineLenChunked( s, splitDist( rng ) ), expected )
         << "iter=" << iter << " len=" << len;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Fused `-L -m` scanner: one pass must produce exactly what the two separate
+// passes would -- the char-mode longest line (maxLineLen with countChars) and
+// the character total (chars()). All three classify a byte as a continuation
+// byte the same way and never actually decode UTF-8, so the equality must hold
+// for arbitrary byte input, not just well-formed text.
+// ---------------------------------------------------------------------------
+TEST( MaxLineLenChars, MatchesSeparatePassesKnown )
+{
+  // "héllo wörld" (11 chars) is the longest line; total = 11 + nl + 5 + nl = 18.
+  const std::string s = "h\xC3\xA9llo w\xC3\xB6rld\nshort\n";
+  const auto [maxLine, chars] = fusedLineChars( s );
+  EXPECT_EQ( maxLine, 11u );
+  EXPECT_EQ( chars, 18u );
+  EXPECT_EQ( maxLine, charModeMaxLine( s ) );
+  EXPECT_EQ( chars, charsStr( s ) );
+}
+
+TEST( MaxLineLenChars, EmptyAndNoNewline )
+{
+  EXPECT_EQ( fusedLineChars( "" ), ( std::pair<usize, usize>{ 0u, 0u } ) );
+  // No trailing newline: the line is not "complete", so maxLine stays 0, but
+  // its characters still count toward the total (5 here).
+  const auto [maxLine, chars] = fusedLineChars( "h\xC3\xA9llo" );
+  EXPECT_EQ( maxLine, 0u );
+  EXPECT_EQ( chars, 5u );
+}
+
+TEST( MaxLineLenChars, FuzzMatchesSeparatePasses )
+{
+  std::mt19937_64 rng( 0xFA5ED );
+  std::uniform_int_distribution<int> byteDist( 0, 255 );
+  std::uniform_int_distribution<size_t> lenDist( 0, 5000 );
+
+  for ( int iter = 0; iter < 2000; ++iter ) {
+    const size_t len = lenDist( rng );
+    std::string s( len, '\0' );
+    for ( size_t i = 0; i < len; ++i )
+      s[i] = static_cast<char>( byteDist( rng ) );
+
+    const usize expMaxLine = charModeMaxLine( s );
+    const usize expChars = charsStr( s );
+
+    const auto [maxLine, chars] = fusedLineChars( s );
+    EXPECT_EQ( maxLine, expMaxLine ) << "iter=" << iter << " len=" << len;
+    EXPECT_EQ( chars, expChars ) << "iter=" << iter << " len=" << len;
+
+    // Split at a random point (state carried) -- must still match.
+    std::uniform_int_distribution<size_t> splitDist( 1, len + 1 );
+    const auto [mlChunk, ccChunk] = fusedLineCharsChunked( s, splitDist( rng ) );
+    EXPECT_EQ( mlChunk, expMaxLine ) << "iter=" << iter << " len=" << len;
+    EXPECT_EQ( ccChunk, expChars ) << "iter=" << iter << " len=" << len;
   }
 }
