@@ -125,7 +125,11 @@ text-decoding machinery:
   splits some non-whitespace scripts (e.g. it counts `你好` as *two* words). qwc
   deliberately uses C-locale, byte-wise whitespace. The two therefore agree only
   on **pure-ASCII** input; on any non-ASCII input qwc's interpretation is
-  allowed. Under the C locale `wc` is byte-wise too, so they agree on everything.
+  allowed. Even under the C locale the two `wc` flavors part ways here: qwc
+  follows **BSD `wc`** and counts every non-ASCII/control byte as part of a word,
+  while **GNU `wc`** classifies many of them as separators. So C-locale `-w` on
+  non-ASCII input must match BSD `wc` byte-for-byte but is allowed to differ from
+  GNU `wc`; on pure-ASCII input all three agree.
 
 This is why the suite's expectations are **locale-aware** rather than a flat
 "always equal".
@@ -136,9 +140,13 @@ Every input is run under **two locale regimes**, and the required-to-match rule
 differs between them. (The rules below were derived empirically against
 macOS/BSD `wc`; the divergence notes live in `wc_harness.py`.)
 
-**Under `LC_ALL=C`** — `wc` is fully byte-defined, so qwc must match it on
-**every mode and every input, binary included.** This is the strongest invariant
-and the backbone of the suite; under it, *nothing* is skipped.
+**Under `LC_ALL=C`** — `wc` is byte-defined, so qwc must match it on **every mode
+and every input, binary included** — the strongest invariant and the backbone of
+the suite. The sole exception is word splitting on non-ASCII input: qwc matches
+**BSD `wc`** there byte-for-byte, but GNU and BSD `wc` disagree on which non-ASCII
+bytes separate words, so against **GNU `wc`** that one case (`-w`, and bare `wc`
+which includes the word column) is not required to match. Everything else is
+exact.
 
 **Under a UTF-8 locale** (auto-detected; the regime is skipped if the host has no
 multibyte locale installed):

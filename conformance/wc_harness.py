@@ -18,8 +18,12 @@ through the locale's multibyte/`iswspace` machinery while qwc counts bytes (for
 words) and UTF-8 code points (for chars):
 
 * Under the C/POSIX locale `wc` is itself byte-defined, so qwc matches it on
-  EVERY mode and EVERY input, binary included. This is the strongest invariant
-  and the backbone of the suite.
+  every mode and every input, binary included -- with one exception: word
+  splitting. qwc follows BSD `wc` and treats every non-ASCII/control byte as part
+  of a word, whereas GNU `wc` classifies many of them as separators. So `-w` on
+  non-ASCII input is required to match a BSD-style `wc` (byte-for-byte) but is
+  allowed to differ from GNU `wc`. Every other C-locale mode is the strongest
+  invariant in the suite.
 
 * Under a UTF-8 locale:
     - byte-defined modes  (lines, bytes, max-line-length) match on every input;
@@ -120,13 +124,23 @@ def combine(metas: list[Meta]) -> Meta:
     )
 
 
-def required_to_match(regime: str, mode: Mode, meta: Meta, wc_ok: bool) -> bool:
+def required_to_match(
+    regime: str, mode: Mode, meta: Meta, wc_ok: bool, exact_format: bool
+) -> bool:
     """Should qwc be required to reproduce `wc` exactly for this case?"""
     if not wc_ok:
         # `wc` itself failed (e.g. -m on invalid UTF-8): our interpretation is
         # allowed, so do not demand agreement.
         return False
     if regime == "C":
+        # Counts are byte-defined under the C/POSIX locale, with one exception:
+        # word splitting. qwc (like BSD `wc`) treats every non-ASCII/control byte
+        # as part of a word, but GNU `wc` classifies many of them as separators,
+        # so the two disagree on `-w` for non-ASCII input. Against a BSD-style
+        # `wc` (exact_format) qwc still matches exactly, so keep demanding parity
+        # there; against GNU `wc` the divergence is expected and allowed.
+        if mode.kind == "word" and not meta.ascii:
+            return exact_format
         return True
     # UTF-8 regime.
     if mode.kind == "byte":
@@ -280,7 +294,7 @@ def compare(
         return Result("fail", sane)
 
     wc_ok = wc_run.returncode == 0
-    if not required_to_match(regime, mode, meta, wc_ok):
+    if not required_to_match(regime, mode, meta, wc_ok, exact_format):
         return Result("skip", "parity not required for this locale/mode/input")
 
     # Exact byte-for-byte output (formatting included) -- only when the local

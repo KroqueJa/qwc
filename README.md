@@ -23,6 +23,7 @@ Hmm. I feel like it took a bit more credit for the vectorization than I would ha
 # Roadmap
 - [x] Combined flags (`-L -m` etc)
 - [x] Fuzzy correctness suite
+- [ ] Conform to GNU `wc` instead of BSD
 - [ ] Comprehensive multi-system performance benchmarking
 - [ ] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
