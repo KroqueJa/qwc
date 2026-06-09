@@ -116,9 +116,11 @@ Counts processFile(
   }
 
   // We will read every byte sequentially, so ask the kernel to start pulling
-  // the whole file into the page cache up front. On macOS F_RDADVISE is the
-  // most effective hint (MADV_WILLNEED is largely a no-op). radvisory::ra_count
-  // is an int, so issue the advice in <=INT_MAX chunks.
+  // the whole file into the page cache up front.
+#if defined( __APPLE__ )
+  // On macOS F_RDADVISE is the most effective hint (MADV_WILLNEED is largely a
+  // no-op). radvisory::ra_count is an int, so issue the advice in <=INT_MAX
+  // chunks.
   for ( usize off = 0; off < fileSize; ) {
     usize remaining = fileSize - off;
     radvisory ra{};
@@ -129,6 +131,12 @@ Counts processFile(
     fcntl( fd, F_RDADVISE, &ra );
     off += static_cast<usize>( ra.ra_count );
   }
+#elif defined( POSIX_FADV_SEQUENTIAL )
+  // On Linux posix_fadvise gives the kernel both the access pattern and an
+  // explicit readahead hint over the whole range.
+  posix_fadvise( fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_SEQUENTIAL );
+  posix_fadvise( fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_WILLNEED );
+#endif
 
   u32 numThreads = static_cast<u32>( std::min(
       static_cast<usize>( MAX_THREADS ),
