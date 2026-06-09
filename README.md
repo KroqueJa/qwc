@@ -26,7 +26,7 @@ A note on why performance matters to me.
 
 Partly, it's because optimization is fun. There is something deeply satisfying about making a machine do the same work with fewer instructions, fewer cycles, and less wasted effort.
 
-But I also think the industry - dare I say humanity? - has become annoyingly comfortable with waste. Efficient programs are not just faster; they consume less energy, require less hardware, and emit less CO2 to accomplish the same task. Computer programs are only faster if they are more efficient.
+But I also think the industry - dare I say humanity? - has become annoyingly comfortable with waste. Efficient programs consume less energy, require less hardware, and emit less CO2 to accomplish the same task as inefficient ones. *Computer programs are only faster if they are more efficient.*
 
 Most software does not become slow because the underlying problems are challenging. It becomes slow because we tolerate inefficiency. Sometimes, performance is spent providing security, monitoring, or features. That's fine. "Performance is the currency of computing," according to Bjarne Stroustrup. But very often, software is slow because software teams are taught that 50 half-baked features are better than three good ones. We learn as programmers that premature optimization is evil, and all optimization that does not stem from a user complaint or opex report is premature. I humbly believe that is dumb and bad.
 
