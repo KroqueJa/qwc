@@ -159,3 +159,46 @@ TEST( Chars, FuzzValidUtf8AgainstReference )
         << "iter=" << iter;
   }
 }
+
+// ---------------------------------------------------------------------------
+// SIMD seam coverage. A vectorized chars() has an alignment prologue, a wide
+// main loop and a scalar epilogue; sweeping start offsets and slice lengths
+// exercises every boundary so a lane- or seam-handling bug shows up. The oracle
+// is chars()'s own byte-definition -- the number of bytes that are NOT UTF-8
+// continuation bytes -- computed with a plain loop. Unlike refChars it is
+// slice-safe: it does not assume the slice begins on a code-point boundary.
+// ---------------------------------------------------------------------------
+static usize nonContinuationBytes( const char* p, size_t n )
+{
+  usize c = 0;
+  for ( size_t i = 0; i < n; ++i )
+    if ( ( static_cast<unsigned char>( p[i] ) & 0xC0 ) != 0x80 ) ++c;
+  return c;
+}
+
+TEST( Chars, SimdSeamsAcrossOffsetsAndLengths )
+{
+  // Mix 1-, 2-, 3- and 4-byte sequences so continuation bytes land at many
+  // positions relative to the SIMD lanes.
+  std::string buf;
+  while ( buf.size() < 512 ) buf += "a\xC3\xA9z\xE2\x98\x83q\xF0\x9F\x98\x80";
+  for ( size_t off = 0; off <= 40 && off < buf.size(); ++off )
+    for ( size_t len = 0; off + len <= buf.size() && len <= 200; ++len ) {
+      const char* p = buf.data() + off;
+      EXPECT_EQ( chars( p, len ), nonContinuationBytes( p, len ) )
+          << "off=" << off << " len=" << len;
+    }
+}
+
+TEST( Chars, CrossesAccumulatorDrainBoundary )
+{
+  // A byte-accumulator SIMD loop drains only periodically (e.g. every 255
+  // iterations); exceed that so the drain/refill path runs, with continuation
+  // bytes throughout. "a\xC3\xA9" is 3 bytes / 2 characters.
+  std::string s;
+  const size_t reps = 15000;  // 45000 bytes, well past any per-lane drain window
+  for ( size_t i = 0; i < reps; ++i ) s += "a\xC3\xA9";
+  const usize expected = 2 * reps;
+  EXPECT_EQ( charsStr( s ), expected );
+  EXPECT_EQ( charsStr( s ), refChars( s ) );
+}

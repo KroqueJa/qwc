@@ -1,18 +1,7 @@
 #include <immintrin.h>
 
+#include "avx2_util.h"
 #include "countlines.h"
-
-// Horizontally sum the 32 unsigned bytes of an accumulator. _mm256_sad_epu8
-// against zero reduces each 8-byte group to a 64-bit sum (max 8*255=2040),
-// leaving four partial sums to add up.
-static u64 hsumBytes( const __m256i v )
-{
-  __m256i sad = _mm256_sad_epu8( v, _mm256_setzero_si256() );
-  return static_cast<u64>( _mm256_extract_epi64( sad, 0 ) ) +
-         static_cast<u64>( _mm256_extract_epi64( sad, 1 ) ) +
-         static_cast<u64>( _mm256_extract_epi64( sad, 2 ) ) +
-         static_cast<u64>( _mm256_extract_epi64( sad, 3 ) );
-}
 
 usize count( const char* buffer, const usize length, const char target )
 {
