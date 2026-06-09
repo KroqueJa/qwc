@@ -3,6 +3,7 @@ qwc*
 
 # CMake build artifacts
 build/
+build-wsl/
 cmake-build-*/
 CMakeCache.txt
 CMakeFiles/

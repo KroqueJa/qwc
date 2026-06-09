@@ -1,7 +1,6 @@
 """
 Environment discovery shared by run.py and test_conformance.py: where is the
-`qwc` binary, is `wc` present, which locales can we exercise, and does the local
-`wc` format its output the way qwc does.
+`qwc` binary, is `wc` present, and which locales can we exercise.
 """
 
 from __future__ import annotations
@@ -10,7 +9,6 @@ import dataclasses
 import os
 import shutil
 import subprocess
-import tempfile
 from typing import Optional
 
 
@@ -33,7 +31,6 @@ class Session:
     qwc_bin: str
     c_locale: str               # always "C"
     utf8_locale: Optional[str]  # None if no multibyte locale is available
-    exact_format: bool          # local `wc` is byte-for-byte format-compatible
 
     def regimes(self) -> list[tuple[str, str]]:
         """(regime-name, locale) pairs to run every case under."""
@@ -99,33 +96,6 @@ def pick_utf8_locale() -> Optional[str]:
     return None
 
 
-def detect_exact_format(qwc_bin: str) -> bool:
-    """
-    True when the local `wc` pads/formats its output exactly like qwc (BSD/macOS
-    `wc`). GNU `wc` uses a different field width, so on Linux this is False and
-    the suite compares parsed numbers instead of raw bytes.
-    """
-    with tempfile.NamedTemporaryFile(
-        prefix="qwc_conf_fmt_", suffix=".txt", delete=False
-    ) as fh:
-        fh.write(b"alpha beta\ngamma\n\nx y z\n")
-        path = fh.name
-    try:
-        env = dict(os.environ)
-        env["LC_ALL"] = "C"
-        env["LANG"] = "C"
-        # Bare `wc` and bare `qwc` both print lines, words and bytes.
-        wc_out = subprocess.run(
-            ["wc", path], capture_output=True, env=env
-        ).stdout
-        qwc_out = subprocess.run(
-            [qwc_bin, path], capture_output=True, env=env
-        ).stdout
-        return wc_out == qwc_out
-    finally:
-        os.unlink(path)
-
-
 def build_session() -> Session:
     _wc_present()
     qwc_bin = find_qwc()
@@ -134,5 +104,4 @@ def build_session() -> Session:
         qwc_bin=qwc_bin,
         c_locale="C",
         utf8_locale=utf8,
-        exact_format=detect_exact_format(qwc_bin),
     )

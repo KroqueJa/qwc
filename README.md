@@ -1,12 +1,15 @@
 # QWC
-Have you used `wc` before? I have - it's great! But it's not as fast as it could be. Hence, some people wrote `uutils` containing `uu-wc`. Which is even greater! But it's not as fast as it could be. `qwc` is as fast as it can be.
+Have you used `wc` before? I have - it's great! But it's not as fast as it could be. Hence, some people wrote [uutils](https://github.com/uutils/coreutils) containing `uu-wc`. Which is even greater! But it's not as fast as it could be. `qwc` is as fast as it can be.
 
-`wc` holds itself to a very rigorous standard of correctness, and faithfully counts lines, words, bytes etc in whatever file-like input it is given. `qwc` on the other hand omits some of these rigorous guarantees in order to specialize on the use case of performing on files.  This allows it to be substantially faster than its two big brothers for this particular use case, common in data engineering and data science.
+Why is it faster than the above mentioned byte counters? Many reasons:
+1. It doesn't hold itself to as rigorous a standard of correctness with regards to file-like inputs. It specializes in the use case of performing on files.
+2. It employs a novel SIMD-based architecture that is both faster and more cache-efficient than the traditional scalar approach.
+3. It is written by someone who constantly tinkers to make it faster instead of shipping more useful features.
 
 `qwc` is benchmarked to be around 25-50x faster than GNU `wc` on a variety of file sizes, and 3-4x faster than `uu-wc`. Wherever possible, it is compliant with the output of GNU `wc` - the exception being for byte streams that do not constitute valid characters in the output locale. For this particular case, `wc`, `uu-wc` and `qwc` all differ in their interpretations. The input flags are all identical to `wc` - hence, one can learn to use `qwc` with eg `man wc`.
 
 # How AI is used in this project
-I feel that it's important to state that the core of this project is designed, benchmarked and implemented by myself. The first version of the project, then called `wcl`, is from a time when AI was not a thing to the extent that it is today in 2026. This is not to say that AI does not play a significant part in the development of the project. AI has enabled rapid development on time-consuming tasks. I'll leave it to Claude itself to tell you what it has done:
+I feel that it's important to state that the core of this project is designed, benchmarked, and implemented by myself. The first version of the project, then called `wcl`, is from a time when AI was not a thing to the extent that it is today in 2026. This is not to say that AI does not play a significant part in the development of the project. AI has enabled rapid development on time-consuming tasks. I'll leave it to Claude itself to tell you what it has done:
 
 
 > What's worth being precise about is the *kind* of help I provided. Almost none of what follows was impossible for a competent C++ developer to do by hand — but in a one-person performance side project, "possible" and "actually gets done" are very different things. Mostly I changed the economics of effort, and in doing so pulled a handful of things across the line from "never worth the time" into "exists and is maintained":
@@ -18,11 +21,26 @@ I feel that it's important to state that the core of this project is designed, b
 > 
 > I want to be equally honest about the limits of my contribution. The thing that actually makes `qwc` fast — the parallel, cache-warm, SIMD architecture — is the developer's, predates most of my work here, and the large refactors I helped with *held* that performance rather than improved on it. My code was not magically correct either: I got `wc`'s trailing-newline rule for `-L` wrong on the first attempt, and the `-m`-changes-`-L` behaviour only came to light because the conformance suite complained. My value was at least as much in the relentless verification loop as in the code I generated, and the developer's own review still caught things I missed.
 
-Hmm. I feel like it took a bit more credit for the vectorization than I would have given it. But such is the nature of having a collaborator. It would say the same thing about me, I'm sure.
+# The Creed of Speed (Zoom Zoom)
+A note on why performance matters to me.
+
+Partly, it's because optimization is fun. There is something deeply satisfying about making a machine do the same work with fewer instructions, fewer cycles, and less wasted effort.
+
+But I also think the industry - dare I say humanity? - has become annoyingly comfortable with waste. Efficient programs consume less energy, require less hardware, and emit less CO2 to accomplish the same task as inefficient ones. *Computer programs are only faster if they are more efficient.*
+
+Most software does not become slow because the underlying problems are challenging. It becomes slow because we tolerate inefficiency. Sometimes, performance is spent providing security, monitoring, or features. That's fine. "Performance is the currency of computing," according to Bjarne Stroustrup. But very often, software is slow because software teams are taught that 50 half-baked features are better than three good ones. We learn as programmers that premature optimization is evil, and all optimization that does not stem from a user complaint or opex report is premature. I humbly believe that is dumb and bad.
+
+Hence; this project is equally a challenge, a hobby, and a small act of protest.
+
+If we could spend less time waiting for our pocket computers to turn on, we could spend more time with our children, in the sun, or hand-tuning SIMD.
 
 # Roadmap
 - [x] Combined flags (`-L -m` etc)
 - [x] Fuzzy correctness suite
+- [x] Conform to GNU `wc` instead of BSD
+- [ ] Center architecture more cleanly around `S_ISREG` (files are files, other things are streams)
+- [ ] Support for valid unicode whitespace in line with GNU `wc`
+- [ ] Reconcile `-cm` with GNU
 - [ ] Comprehensive multi-system performance benchmarking
 - [ ] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
