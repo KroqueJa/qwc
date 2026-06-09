@@ -1,5 +1,6 @@
 qwc*
 .idea
+.venv
 
 # CMake build artifacts
 build/
@@ -11,6 +12,8 @@ cmake_install.cmake
 benchmarks/test-data
 benchmarks/bench-spec.csv
 benchmarks/benchmarks.log
-CLAUDE.md
-.venv
+
 thirdparty
+
+# Agentic helper configs
+CLAUDE.md

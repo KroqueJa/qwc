@@ -1,8 +1,9 @@
 # qwc ↔ wc conformance.
 #
-# Copy to .github/workflows/conformance.yml to enable. Runs on Linux (GNU wc)
-# and macOS (BSD wc); the suite applies one universal rule set that is expected
-# to pass against either, comparing counts numerically.
+# Copy to .github/workflows/conformance.yml to enable. The oracle is GNU `wc`:
+# ubuntu-latest provides it as the system `wc`, and the macOS leg installs GNU
+# coreutils and puts its `wc` first on PATH (the system `wc` there is BSD, which
+# the suite no longer targets). Counts are compared numerically.
 
 name: conformance
 
@@ -31,6 +32,22 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DQWC_BUILD_TESTS=OFF
           cmake --build build --target qwc
+
+      # The oracle must be GNU `wc`. macOS ships BSD `wc`, so install GNU
+      # coreutils and put its `wc` (the gnubin dir) first on PATH.
+      - name: Use GNU wc as the oracle (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install coreutils
+          echo "$(brew --prefix)/opt/coreutils/libexec/gnubin" >> "$GITHUB_PATH"
+
+      # Fail loudly if the resolved `wc` is not GNU coreutils -- a BSD oracle
+      # would produce spurious mismatches the suite is no longer calibrated for.
+      - name: Verify the oracle is GNU wc
+        run: |
+          wc --version | head -1
+          wc --version 2>/dev/null | grep -q "GNU coreutils" \
+            || { echo "::error::system wc is not GNU coreutils"; exit 1; }
 
       # A UTF-8 locale lets the suite exercise the multibyte (-m) path against
       # wc. C.UTF-8 ships on ubuntu-latest; macOS already has UTF-8 locales.
