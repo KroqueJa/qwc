@@ -15,6 +15,14 @@ static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 // Map `perFile(idx)` over [0, numFiles) across the thread pool: a shared atomic
 // cursor hands the next file to whichever worker is free, and results are
 // stored at the matching index so the output order mirrors opt.files.
+//
+// GCC 13's -fanalyzer mis-models the libstdc++ vector constructor and reports a
+// bogus "use of uninitialized value" for the value-initialized `output` below;
+// silence just that false positive (GCC only -- clang has no such option).
+#if defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wanalyzer-use-of-uninitialized-value"
+#endif
 template <typename T, typename Fn>
 static std::vector<T> mapFiles( usize numFiles, Fn perFile )
 {
@@ -33,6 +41,9 @@ static std::vector<T> mapFiles( usize numFiles, Fn perFile )
   for ( auto& t: pool ) t.join();
   return output;
 }
+#if defined( __GNUC__ ) && !defined( __clang__ )
+#pragma GCC diagnostic pop
+#endif
 
 int main( int argc, char** argv )
 {
