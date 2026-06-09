@@ -1,0 +1,27 @@
+# ninja log v5
+125	252	1781032253783666900	CMakeFiles/qwc.dir/src/words_scalar.cpp.o	25659f03ce0339e0
+129	285	1781032253809044000	CMakeFiles/qwc.dir/src/maxlinelen_scalar.cpp.o	1ec5e1e247d46e97
+131	305	1781032253816655900	CMakeFiles/qwc.dir/src/chars_scalar.cpp.o	b647603510b86e14
+116	1346	1781032254924605400	CMakeFiles/qwc.dir/src/main.cpp.o	10651d5eefc3ef42
+123	1459	1781032255043220400	CMakeFiles/qwc.dir/src/count_avx2.cpp.o	bdfd787a3ae94e69
+121	1524	1781032255110709700	CMakeFiles/qwc.dir/src/processfile.cpp.o	d26b6a2b2c842699
+118	3245	1781032256902469000	CMakeFiles/qwc.dir/src/cli.cpp.o	5b9f66cac28f183
+141	3841	1781032257514736700	thirdparty/googletest/googletest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o	bc946bed936b13c1
+3263	3998	1781032257691468700	/mnt/c/Users/jikro/CLionProjects/qwc/qwc	4cd61463c8e94659
+4029	4379	1781032258075443700	tests/CMakeFiles/qwc_tests.dir/__/src/words_scalar.cpp.o	bdcaf56e950b0d19
+4052	4406	1781032258112417400	tests/CMakeFiles/qwc_tests.dir/__/src/chars_scalar.cpp.o	5cdd151c08d1872
+4062	4443	1781032258121467000	tests/CMakeFiles/qwc_tests.dir/__/src/maxlinelen_scalar.cpp.o	51681d3c89286330
+4069	6720	1781032260516237400	tests/CMakeFiles/qwc_tests.dir/__/src/count_avx2.cpp.o	fbb10ac9a32b908a
+4013	7280	1781032261102940400	tests/CMakeFiles/qwc_tests.dir/__/src/processfile.cpp.o	5af016c4a3d705d3
+4004	9907	1781032263848834800	tests/CMakeFiles/qwc_tests.dir/chars_test.cpp.o	80df17b2343ec200
+4002	10007	1781032263944724600	tests/CMakeFiles/qwc_tests.dir/words_test.cpp.o	d98cd8240e0a47cf
+4007	10483	1781032264427625800	tests/CMakeFiles/qwc_tests.dir/maxlinelen_test.cpp.o	bf5d30f6953e3b2b
+3999	10583	1781032264520293300	tests/CMakeFiles/qwc_tests.dir/count_test.cpp.o	fd567da5ccf797d6
+4008	12242	1781032266179911100	tests/CMakeFiles/qwc_tests.dir/processfile_test.cpp.o	a14a8f1eb3160e7b
+4011	15381	1781032267909729500	tests/CMakeFiles/qwc_tests.dir/cli_test.cpp.o	2f0e68233f91080a
+133	19094	1781032271772795800	thirdparty/googletest/googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.o	5f781e03574ceafa
+19116	19563	1781032272279183300	lib/libgtest.a	7a3e3e72ba098b27
+19564	19696	1781032272423684700	lib/libgtest_main.a	fcb50eaba4103207
+19698	24471	1781032277551287800	tests/qwc_tests	2fa2d8d5ab8d28a0
+19698	24471	1781032277551287800	tests/qwc_tests[1]_tests.cmake	2fa2d8d5ab8d28a0
+19698	24471	1781032277551287800	/mnt/c/Users/jikro/CLionProjects/qwc/build-wsl/tests/qwc_tests[1]_tests.cmake	2fa2d8d5ab8d28a0

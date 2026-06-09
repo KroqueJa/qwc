@@ -38,6 +38,9 @@ If we could spend less time waiting for our pocket computers to turn on, we coul
 - [x] Combined flags (`-L -m` etc)
 - [x] Fuzzy correctness suite
 - [x] Conform to GNU `wc` instead of BSD
+- [ ] Center architecture more cleanly around `S_ISREG` (files are files, other things are streams)
+- [ ] Support for valid unicode whitespace in line with GNU `wc`
+- [ ] Reconcile `-cm` with GNU
 - [ ] Comprehensive multi-system performance benchmarking
 - [ ] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
