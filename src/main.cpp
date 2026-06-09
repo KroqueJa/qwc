@@ -45,7 +45,9 @@ int main( int argc, char** argv )
   // isn't multibyte, count bytes for that column instead of scanning code
   // points.
   if ( opt.charByte && opt.charsNotBytes ) {
-    std::setlocale( LC_CTYPE, "" );
+    // Called once at startup, before any worker threads are spawned, so the
+    // concurrency-mt-unsafe warning does not apply here.
+    std::setlocale( LC_CTYPE, "" );  // NOLINT(concurrency-mt-unsafe)
     if ( MB_CUR_MAX <= 1 ) opt.charsNotBytes = false;
   }
 

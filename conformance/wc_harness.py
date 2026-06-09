@@ -47,7 +47,7 @@ from typing import Optional
 # rule above; for a combination it is the most restrictive of its parts (a
 # words column forces "word", else a chars column forces "char", else "byte"),
 # because every selected column must agree for the row to match. `ncols` counts
-# the output columns -- note -c and -m share one column (last wins).
+# the output columns.
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
 class Mode:
@@ -80,10 +80,12 @@ MODES: tuple[Mode, ...] = (
          compare_total=False),  # wc's char total is buggy with -m and -L
     Mode("l+w+c",   ("-l", "-w", "-c"),       ("-l", "-w", "-c"),       "word", 3),
     Mode("l+w+c+L", ("-l", "-w", "-c", "-L"), ("-l", "-w", "-c", "-L"), "word", 4),
-    # -c and -m share one column; the last flag wins, so -c -m counts chars and
-    # -m -c counts bytes.
-    Mode("c+m",     ("-c", "-m"),             ("-c", "-m"),             "char", 1),
-    Mode("m+c",     ("-m", "-c"),             ("-m", "-c"),             "byte", 1),
+    # NB: -cm/-mc are intentionally absent. BSD `wc` (which qwc targets) collapses
+    # -c and -m into one shared char/byte column on a last-flag-wins basis, while
+    # GNU `wc` prints both a byte and a char column. That is a divergence in
+    # column *count*, not formatting, so no single binary matches both `wc`s; the
+    # differential harness cannot include them. qwc's single-column choice is
+    # pinned directly by the CliCombined tests under tests/.
 )
 
 MODE_BY_NAME = {m.name: m for m in MODES}

@@ -71,14 +71,22 @@ Every mode `wc` and qwc have in common:
 | `-m` | `-m` | characters (code points in a UTF-8 locale) |
 | `-L` | `-L` | length of the longest line |
 
-**Combinations** are tested too (`-lw`, `-lwc`, `-lwcL`, `-cm`, `-mc`, …): `wc`
+**Combinations** are tested too (`-lw`, `-lwc`, `-lwcL`, …): `wc`
 prints the selected columns in a fixed order — lines, words, char/byte, longest
-line — regardless of the order the flags were given. `-c` and `-m` share one
-column and the last of the two wins (`-cm` counts characters, `-mc` counts
-bytes), and the longest-line column is measured in that same unit (characters
-when `-m` is in effect, bytes otherwise). The suite assigns a combination the
-most restrictive parity rule of its parts, since every column must agree for the
-row to match.
+line — regardless of the order the flags were given. The longest-line column is
+measured in the active char/byte unit (characters when `-m` is in effect, bytes
+otherwise). The suite assigns a combination the most restrictive parity rule of
+its parts, since every column must agree for the row to match.
+
+**`-cm`/`-mc` are where BSD and GNU `wc` genuinely disagree, and we zeroed in on
+the BSD/macOS behavior.** BSD `wc` treats `-c` and `-m` as a single shared
+char/byte column on a last-flag-wins basis — `-cm` counts characters, `-mc`
+counts bytes — emitting one column. GNU `wc` instead prints *both* a byte and a
+character column. qwc follows the BSD interpretation (one column, last wins), so
+these two modes diverge from GNU `wc` in column *count*, not merely formatting,
+and no single binary can match both systems. They are therefore excluded from
+the cross-`wc` differential modes; qwc's chosen single-column output is pinned
+directly by the `CliCombined` C++ tests under `tests/` instead.
 
 qwc-only features (`--char`, `-r`/`--recursive`, `--sort-*`, `--reverse`,
 `--top`, `--bytes-per-thread`) have no `wc` counterpart, so they are not a
