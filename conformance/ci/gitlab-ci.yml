@@ -1,8 +1,8 @@
 # qwc ↔ wc conformance for GitLab CI.
 #
 # Copy to .gitlab-ci.yml, or `include:` it from your pipeline. Uses a Debian/
-# Ubuntu-based image (GNU wc -> the suite compares parsed numbers; exact-byte
-# formatting parity is covered by the macOS GitHub Actions job and the C++ tests).
+# Ubuntu-based image (GNU wc). The suite compares counts numerically against the
+# local wc; qwc's exact column formatting is pinned separately by the C++ tests.
 
 conformance:
   image: ubuntu:24.04

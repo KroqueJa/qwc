@@ -52,7 +52,6 @@ class Scenario:
     files: Optional[list[str]]
     stdin: Optional[bytes]
     bpt: Optional[int]
-    exact_format: bool
 
 
 @dataclasses.dataclass
@@ -101,7 +100,6 @@ def scenarios(
     bpt_stress: bool,
     stdin_inputs: list[Input],
 ) -> Iterator[Scenario]:
-    ef = session.exact_format
     for regime, locale in session.regimes():
         for mode in H.MODES:
             # Single file, on disk (with and without chunk-stress).
@@ -115,13 +113,13 @@ def scenarios(
                     tag = "" if bpt is None else f" bpt={bpt}"
                     yield Scenario(
                         f"[{regime}] {mode.name} file {inp.cid}{tag}",
-                        mode, regime, locale, inp.meta, [inp.path], None, bpt, ef,
+                        mode, regime, locale, inp.meta, [inp.path], None, bpt,
                     )
             # stdin (a distinct qwc code path; bpt does not apply).
             for inp in stdin_inputs:
                 yield Scenario(
                     f"[{regime}] {mode.name} stdin {inp.cid}",
-                    mode, regime, locale, inp.meta, None, inp.data, None, ef,
+                    mode, regime, locale, inp.meta, None, inp.data, None,
                 )
             # Multiple files: per-file lines + the grand total / max line.
             for gid, members in multi:
@@ -132,7 +130,7 @@ def scenarios(
                     tag = "" if bpt is None else f" bpt={bpt}"
                     yield Scenario(
                         f"[{regime}] {mode.name} multi {gid}{tag}",
-                        mode, regime, locale, meta, paths, None, bpt, ef,
+                        mode, regime, locale, meta, paths, None, bpt,
                     )
 
 
@@ -146,7 +144,6 @@ def run_one(session: Session, sc: Scenario) -> tuple[str, H.Result]:
         files=sc.files,
         stdin=sc.stdin,
         bytes_per_thread=sc.bpt,
-        exact_format=sc.exact_format,
     )
     return sc.label, res
 
@@ -177,8 +174,6 @@ def main() -> int:
     print(f"  qwc binary    : {session.qwc_bin}")
     print(f"  C locale      : {session.c_locale}")
     print(f"  UTF-8 locale  : {session.utf8_locale or '(none available -- UTF-8 regime skipped)'}")
-    print(f"  exact format  : {session.exact_format} "
-          f"({'byte-for-byte vs wc' if session.exact_format else 'numeric compare (GNU wc?)'})")
     print(f"  fuzz cases    : {fuzz_n} (seed {args.seed})")
     print(f"  chunk-stress  : {bpt_stress}")
     print(f"  jobs          : {args.jobs}")

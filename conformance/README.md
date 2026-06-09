@@ -16,26 +16,30 @@ Concretely, the suite is built to guarantee the following.
    our own expected counts, because the goal is to track `wc`'s behaviour rather
    than our belief about it.
 
-2. **Drop-in fidelity, including formatting.** A replacement that prints the
-   right numbers in the wrong layout still breaks scripts that parse columns.
-   Where the local `wc` formats the way qwc does (BSD/macOS), the suite demands
-   **byte-for-byte identical output** — padding, column widths, the `total` line,
-   the lot. (See the formatting note under *What gets exercised* for how this
-   degrades gracefully on GNU `wc`.)
+2. **Drop-in fidelity of the columns.** A replacement that prints the right
+   numbers in the wrong layout still breaks scripts that parse columns. The suite
+   enforces the same column *selection*, *order*, per-file lines and `total` row
+   as `wc`, comparing the counts as parsed integers. It deliberately does *not*
+   require byte-identical padding: GNU and BSD `wc` choose different field widths,
+   and the field-splitting tools people pipe `wc` into never see the difference.
+   (qwc emits BSD-style fixed-width columns; that exact layout is pinned by the
+   C++ `tests/cli_test.cpp`, not here.)
 
 3. **Comprehensiveness.** Replacing `wc` is the whole game, so coverage has to be
    broad and adversarial: hand-picked edge cases *and* a large body of seeded,
    reproducible fuzz input, exercised through every invocation form (single file,
    many files, stdin) and with qwc's parallel machinery deliberately stressed.
 
-4. **A precisely-drawn line for "binary garbage".** `wc` itself is not
-   byte-defined for word and character counting — it decodes text through the
-   locale. On input that is not well-formed text, `wc`'s answer is a function of
-   that machinery, not of any portable specification, and it sometimes errors
-   outright. On exactly those inputs qwc is allowed its own interpretation. The
+4. **A precisely-drawn line for "where `wc`s disagree".** `wc` is not
+   byte-defined for word splitting, character counting or longest-line width — it
+   decodes text and measures display width through the C library's locale tables.
+   The `wc` implementations themselves diverge there: BSD `wc`, GNU `wc` on glibc,
+   and GNU `wc` built against macOS libc all give different answers on non-ASCII
+   words and on `-L`. qwc cannot match all of them, so on exactly those inputs it
+   uses its own fast, locale-independent rules and is allowed to differ. The
    suite's job is to draw that line *precisely* — to know, for each mode and
-   input, whether agreement is required or merely allowed — and to demand
-   agreement everywhere else.
+   input, whether the count is *universal* (the same for every `wc` everywhere)
+   and therefore required — and to demand agreement on all of those.
 
 5. **Robustness on anything.** Even where parity is not required, qwc must never
    crash, hang, or emit malformed output. Garbage in must not mean a crash out:
@@ -52,11 +56,13 @@ Concretely, the suite is built to guarantee the following.
 `wc`'s output is two separable things, and the suite treats them separately:
 
 * **The counts** — the integers. This is the portable, semantic content of
-  correctness, and it is *always* checked (by parsing both outputs into numbers).
-* **The formatting** — the leading padding, the minimum-width-7 columns, the
-  per-file lines, the `total`/max line. qwc matches BSD/macOS `wc`'s
-  `" %7ju"`-style layout. This is checked byte-for-byte whenever the local `wc`
-  uses the same layout.
+  correctness. Both outputs are parsed into numbers and compared, along with the
+  column selection/order, the per-file rows and the `total` row.
+* **The formatting** — the exact leading padding and field width. This is *not*
+  asserted here, because GNU and BSD `wc` pad differently and the difference is
+  invisible to anything that splits on whitespace. qwc emits BSD/macOS `wc`'s
+  `" %7ju"`-style layout; that exact byte layout is pinned by the C++
+  `tests/cli_test.cpp` instead.
 
 ## Modes covered
 
@@ -103,63 +109,75 @@ for that one combination the suite compares the per-file rows but not the buggy
 ## Where qwc is allowed to differ, and why
 
 The boundary between "must match" and "may differ" is not arbitrary — it falls
-exactly where `wc` stops being byte-defined and starts depending on the locale's
-text-decoding machinery:
+exactly where the various `wc`s stop agreeing among themselves, which is where
+counting stops being byte-defined and starts depending on the C library's locale
+tables. We verified each boundary against real BSD `wc` *and* real GNU `wc` 9.11:
 
-* **Bytes (`-c`)**, **lines (`-l`)** and **longest line (`-L`, on its own)** are
-  pure byte operations. `wc` computes them the same way in every locale, so qwc
-  must match them on **every input, binary included**. No latitude. (When `-L`
-  rides along with `-m` it measures characters instead, and inherits the char
-  rule below.)
+* **Bytes (`-c`)** and **lines (`-l`)** are pure byte operations — newline counts
+  and file sizes. Every `wc` computes them identically in every locale, so qwc
+  must match them on **every input, binary included**. No latitude.
 
-* **Characters (`-m`)** counts code points. On **valid UTF-8** (ASCII is a
-  subset) qwc and `wc` agree. On **invalid UTF-8** there is no right answer:
-  `wc` may count partial sequences its own way or fail with *"Illegal byte
-  sequence"*. There, qwc's interpretation (count bytes that are not UTF-8
-  continuation bytes) is allowed to differ.
+* **Characters (`-m`)** counts code points. Under the **C locale** it collapses
+  to a byte count (universal — required everywhere). Under a **UTF-8 locale** it
+  counts code points: on **valid UTF-8** (ASCII included) every `wc` agrees, but
+  on **invalid UTF-8** there is no right answer — `wc` may count partial
+  sequences its own way or fail with *"Illegal byte sequence"* — so qwc's
+  interpretation (count bytes that are not UTF-8 continuation bytes) is allowed
+  to differ.
 
 * **Words (`-w`)**, and therefore **bare qwc** (no flag) which includes the word
-  column, are where `wc` and qwc genuinely part ways by design. In a UTF-8
-  locale `wc` splits words using the wide-character `iswspace` predicate, so it
-  treats Unicode whitespace as separators and — observably on macOS/BSD — even
-  splits some non-whitespace scripts (e.g. it counts `你好` as *two* words). qwc
-  deliberately uses C-locale, byte-wise whitespace. The two therefore agree only
-  on **pure-ASCII** input; on any non-ASCII input qwc's interpretation is
-  allowed. Even under the C locale the two `wc` flavors part ways here: qwc
-  follows **BSD `wc`** and counts every non-ASCII/control byte as part of a word,
-  while **GNU `wc`** classifies many of them as separators. So C-locale `-w` on
-  non-ASCII input must match BSD `wc` byte-for-byte but is allowed to differ from
-  GNU `wc`; on pure-ASCII input all three agree.
+  column, are where the `wc`s genuinely part ways. `wc` splits words with libc's
+  whitespace classification, and the implementations disagree: in a UTF-8 locale
+  BSD `wc` even counts `你好` as *two* words, while glibc, macOS libc and qwc each
+  classify non-ASCII bytes differently again (we measured three different word
+  counts for the same non-ASCII input). qwc deliberately uses fast, locale-
+  independent ASCII-whitespace splitting. So `-w` is required to match only on
+  **pure-ASCII** input — where every `wc` agrees — and free to differ on anything
+  non-ASCII, in either locale.
 
-This is why the suite's expectations are **locale-aware** rather than a flat
-"always equal".
+* **Longest line (`-L`)** is the subtlest. qwc and BSD `wc` report the longest
+  line as a **byte count**; GNU `wc` reports a **display width** — it expands
+  tabs to 8-column stops and applies `wcwidth` (so a CJK char counts 2, a control
+  byte 0), and it *also* counts an unterminated final line that qwc and BSD `wc`
+  ignore. These three behaviours collapse to the same number only on **printable
+  ASCII** (`0x20`–`0x7E`) that is **newline-terminated**. So a `-L` column is
+  required only on such input, and free to differ once tabs, control bytes, high
+  bytes, or a missing trailing newline are involved.
+
+This is why the suite's expectations are **content- and locale-aware** rather
+than a flat "always equal".
 
 ## The parity policy
 
-Every input is run under **two locale regimes**, and the required-to-match rule
-differs between them. (The rules below were derived empirically against
-macOS/BSD `wc`; the divergence notes live in `wc_harness.py`.)
-
-**Under `LC_ALL=C`** — `wc` is byte-defined, so qwc must match it on **every mode
-and every input, binary included** — the strongest invariant and the backbone of
-the suite. The sole exception is word splitting on non-ASCII input: qwc matches
-**BSD `wc`** there byte-for-byte, but GNU and BSD `wc` disagree on which non-ASCII
-bytes separate words, so against **GNU `wc`** that one case (`-w`, and bare `wc`
-which includes the word column) is not required to match. Everything else is
-exact.
-
-**Under a UTF-8 locale** (auto-detected; the regime is skipped if the host has no
-multibyte locale installed):
+Every input is run under **two locale regimes** (`LC_ALL=C` and a UTF-8 locale),
+and a **single** required-to-match rule is applied in both — calibrated so it
+holds against any `wc` on any platform. The full rule lives in
+`required_to_match()` in `wc_harness.py`; in words:
 
 | mode | required to match `wc` on… |
 |------|----------------------------|
-| lines, bytes, max-line-length | every input, including binary |
-| chars (`-m`) | valid UTF-8 (incl. ASCII); free to differ on invalid UTF-8 |
-| words (`-w`), bare qwc | pure-ASCII input; free to differ on any non-ASCII |
+| lines (`-l`), bytes (`-c`) | every input, including binary |
+| chars (`-m`) | always under `LC_ALL=C` (it's a byte count there); under a UTF-8 locale, valid UTF-8 only |
+| words (`-w`), bare qwc | pure-ASCII input only |
+| longest line (`-L`) | printable-ASCII, newline-terminated input only |
+
+This is **one rule set, not two**: it passes against BSD `wc` on macOS and GNU
+`wc` on Linux alike, because it only ever requires agreement on counts that are
+universal across `wc` implementations. There is no "exact formatting" mode and no
+auto-detection of the local `wc` flavour — counts are always compared as parsed
+integers, and the cases where `wc`s disagree (above) are simply not required.
+
+> **Why not just run GNU `wc` locally?** Because it wouldn't help. GNU `wc`
+> delegates word/`-L`/character classification to the platform's libc, so GNU
+> `wc` on macOS produces *different* locale-dependent counts than GNU `wc` on
+> Linux (we measured it). No binary runnable on a Mac can reproduce Linux `wc`'s
+> locale-dependent output — which is exactly why the suite requires parity only
+> on the universal cases instead of chasing a "matching" oracle.
 
 Whenever a comparison is *not* required, the suite does not simply ignore it — it
-still asserts that qwc exited cleanly and produced a well-formed count line, so
-goal 5 (robustness) is enforced on exactly the inputs most likely to break it.
+still asserts that qwc exited cleanly and produced a well-formed count line with
+the right column count, so goal 5 (robustness) is enforced on exactly the inputs
+most likely to break it.
 
 ## What gets exercised
 
@@ -187,19 +205,19 @@ goal 5 (robustness) is enforced on exactly the inputs most likely to break it.
   against `wc`'s ground truth. (`wc` runs unmodified — the counts are invariant
   to however qwc splits the work, which is precisely the property being tested.)
 
-* **Output formatting**: when the local `wc` formats identically to qwc
-  (BSD/macOS), comparisons are **byte-for-byte**. On GNU `wc`, whose column
-  widths differ, the suite automatically falls back to comparing parsed numbers —
-  the portable correctness signal — and says so in its banner. Exact-formatting
-  fidelity on the BSD layout is then guaranteed by the macOS CI job and the C++
-  `tests/cli_test.cpp`.
+* **Output structure**: counts are compared as parsed integers, but the suite
+  still enforces the column *count*, *order*, the per-file rows and the `total`
+  row (via `parse_output`). Exact field-width/padding is not asserted here — GNU
+  and BSD `wc` differ on it — and is instead pinned for qwc's BSD-style layout by
+  the C++ `tests/cli_test.cpp`.
 
 ## Non-goals
 
-* Re-implementing `wc`'s exact behaviour on malformed text — that is explicitly
-  out of scope (see goal 4); qwc's own interpretation there is intentional.
-* Matching **GNU** `wc`'s output formatting byte-for-byte. qwc targets the
-  BSD/macOS layout; GNU parity is checked at the level of counts.
+* Re-implementing any `wc`'s locale-dependent behaviour on non-ASCII text, tabs,
+  or display width — that is explicitly out of scope (see goal 4); qwc's own
+  fast, locale-independent interpretation there is intentional.
+* Matching any `wc`'s output *formatting* byte-for-byte. The suite compares
+  counts; qwc's BSD-style column layout is pinned by the C++ tests.
 * Performance. This suite is about correctness only; benchmarks live elsewhere.
 
 ## Running
@@ -245,8 +263,8 @@ input together with the `wc` and qwc outputs side by side.
 Ready-to-use configs live in [`ci/`](ci/):
 
 * [`ci/github-actions.yml`](ci/github-actions.yml) — copy to
-  `.github/workflows/conformance.yml`. Runs on both Linux (GNU `wc`, numeric
-  comparison) and macOS (BSD `wc`, byte-for-byte comparison).
+  `.github/workflows/conformance.yml`. Runs on both Linux (GNU `wc`) and macOS
+  (BSD `wc`); the same universal rule set is expected to pass against either.
 * [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml) — copy to `.gitlab-ci.yml`, or
   `include:` it.
 
@@ -259,7 +277,7 @@ Both build qwc, ensure a UTF-8 locale is available, and run
 |------|------|
 | `wc_harness.py` | the engine: mode table, input classification, the parity policy, running `wc`/qwc, parsing and comparing |
 | `corpus.py` | curated inputs and the seeded fuzz generators |
-| `session.py` | environment discovery: locate qwc, pick a UTF-8 locale, detect format compatibility |
+| `session.py` | environment discovery: locate qwc, confirm `wc` is present, pick a UTF-8 locale |
 | `run.py` | dependency-free runner and CLI |
 | `test_conformance.py`, `conftest.py` | pytest front-end over the same engine |
 | `ci/` | ready-to-use GitHub Actions and GitLab CI configs |

@@ -1,8 +1,8 @@
 # qwc ↔ wc conformance.
 #
-# Copy to .github/workflows/conformance.yml to enable. Runs on Linux (GNU wc,
-# numeric comparison) and macOS (BSD wc, byte-for-byte comparison) so both
-# formatting regimes are covered.
+# Copy to .github/workflows/conformance.yml to enable. Runs on Linux (GNU wc)
+# and macOS (BSD wc); the suite applies one universal rule set that is expected
+# to pass against either, comparing counts numerically.
 
 name: conformance
 

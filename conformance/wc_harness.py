@@ -13,25 +13,29 @@ corpus.py supplies the inputs; run.py and test_conformance.py drive it.
 ----------------------------------------------------------------------------
 The parity policy (derived empirically -- see conformance/README.md)
 ----------------------------------------------------------------------------
-Everything hinges on the locale, because `wc` counts words and characters
-through the locale's multibyte/`iswspace` machinery while qwc counts bytes (for
-words) and UTF-8 code points (for chars):
+qwc is held to `wc` only where the count is *universal* -- the same for every
+`wc` on every platform. The `wc` implementations themselves disagree once the
+answer depends on the C library's locale tables: BSD `wc` (macOS), GNU `wc`
+(Linux/glibc) and even GNU `wc` built against macOS libc all split non-ASCII
+words and measure `-L` differently. qwc cannot (and should not) match all of
+them, so for those cases it uses its own fast, locale-independent rules and the
+suite does not demand agreement. The rule below is a single set that passes
+against whatever `wc` is local -- BSD on a Mac, GNU in CI:
 
-* Under the C/POSIX locale `wc` is itself byte-defined, so qwc matches it on
-  every mode and every input, binary included -- with one exception: word
-  splitting. qwc follows BSD `wc` and treats every non-ASCII/control byte as part
-  of a word, whereas GNU `wc` classifies many of them as separators. So `-w` on
-  non-ASCII input is required to match a BSD-style `wc` (byte-for-byte) but is
-  allowed to differ from GNU `wc`. Every other C-locale mode is the strongest
-  invariant in the suite.
+* lines (`-l`) and bytes (`-c`): pure byte counts, required on every input.
+* chars (`-m`): bytes under the C locale (required everywhere); UTF-8 code
+  points under a UTF-8 locale (required on valid UTF-8, allowed to differ on
+  invalid input, where `wc` may also error).
+* words (`-w`) and bare `wc`: required on ASCII input only. Non-ASCII word
+  splitting is libc-defined and differs across every `wc`.
+* longest line (`-L`): GNU `wc` expands tabs and uses display width while qwc
+  and BSD `wc` count bytes, and GNU counts an unterminated final line the others
+  ignore. So a `-L` column is required only on printable-ASCII, newline-
+  terminated input (no tabs, control or high bytes, ending in '\n').
 
-* Under a UTF-8 locale:
-    - byte-defined modes  (lines, bytes, max-line-length) match on every input;
-    - chars (`-m`)        match on valid UTF-8 (ASCII included), and qwc may
-                          diverge on invalid UTF-8 (where `wc` may also error);
-    - words (`-w`) and    match on pure-ASCII input; on any non-ASCII input
-      bare-wc (`-a`)      qwc's C-locale byte semantics may legitimately differ
-                          from `wc`'s wide-char `iswspace` splitting.
+Counts are compared as parsed integers, so differing field widths between GNU
+and BSD `wc` are irrelevant; column order, selection and the `total` row are
+still enforced.
 
 When a comparison is not *required*, the suite still checks that qwc ran
 cleanly and produced well-formed output -- garbage in must not mean a crash out.
@@ -60,6 +64,11 @@ class Mode:
     wc: tuple[str, ...]   # flags passed to wc
     kind: str             # "byte" | "char" | "word"
     ncols: int            # how many integer columns the output has
+    # True when the mode includes -L. GNU `wc` measures the longest line as a
+    # display width (expanding tabs, applying wcwidth), whereas qwc and BSD `wc`
+    # count raw bytes, so a -L column is only universally comparable on printable
+    # ASCII input (see required_to_match).
+    has_maxline: bool = False
     # macOS/BSD `wc` has a bug: with -m AND -L together, the multi-file char
     # total prints as 0 (per-file values are fine; `wc -m` alone is fine). qwc
     # computes the correct total and we will not replicate the defect, so for
@@ -73,17 +82,19 @@ MODES: tuple[Mode, ...] = (
     Mode("words",   ("-w",), ("-w",), "word", 1),
     Mode("bytes",   ("-c",), ("-c",), "byte", 1),
     Mode("chars",   ("-m",), ("-m",), "char", 1),
-    Mode("maxline", ("-L",), ("-L",), "byte", 1),
+    Mode("maxline", ("-L",), ("-L",), "byte", 1, has_maxline=True),
     Mode("all",     (),      (),      "word", 3),  # bare qwc == bare wc: l w b
     # Combinations: wc prints a fixed column order regardless of flag order.
     Mode("l+w",     ("-l", "-w"),             ("-l", "-w"),             "word", 2),
     Mode("l+c",     ("-l", "-c"),             ("-l", "-c"),             "byte", 2),
-    Mode("l+L",     ("-l", "-L"),             ("-l", "-L"),             "byte", 2),
+    Mode("l+L",     ("-l", "-L"),             ("-l", "-L"),             "byte", 2,
+         has_maxline=True),
     Mode("w+c",     ("-w", "-c"),             ("-w", "-c"),             "word", 2),
     Mode("m+L",     ("-m", "-L"),             ("-m", "-L"),             "char", 2,
-         compare_total=False),  # wc's char total is buggy with -m and -L
+         has_maxline=True, compare_total=False),  # char total buggy with -m -L
     Mode("l+w+c",   ("-l", "-w", "-c"),       ("-l", "-w", "-c"),       "word", 3),
-    Mode("l+w+c+L", ("-l", "-w", "-c", "-L"), ("-l", "-w", "-c", "-L"), "word", 4),
+    Mode("l+w+c+L", ("-l", "-w", "-c", "-L"), ("-l", "-w", "-c", "-L"), "word", 4,
+         has_maxline=True),
     # NB: -cm/-mc are intentionally absent. BSD `wc` (which qwc targets) collapses
     # -c and -m into one shared char/byte column on a last-flag-wins basis, while
     # GNU `wc` prints both a byte and a char column. That is a divergence in
@@ -100,19 +111,31 @@ MODE_BY_NAME = {m.name: m for m in MODES}
 # ---------------------------------------------------------------------------
 @dataclasses.dataclass(frozen=True)
 class Meta:
-    ascii: bool       # every byte < 0x80
-    valid_utf8: bool  # decodes cleanly as UTF-8
+    ascii: bool          # every byte < 0x80
+    valid_utf8: bool     # decodes cleanly as UTF-8
+    ascii_print: bool    # only newlines + printable ASCII (0x20-0x7E); no tabs/ctrl
+    nl_terminated: bool  # empty, or ends in '\n' (no unterminated final line)
     size: int
 
 
 def classify(data: bytes) -> Meta:
     is_ascii = all(b < 0x80 for b in data)
+    # Newlines (line separators) plus printable ASCII only -- the inputs on which
+    # `-L` is universal. Tabs and other control bytes make GNU `wc` (display width
+    # with tab expansion) diverge from qwc/BSD `wc` (raw byte count).
+    is_ascii_print = all(b == 0x0A or 0x20 <= b <= 0x7E for b in data)
+    # GNU `wc` counts an unterminated final line toward `-L`; BSD `wc` and qwc do
+    # not. They agree only when every line ends in '\n'.
+    nl_term = len(data) == 0 or data.endswith(b"\n")
     try:
         data.decode("utf-8")
         valid = True
     except UnicodeDecodeError:
         valid = False
-    return Meta(ascii=is_ascii, valid_utf8=valid, size=len(data))
+    return Meta(
+        ascii=is_ascii, valid_utf8=valid, ascii_print=is_ascii_print,
+        nl_terminated=nl_term, size=len(data),
+    )
 
 
 def combine(metas: list[Meta]) -> Meta:
@@ -120,35 +143,40 @@ def combine(metas: list[Meta]) -> Meta:
     return Meta(
         ascii=all(m.ascii for m in metas),
         valid_utf8=all(m.valid_utf8 for m in metas),
+        ascii_print=all(m.ascii_print for m in metas),
+        nl_terminated=all(m.nl_terminated for m in metas),
         size=sum(m.size for m in metas),
     )
 
 
-def required_to_match(
-    regime: str, mode: Mode, meta: Meta, wc_ok: bool, exact_format: bool
-) -> bool:
-    """Should qwc be required to reproduce `wc` exactly for this case?"""
+def required_to_match(regime: str, mode: Mode, meta: Meta, wc_ok: bool) -> bool:
+    """Should qwc be required to reproduce `wc` exactly for this case?
+
+    Parity is demanded only where the count is *universal* -- identical for every
+    `wc` on every platform. Where the result depends on the C library's locale
+    tables (word splitting, display width) or on undefined input, the various
+    `wc`s disagree among themselves, so qwc's own fast, locale-independent answer
+    is allowed to differ. The single rule set below holds against BSD `wc` (macOS)
+    and GNU `wc` (Linux) alike, which is what lets the suite pass on both.
+    """
     if not wc_ok:
         # `wc` itself failed (e.g. -m on invalid UTF-8): our interpretation is
         # allowed, so do not demand agreement.
         return False
-    if regime == "C":
-        # Counts are byte-defined under the C/POSIX locale, with one exception:
-        # word splitting. qwc (like BSD `wc`) treats every non-ASCII/control byte
-        # as part of a word, but GNU `wc` classifies many of them as separators,
-        # so the two disagree on `-w` for non-ASCII input. Against a BSD-style
-        # `wc` (exact_format) qwc still matches exactly, so keep demanding parity
-        # there; against GNU `wc` the divergence is expected and allowed.
-        if mode.kind == "word" and not meta.ascii:
-            return exact_format
-        return True
-    # UTF-8 regime.
-    if mode.kind == "byte":
-        return True
-    if mode.kind == "char":
-        return meta.valid_utf8
-    if mode.kind == "word":
-        return meta.ascii
+    # -L (longest line): GNU `wc` expands tabs and measures display width (so it
+    # only agrees with qwc/BSD's byte count on printable ASCII), and it counts an
+    # unterminated final line that qwc/BSD ignore (so the input must end in '\n').
+    if mode.has_maxline and not (meta.ascii_print and meta.nl_terminated):
+        return False
+    # Word splitting: every `wc` defers to libc whitespace classification for
+    # non-ASCII bytes, and glibc, macOS libc and qwc all disagree there. Require
+    # parity only on ASCII input.
+    if mode.kind == "word" and not meta.ascii:
+        return False
+    # Characters (-m): bytes under the C locale (universal); code points under a
+    # UTF-8 locale, which agree only on well-formed UTF-8.
+    if mode.kind == "char" and regime != "C" and not meta.valid_utf8:
+        return False
     return True
 
 
@@ -277,9 +305,14 @@ def compare(
     files: Optional[list[str]] = None,
     stdin: Optional[bytes] = None,
     bytes_per_thread: Optional[int] = None,
-    exact_format: bool = False,
 ) -> Result:
-    """Run one qwc invocation and the matching wc invocation, then judge them."""
+    """Run one qwc invocation and the matching wc invocation, then judge them.
+
+    Counts are compared numerically (parsed integers), so qwc's field width need
+    not match the local `wc`'s -- GNU and BSD `wc` pad differently and downstream
+    tools split on whitespace anyway. Column order, selection and the "total" row
+    are still enforced via parse_output.
+    """
     wc_run = run_tool(
         "wc", mode.wc, files=files, stdin=stdin, locale=locale
     )
@@ -294,21 +327,8 @@ def compare(
         return Result("fail", sane)
 
     wc_ok = wc_run.returncode == 0
-    if not required_to_match(regime, mode, meta, wc_ok, exact_format):
+    if not required_to_match(regime, mode, meta, wc_ok):
         return Result("skip", "parity not required for this locale/mode/input")
-
-    # Exact byte-for-byte output (formatting included) -- only when the local
-    # `wc` formats the way qwc does (BSD/macOS). On GNU `wc` we fall back to the
-    # numeric comparison below, which is the portable correctness signal. Modes
-    # where wc's total is buggy can't be byte-compared (the total line differs),
-    # so they take the numeric path and skip the total there.
-    if exact_format and mode.compare_total and qwc_run.stdout != wc_run.stdout:
-        return Result(
-            "fail",
-            "exact output mismatch\n"
-            f"  wc : {wc_run.stdout!r}\n"
-            f"  qwc: {qwc_run.stdout!r}",
-        )
 
     wc_parsed = parse_output(wc_run.stdout)
     qwc_parsed = parse_output(qwc_run.stdout)
