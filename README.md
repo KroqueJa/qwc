@@ -9,7 +9,7 @@ Why is it faster than the above mentioned byte counters? Many reasons:
 `qwc` is benchmarked to be around 25-50x faster than GNU `wc` on a variety of file sizes, and 3-4x faster than `uu-wc`. Wherever possible, it is compliant with the output of GNU `wc` - the exception being for byte streams that do not constitute valid characters in the output locale. For this particular case, `wc`, `uu-wc` and `qwc` all differ in their interpretations. The input flags are all identical to `wc` - hence, one can learn to use `qwc` with eg `man wc`.
 
 # How AI is used in this project
-I feel that it's important to state that the core of this project is designed, benchmarked and implemented by myself. The first version of the project, then called `wcl`, is from a time when AI was not a thing to the extent that it is today in 2026. This is not to say that AI does not play a significant part in the development of the project. AI has enabled rapid development on time-consuming tasks. I'll leave it to Claude itself to tell you what it has done:
+I feel that it's important to state that the core of this project is designed, benchmarked, and implemented by myself. The first version of the project, then called `wcl`, is from a time when AI was not a thing to the extent that it is today in 2026. This is not to say that AI does not play a significant part in the development of the project. AI has enabled rapid development on time-consuming tasks. I'll leave it to Claude itself to tell you what it has done:
 
 
 > What's worth being precise about is the *kind* of help I provided. Almost none of what follows was impossible for a competent C++ developer to do by hand — but in a one-person performance side project, "possible" and "actually gets done" are very different things. Mostly I changed the economics of effort, and in doing so pulled a handful of things across the line from "never worth the time" into "exists and is maintained":
@@ -28,11 +28,11 @@ Partly, it's because optimization is fun. There is something deeply satisfying a
 
 But I also think the industry - dare I say humanity? - has become annoyingly comfortable with waste. Efficient programs are not just faster; they consume less energy, require less hardware, and emit less CO2 to accomplish the same task. Computer programs are only faster if they are more efficient.
 
-Most software does not become slow because the underlying problems are difficult. It becomes slow because we tolerate inefficiency. We ship layers upon layers of abstraction, dependencies, animations, telemetry, frameworks, and convenience until a device with orders of magnitude more computing power somehow feels less responsive than the one it replaced.
+Most software does not become slow because the underlying problems are challenging. It becomes slow because we tolerate inefficiency. Sometimes, performance is spent providing security, monitoring, or features. That's fine. "Performance is the currency of computing," according to Bjarne Stroustrup. But very often, software is slow because software teams are taught that 50 half-baked features are better than three good ones. We learn as programmers that premature optimization is evil, and all optimization that does not stem from a user complaint or opex report is premature. I humbly believe that is dumb and bad.
 
-So this project is partly a challenge, partly a hobby, and partly a small act of protest.
+Hence; this project is equally a challenge, a hobby, and a small act of protest.
 
-If we could spend less time waiting for our pocket computers to turn on, we can spend more time with our children, more time in the sun, or more time hand-tuning SIMD.
+If we could spend less time waiting for our pocket computers to turn on, we could spend more time with our children, in the sun, or hand-tuning SIMD.
 
 # Roadmap
 - [x] Combined flags (`-L -m` etc)
