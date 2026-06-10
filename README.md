@@ -3,7 +3,7 @@ Have you used `wc` before? I have - it's great! But it's not as fast as it could
 
 Why is it faster than the above mentioned byte counters? Many reasons:
 1. It doesn't hold itself to as rigorous a standard of correctness with regards to file-like inputs. It specializes in the use case of performing on files.
-2. It employs a novel SIMD-based architecture that is both faster and more cache-efficient than the traditional scalar approach.
+2. It employs a novel SIMD-based, threaded architecture that is both faster and more cache-efficient than the traditional scalar approach. It is not faster on a single-core machine.
 3. It is written by someone who constantly tinkers to make it faster instead of shipping more useful features.
 
 `qwc` is benchmarked to be around 25-50x faster than GNU `wc` on a variety of file sizes, and 3-4x faster than `uu-wc`. Wherever possible, it is compliant with the output of GNU `wc` - the exception being for byte streams that do not constitute valid characters in the output locale. For this particular case, `wc`, `uu-wc` and `qwc` all differ in their interpretations. The input flags are all identical to `wc` - hence, one can learn to use `qwc` with eg `man wc`.
@@ -56,3 +56,4 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
 - [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
   scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
   and benchmark it against the current 1×32-byte loop
+- [ ] Detect lone `-c` and don't spin up any threads.

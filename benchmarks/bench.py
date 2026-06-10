@@ -60,6 +60,38 @@ def fmt_ratio(slower: float, faster: float) -> str:
     return f"{slower / faster:.2f}x"
 
 
+def describe_host() -> str:
+    """A one-line host summary. The logical-CPU count is the key context for
+    reading the table: qwc threads to hardware_concurrency(), so its win on the
+    bandwidth-bound flags (-l, -c) is largely a parallelism win and collapses on
+    a core-starved runner. Degrades gracefully off Linux."""
+    logical = os.cpu_count() or 0
+    model = ""
+    mem_gib = None
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    model = line.split(":", 1)[1].strip()
+                    break
+    except OSError:
+        pass
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith("MemTotal"):
+                    mem_gib = int(line.split()[1]) / 1024 / 1024
+                    break
+    except OSError:
+        pass
+    parts = [f"{logical} logical CPUs (qwc threads to this)"]
+    if model:
+        parts.append(model)
+    if mem_gib:
+        parts.append(f"{mem_gib:.1f} GiB RAM")
+    return " · ".join(parts)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--qwc", required=True, help="branch qwc binary")
@@ -138,14 +170,20 @@ def render(flags, headers, rows) -> None:
         lines.append("| " + " | ".join(cells) + " |")
 
     table = "\n".join(lines)
+    host = describe_host()
+    print(f"host: {host}")
     print(table)
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as f:
             f.write("## qwc benchmark\n\n")
+            f.write(f"**Host:** {host}\n\n")
             f.write("Speedup columns are relative to qwc (>1.00x means qwc is "
-                    "faster). Measured with hyperfine; runner noise applies.\n\n")
+                    "faster). Measured with hyperfine; runner noise applies. "
+                    "qwc's edge on bandwidth-bound flags (-l, -c) scales with "
+                    "CPU count, so read those against the logical-CPU count "
+                    "above.\n\n")
             f.write(table + "\n")
 
 
