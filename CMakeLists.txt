@@ -89,7 +89,23 @@ elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64" )
   set( QWC_WORDS src/words_avx2.cpp)
   set( QWC_MAXLINE src/maxlinelen_avx2.cpp)
   set( QWC_CHARS src/chars_avx2.cpp)
-  set( QWC_SIMD_FLAGS -mavx2 )
+  # The hand-written kernels use AVX2 (256-bit) intrinsics, so AVX2 is the floor.
+  # Default to the x86-64-v3 microarchitecture level -- AVX2 + FMA + BMI1/2 +
+  # LZCNT + POPCNT, the standard "modern x86-64" baseline (Haswell / Excavator,
+  # ~2015 onward) -- rather than bare -mavx2. It is a strict superset of -mavx2,
+  # also sets matching tuning, and lets the compiler autovectorize the scalar
+  # frontend TUs (and the count reductions) more aggressively. The trade-off is
+  # the minimum CPU: a v3 binary will SIGILL on anything pre-Haswell.
+  #
+  # Override to benchmark or to build for one specific box, e.g.
+  #   -DQWC_X86_ARCH=native      fastest on the build CPU, NOT portable
+  #   -DQWC_X86_ARCH=x86-64-v4   AVX-512 (Skylake-X / Zen 4+)
+  #   -DQWC_X86_ARCH=x86-64-v2   AVX2-less fallback (SSE4.2 era) -- but note the
+  #                              AVX2 intrinsic kernels then need -mavx2 anyway
+  # Needs GCC 11+ / Clang 12+ for the x86-64-vN names; use -mavx2 on older tools.
+  set( QWC_X86_ARCH "x86-64-v3" CACHE STRING
+       "x86-64 -march level for the SIMD qwc build (e.g. x86-64-v3, native)" )
+  set( QWC_SIMD_FLAGS -march=${QWC_X86_ARCH} )
 else()
   set( QWC_COUNTLINES src/count_scalar.cpp)
   set( QWC_WORDS src/words_scalar.cpp)

@@ -4,6 +4,7 @@ qwc*
 
 # CMake build artifacts
 build/
+build-release
 build-wsl/
 cmake-build-*/
 CMakeCache.txt
