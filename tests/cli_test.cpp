@@ -530,6 +530,35 @@ TEST( Cli, MultipleFilesPerFileAndTotal )
              line( 5, "total" ) );
 }
 
+// Guard for the no-scan (-c) glob dispatch: with more files than
+// QWC_FILES_PER_THREAD the glob is split across multiple workers, so this checks
+// that the threaded path still yields every per-file count in input order plus a
+// correct grand total (70 files > the default threshold of 32).
+TEST( Cli, ManyFilesBytesPreservesOrderAndTotal )
+{
+  const std::string dir = "/tmp/qwc_manyc";
+  const int N = 70;
+  std::ostringstream setup;
+  setup << "mkdir -p " << dir << " && ";
+  for ( int i = 0; i < N; ++i )
+    setup << "printf '%b' 'abc\\n' > " << dir << "/f" << std::setw( 2 )
+          << std::setfill( '0' ) << i << " && ";
+  setup << "true";
+  CmdResult r = run( setup.str() + "; " + kBin + " -c " + dir + "/f*"
+                     "; rm -rf " + dir );
+
+  std::ostringstream expected;
+  for ( int i = 0; i < N; ++i ) {
+    std::ostringstream name;
+    name << dir << "/f" << std::setw( 2 ) << std::setfill( '0' ) << i;
+    expected << line( 4, name.str() );  // "abc\n" = 4 bytes each
+  }
+  expected << line( 4 * N, "total" );
+
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, expected.str() );
+}
+
 // ---------------------------------------------------------------------------
 // --recursive: directory arguments expand to all regular files beneath them,
 // sorted, with a per-file line each and a grand total. (-l = line counts.)
