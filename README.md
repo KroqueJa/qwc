@@ -53,6 +53,6 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
   - [x] Multibyte characters
     - [x] AVX2
     - [x] NEON
-  - [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
-    scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
-    and benchmark it against the current 1×32-byte loop
+- [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
+  scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
+  and benchmark it against the current 1×32-byte loop
