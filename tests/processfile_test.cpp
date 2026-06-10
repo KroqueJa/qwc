@@ -1,12 +1,17 @@
 #include <gtest/gtest.h>
 
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "processfile.h"
 #include "test_util.h"
@@ -59,6 +64,31 @@ std::string makePattern( size_t len, size_t every, char target = '\n' )
   for ( size_t i = 0; i < len; i += every ) s[i] = target;
   return s;
 }
+
+// RAII named FIFO -- a non-regular file given by name, the case the S_ISREG
+// dispatch must route to the serial read path (fstat reports st_size==0 for a
+// FIFO, which the fast path would mistake for an empty file).
+class TempFifo
+{
+ public:
+  TempFifo()
+  {
+    char tmpl[] = "/tmp/qwc_pf_fifo_XXXXXX";
+    int fd = mkstemp( tmpl );  // reserve a unique name, then re-create as a FIFO
+    if ( fd < 0 ) std::abort();
+    ::close( fd );
+    ::unlink( tmpl );
+    path_ = tmpl;
+    if ( ::mkfifo( path_.c_str(), 0600 ) != 0 ) std::abort();
+  }
+  ~TempFifo() { ::unlink( path_.c_str() ); }
+  TempFifo( const TempFifo& ) = delete;
+  TempFifo& operator=( const TempFifo& ) = delete;
+  const char* path() const { return path_.c_str(); }
+
+ private:
+  std::string path_;
+};
 
 }  // namespace
 
@@ -405,6 +435,80 @@ TEST( ProcessFileDeathTest, MissingFileExitsWithCode1 )
   EXPECT_EXIT(
       pfLines( "/nonexistent/qwc/path/should/not/exist_zzz" ),
       ::testing::ExitedWithCode( 1 ), "Error opening file" );
+}
+
+// ---------------------------------------------------------------------------
+// Non-regular files (FIFOs, devices, /proc, ...): fstat gives no usable size,
+// so they must take the serial read path, never the fstat/parallel fast path.
+// Regression test for the S_ISREG dispatch bug (silent all-zero counts).
+// ---------------------------------------------------------------------------
+TEST( ProcessFileNonRegular, FifoCountsLikeItsContents )
+{
+  // A buggy fast-path reader returns immediately without draining the pipe; the
+  // writer must not die of SIGPIPE before we observe the (wrong) zero counts.
+  ::signal( SIGPIPE, SIG_IGN );
+
+  TempFifo fifo;
+  const std::string content = "one two three\nfour five\nsix\n";
+  const size_t expectedLines = refCount( content, '\n' );  // 3
+  const size_t expectedWords = refWords( content );        // 6
+  const size_t expectedBytes = content.size();
+
+  std::thread writer( [&]() {
+    int wfd = ::open( fifo.path(), O_WRONLY );
+    if ( wfd < 0 ) return;
+    size_t off = 0;
+    while ( off < content.size() ) {
+      const ssize_t n =
+          ::write( wfd, content.data() + off, content.size() - off );
+      if ( n <= 0 ) break;
+      off += static_cast<size_t>( n );
+    }
+    ::close( wfd );
+  } );
+
+  Workload w;
+  w.lines = w.words = w.bytes = true;
+  const Counts c = processFile( fifo.path(), w );
+  writer.join();
+
+  EXPECT_EQ( c.lines, expectedLines );
+  EXPECT_EQ( c.words, expectedWords );
+  EXPECT_EQ( c.bytes, expectedBytes );
+}
+
+// A procfs file is a *regular* file (S_ISREG is true) whose fstat size is 0 yet
+// which has real content. Trusting st_size==0 as "empty" silently reports zeros,
+// so a zero-size regular file must also fall back to the serial read. Uses
+// /proc/version, whose contents are byte-stable within a run (unlike cpuinfo,
+// whose "cpu MHz" can change between reads). Linux-only vehicle.
+TEST( ProcessFileNonRegular, ZeroSizeRegularProcFileWithContent )
+{
+  const char* path = "/proc/version";
+  std::ifstream probe( path );
+  if ( !probe.good() ) GTEST_SKIP() << path << " not available";
+  const std::string content( ( std::istreambuf_iterator<char>( probe ) ),
+                             std::istreambuf_iterator<char>() );
+  ASSERT_FALSE( content.empty() );
+
+  Workload w;
+  w.lines = w.words = w.bytes = true;
+  const Counts c = processFile( path, w );
+  EXPECT_EQ( c.bytes, content.size() );
+  EXPECT_EQ( c.lines, refCount( content, '\n' ) );
+  EXPECT_EQ( c.words, refWords( content ) );
+}
+
+// A character device (/dev/null) is also non-regular: it must read cleanly to
+// EOF as an empty stream rather than crash or trust a bogus fstat size.
+TEST( ProcessFileNonRegular, DevNullIsEmpty )
+{
+  Workload w;
+  w.lines = w.words = w.bytes = true;
+  const Counts c = processFile( "/dev/null", w );
+  EXPECT_EQ( c.lines, 0u );
+  EXPECT_EQ( c.words, 0u );
+  EXPECT_EQ( c.bytes, 0u );
 }
 
 // ---------------------------------------------------------------------------

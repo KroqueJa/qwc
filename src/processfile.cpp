@@ -65,16 +65,20 @@ inline void scanBuffer(
   if ( g > 0 ) s.sawFirst = true;
 }
 
-// Standard input: one sequential pass, since fd 0 can only be consumed once.
-Counts processStdin( const Workload& w )
+// Serial single-pass scan of a stream that can only be consumed once and whose
+// length fstat cannot give us up front: standard input, and any non-regular
+// file (FIFO, character/block device, socket, /proc, ...). Bytes are tallied as
+// we read, since there is no reliable st_size. This is the boring,
+// always-correct path -- no threads, no pread, no size assumptions.
+Counts processStream( int fd, const Workload& w )
 {
   thread_local char buffer[128 * 4096];
   ScanState s;
   Counts c{};
   isize bytesRead;
-  while ( ( bytesRead = read( 0, buffer, sizeof( buffer ) ) ) > 0 ) {
+  while ( ( bytesRead = read( fd, buffer, sizeof( buffer ) ) ) > 0 ) {
     const auto g = static_cast<usize>( bytesRead );
-    if ( w.bytes ) c.bytes += g;  // no fstat for a pipe; tally as we read
+    if ( w.bytes ) c.bytes += g;  // no usable fstat size; tally as we read
     scanBuffer( buffer, g, w, s );
   }
   c.lines = s.lines;
@@ -92,7 +96,7 @@ Counts processFile(
     const char* filename, const Workload& work, const usize bytesPerThread
 )
 {
-  if ( filename[0] == '\0' ) return processStdin( work );
+  if ( filename[0] == '\0' ) return processStream( 0, work );
 
   // processFile runs on worker threads (see mapFiles), so these fatal I/O-error
   // paths use _Exit: it terminates immediately without running atexit handlers
@@ -109,13 +113,29 @@ Counts processFile(
     std::cerr << "Error stating file: " << filename << '\n';
     std::_Exit( 1 );
   }
+
   const usize fileSize = st.st_size;
+
+  // Take the parallel fast path only for a regular file with a trustworthy,
+  // nonzero size. Everything else goes through the serial stream scan:
+  //   * non-regular inputs (FIFO, device, socket) -- no size, and pread can't
+  //     seek them; and
+  //   * regular files whose fstat size is 0 -- either a genuinely empty file, or
+  //     a procfs/sysfs file that lies about its length and actually has content.
+  // We cannot chunk what we cannot size, and must not assume 0 means empty, so
+  // such inputs are simply read to EOF: correct on everything, while the common
+  // case (a normal file with a real size) keeps the threaded fast path.
+  if ( !S_ISREG( st.st_mode ) || fileSize == 0 ) {
+    const Counts c = processStream( fd, work );
+    close( fd );
+    return c;
+  }
 
   Counts result{};
   if ( work.bytes ) result.bytes = fileSize;  // bytes come straight from fstat
 
-  // Nothing to scan (e.g. a bare `-c`), or an empty file: we are done.
-  if ( !work.needsScan() || fileSize == 0 ) {
+  // Nothing to scan (e.g. a bare `-c`): the fstat byte count is all we need.
+  if ( !work.needsScan() ) {
     close( fd );
     return result;
   }

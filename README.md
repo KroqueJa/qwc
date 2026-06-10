@@ -2,7 +2,7 @@
 Have you used `wc` before? I have - it's great! But it's not as fast as it could be. Hence, some people wrote [uutils](https://github.com/uutils/coreutils) containing `uu-wc`. Which is even greater! But it's not as fast as it could be. `qwc` is as fast as it can be.
 
 Why is it faster than the above mentioned byte counters? Many reasons:
-1. It doesn't hold itself to as rigorous a standard of correctness with regards to file-like inputs. It specializes in the use case of performing on files.
+1. It doesn't hold itself to as rigorous a standard of correctness with regards to exotic locales. `qwc` specializes in the UTF-8 and C locales, where 99.99% of modern use cases live.
 2. It employs a novel SIMD-based, threaded architecture that is both faster and more cache-efficient than the traditional scalar approach. It is not faster on a single-core machine.
 3. It is written by someone who constantly tinkers to make it faster instead of shipping more useful features.
 
@@ -36,7 +36,7 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
 - [x] Combined flags (`-L -m` etc)
 - [x] Fuzzy correctness suite
 - [x] Conform to GNU `wc` instead of BSD
-- [ ] Center architecture more cleanly around `S_ISREG` (files are files, other things are streams)
+- [x] Center dispatch architecture more cleanly around `S_ISREG`
 - [ ] Support for valid unicode whitespace in line with GNU `wc`
 - [ ] Reconcile `-cm` with GNU
 - [ ] Comprehensive multi-system performance benchmarking

@@ -40,9 +40,13 @@ struct Counts
 };
 
 // Compute the requested counts for `filename` (an empty name reads standard
-// input) in one pass. Bytes come straight from fstat; the scanned counters are
-// computed in parallel across chunks of the file, with words and the longest
-// line stitched back together across chunk boundaries. Every requested counter
+// input) in one pass. A regular file with a known, nonzero size takes the fast
+// path: bytes come straight from fstat and the scanned counters are computed in
+// parallel across chunks, with words and the longest line stitched back together
+// across chunk boundaries. Anything whose size fstat cannot be trusted for --
+// standard input, FIFOs, devices, sockets, and procfs/sysfs files that report a
+// zero size yet have content -- is instead read serially to EOF (bytes tallied
+// as read): slower, but correct everywhere. Either way every requested counter
 // shares the same read of the data.
 Counts processFile(
     const char* filename, const Workload& work,
