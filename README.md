@@ -28,11 +28,9 @@ Partly, it's because optimization is fun. There is something deeply satisfying a
 
 But I also think the industry - dare I say humanity? - has become annoyingly comfortable with waste. Efficient programs consume less energy, require less hardware, and emit less CO2 to accomplish the same task as inefficient ones. *Computer programs are only faster if they are more efficient.*
 
-Most software does not become slow because the underlying problems are challenging. It becomes slow because we tolerate inefficiency. Sometimes, performance is spent providing security, monitoring, or features. That's fine. "Performance is the currency of computing," according to Bjarne Stroustrup. But very often, software is slow because software teams are taught that 50 half-baked features are better than three good ones. We learn as programmers that premature optimization is evil, and all optimization that does not stem from a user complaint or opex report is premature. I humbly believe that is dumb and bad.
+Most software does not become slow because the underlying problems are challenging. It becomes slow because we tolerate inefficiency. Sometimes, performance is spent providing security, monitoring, or features. That's fine. "Performance is the currency of computing," according to Bjarne Stroustrup. But very often, software is slow because software teams are taught that 50 half-baked features are better than three good ones. We learn as programmers that premature optimization is evil, and all optimization that does not stem from a user complaint or opex report is premature. I humbly posit that this is dumb and bad.
 
-Hence; this project is equally a challenge, a hobby, and a small act of protest.
-
-If we could spend less time waiting for our pocket computers to turn on, we could spend more time with our children, in the sun, or hand-tuning SIMD.
+Hence; this project is equally a challenge, a hobby, and a small act of protest. If we could spend less time waiting for our pocket computers to turn on, we could spend more time with our children, in the sun, or hand-tuning SIMD.
 
 # Roadmap
 - [x] Combined flags (`-L -m` etc)
@@ -42,19 +40,19 @@ If we could spend less time waiting for our pocket computers to turn on, we coul
 - [ ] Support for valid unicode whitespace in line with GNU `wc`
 - [ ] Reconcile `-cm` with GNU
 - [ ] Comprehensive multi-system performance benchmarking
-- [ ] Vectorized versions of the scalar algorithms
+- [x] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
     - [x] AVX2
     - [x] NEON
-  - [ ] Max line length
+  - [x] Max line length
     - [x] AVX2
     - [x] NEON
-    - [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
-      scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
-      and benchmark it against the current 1×32-byte loop
-  - [ ] Words
-    - [ ] AVX2
+  - [x] Words
+    - [x] AVX2
     - [x] NEON
-  - [ ] Multibyte characters
-    - [ ] AVX2
+  - [x] Multibyte characters
+    - [x] AVX2
     - [x] NEON
+  - [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
+    scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
+    and benchmark it against the current 1×32-byte loop
