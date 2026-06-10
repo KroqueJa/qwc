@@ -1,0 +1,104 @@
+# On-demand performance comparison for qwc.
+#
+# Builds the current branch and main in Release, then uses hyperfine to compare
+# counting throughput across a matrix of wc flags against three references:
+#   * qwc @ main  -- "did this branch improve?" (skipped when run on main)
+#   * uu-wc       -- uutils coreutils, the closest competitor (pinned release)
+#   * GNU wc      -- the headline number (the runner's system coreutils)
+#
+# Report-only: it never fails the build. Manual dispatch only -- benchmarks are
+# noisy and costly, so they run when you ask for them. Correctness is NOT checked
+# here; that is the conformance suite's job (and qwc's -L intentionally diverges
+# from GNU wc on wide characters).
+#
+# NOTE: workflow_dispatch only shows the "Run workflow" button once this file is
+# on the default branch (main). On a feature branch it is invisible in the UI.
+
+name: benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      data_size:
+        description: "Generated corpus size (e.g. 512MiB, 1GiB)"
+        default: "512MiB"
+      runs:
+        description: "hyperfine runs per command"
+        default: "10"
+      warmup:
+        description: "hyperfine warmup runs"
+        default: "3"
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: hyperfine (branch vs main vs uu-wc vs GNU wc)
+    runs-on: ubuntu-latest  # x86_64; hosted runners support AVX2 / x86-64-v3
+    env:
+      HYPERFINE_VERSION: "1.18.0"
+      UUTILS_VERSION: "0.9.0"
+    steps:
+      - name: Checkout (full history so origin/main is available)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install hyperfine + uu-wc (pinned)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/hyperfine.deb \
+            "https://github.com/sharkdp/hyperfine/releases/download/v${HYPERFINE_VERSION}/hyperfine_${HYPERFINE_VERSION}_amd64.deb"
+          sudo dpkg -i /tmp/hyperfine.deb
+          curl -fsSL -o /tmp/uutils.tar.gz \
+            "https://github.com/uutils/coreutils/releases/download/${UUTILS_VERSION}/coreutils-${UUTILS_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p /tmp/uutils && tar -xzf /tmp/uutils.tar.gz -C /tmp/uutils
+          sudo install "$(find /tmp/uutils -name coreutils -type f | head -1)" /usr/local/bin/coreutils
+          hyperfine --version
+          coreutils --version | head -1
+          wc --version | head -1
+
+      - name: Build branch (Release)
+        run: |
+          cmake -S . -B build-branch -DCMAKE_BUILD_TYPE=Release -DQWC_BUILD_TESTS=OFF
+          cmake --build build-branch --target qwc
+          # qwc emits to the source-tree root (RUNTIME_OUTPUT_DIRECTORY); name it.
+          cp ./qwc ./qwc-branch
+
+      - name: Build main (Release)
+        if: github.ref != 'refs/heads/main'
+        run: |
+          git worktree add /tmp/main-tree origin/main
+          cmake -S /tmp/main-tree -B build-main -DCMAKE_BUILD_TYPE=Release -DQWC_BUILD_TESTS=OFF
+          cmake --build build-main --target qwc
+          cp /tmp/main-tree/qwc ./qwc-main
+
+      - name: Generate corpus
+        run: python3 benchmarks/gen-data.py --size "${{ inputs.data_size }}" --out corpus.txt
+
+      - name: Run benchmark
+        run: |
+          set -euo pipefail
+          MAIN_ARG=""
+          if [ -f ./qwc-main ]; then MAIN_ARG="--qwc-main ./qwc-main"; fi
+          python3 benchmarks/bench.py \
+            --qwc ./qwc-branch $MAIN_ARG \
+            --uuwc "coreutils wc" --gwc wc \
+            --data corpus.txt \
+            --runs "${{ inputs.runs }}" --warmup "${{ inputs.warmup }}" \
+            --json-out bench-result.json \
+            | tee bench-result.md
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            bench-result.md
+            bench-result.json
