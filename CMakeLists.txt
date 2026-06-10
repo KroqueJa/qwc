@@ -177,6 +177,11 @@ add_executable( qwc-scalar EXCLUDE_FROM_ALL
   ${QWC_COMMON_SOURCES} src/count_scalar.cpp src/words_scalar.cpp
   src/maxlinelen_scalar.cpp src/chars_scalar.cpp )
 qwc_configure( qwc-scalar )
+# Build the scalar baseline at the SAME -march as the SIMD qwc (QWC_SIMD_FLAGS).
+# This isolates the variable under test -- hand-written SIMD vs the compiler's
+# autovectorization -- by giving both binaries the same ISA ceiling (e.g. AVX2
+# under x86-64-v3) instead of leaving the baseline at the portable SSE2 default.
+target_compile_options( qwc-scalar PRIVATE ${QWC_SIMD_FLAGS} )
 target_compile_options( qwc PRIVATE -Wall -Wextra -Wpedantic )
 
 # ---------------------------------------------------------------------------
