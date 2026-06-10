@@ -87,7 +87,7 @@ elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64" )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64" )
   set( QWC_COUNTLINES src/count_avx2.cpp)
   set( QWC_WORDS src/words_scalar.cpp)  # no AVX2 words variant yet
-  set( QWC_MAXLINE src/maxlinelen_scalar.cpp)  # no AVX2 max-line variant yet
+  set( QWC_MAXLINE src/maxlinelen_avx2.cpp)
   set( QWC_CHARS src/chars_avx2.cpp)
   set( QWC_SIMD_FLAGS -mavx2 )
 else()
