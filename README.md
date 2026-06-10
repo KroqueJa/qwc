@@ -47,8 +47,11 @@ If we could spend less time waiting for our pocket computers to turn on, we coul
     - [x] AVX2
     - [x] NEON
   - [ ] Max line length
-    - [ ] AVX2
+    - [x] AVX2
     - [x] NEON
+    - [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
+      scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
+      and benchmark it against the current 1×32-byte loop
   - [ ] Words
     - [ ] AVX2
     - [x] NEON
