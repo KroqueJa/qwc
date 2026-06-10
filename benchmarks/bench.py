@@ -13,6 +13,7 @@ Speed only -- correctness/parity with wc is the conformance suite's job (and
 qwc's -L intentionally diverges from GNU wc on wide characters).
 """
 import argparse
+import glob
 import json
 import os
 import shlex
@@ -98,16 +99,27 @@ def main() -> None:
     ap.add_argument("--qwc-main", help="main qwc binary (omit when running on main)")
     ap.add_argument("--uuwc", default="coreutils wc", help="uutils invocation")
     ap.add_argument("--gwc", default="wc", help="GNU wc invocation")
-    ap.add_argument("--data", required=True, help="corpus file to count")
-    ap.add_argument("--warmup", type=int, default=3)
+    ap.add_argument("--data", required=True,
+                    help="corpus file, or a directory (all files in it are counted)")
+    ap.add_argument("--warmup", type=int, default=1)
     ap.add_argument("--runs", type=int, default=10)
     ap.add_argument("--flags", help="comma-separated flag sets (overrides default)")
     ap.add_argument("--json-out", help="also write {flag: {tool: mean_sec}} JSON here")
+    ap.add_argument("--title", default="qwc benchmark",
+                    help="heading for the rendered table / step summary")
     args = ap.parse_args()
 
     flags = ([f.strip() for f in args.flags.split(",")] if args.flags
              else DEFAULT_FLAGS)
-    data_q = shlex.quote(args.data)
+    # A directory expands to all the files in it (the many-small-files profile),
+    # sorted for a stable order; a plain file is just itself. Either way the same
+    # target list is handed to every tool.
+    if os.path.isdir(args.data):
+        targets = sorted(p for p in glob.glob(os.path.join(args.data, "*"))
+                         if os.path.isfile(p))
+    else:
+        targets = [args.data]
+    targets_str = " ".join(shlex.quote(t) for t in targets)
 
     # Build the column set, skipping any tool that isn't available.
     columns = [("qwc", args.qwc)]
@@ -129,7 +141,7 @@ def main() -> None:
     for flag in flags:
         commands = []
         for header, prefix in columns:
-            cmdline = f"{prefix} {flag} {data_q}".replace("  ", " ").strip()
+            cmdline = " ".join( p for p in (prefix, flag, targets_str) if p )
             commands.append((header, cmdline))
         means = run_hyperfine(commands, args.warmup, args.runs)
         rows.append(dict(zip(headers, means)))
@@ -139,10 +151,10 @@ def main() -> None:
         with open(args.json_out, "w") as f:
             json.dump(payload, f, indent=2)
 
-    render(flags, headers, rows)
+    render(flags, headers, rows, args.title)
 
 
-def render(flags, headers, rows) -> None:
+def render(flags, headers, rows, title) -> None:
     has_main = "main" in headers
     has_uu = "uu-wc" in headers
     has_gwc = "GNU wc" in headers
@@ -171,13 +183,14 @@ def render(flags, headers, rows) -> None:
 
     table = "\n".join(lines)
     host = describe_host()
+    print(f"# {title}")
     print(f"host: {host}")
     print(table)
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as f:
-            f.write("## qwc benchmark\n\n")
+            f.write(f"## {title}\n\n")
             f.write(f"**Host:** {host}\n\n")
             f.write("Speedup columns are relative to qwc (>1.00x means qwc is "
                     "faster). Measured with hyperfine; runner noise applies. "

@@ -64,8 +64,19 @@ Deterministic UTF-8 corpus generator.
     occasional CJK codepoint) so `-m` differs from `-c` and character-mode `-L`
     is exercised.
   - No NUL / binary bytes.
-- **Output:** a single file written to the path given (in CI: the runner
-  workspace on ext4).
+- **Output (default):** a single file written to the path given (in CI: the
+  runner workspace on ext4).
+- **`--many` mode:** writes a *directory* of many files totalling ~`--size`, with
+  per-file sizes drawn **log-uniformly** from `[--min-file, --max-file]` (default
+  4 KiB–1 MiB; geometric mean ~64 KiB → ~8k files at 512 MiB). This is the second
+  corpus profile: it stresses the per-file `open`/`fstat` dispatch the single big
+  file never touches. Log-uniform (not fixed-size, not linear) so the benchmark
+  samples every octave of the per-file-overhead-vs-throughput curve, instead of
+  landing on one lucky/unlucky file size.
+
+Two profiles are benchmarked: the big single file (in-file chunk parallelism +
+SIMD kernels) and the many varied-size files (per-file dispatch). They are sized
+to the same total so throughput is comparable.
 
 ### Component 2 — `benchmarks/bench.py`
 
@@ -76,9 +87,13 @@ Orchestrator. Runnable both in CI and locally.
   - `--qwc-main <path>` — main binary (optional; omitted when running on main).
   - `--uuwc <cmd>` — uutils invocation, e.g. `"coreutils wc"` (default; configurable).
   - `--gwc <cmd>` — GNU wc, default `wc`.
-  - `--data <file>` — corpus path (required).
-  - `--warmup <N>` (default 3), `--runs <N>` (default 10).
+  - `--data <file-or-dir>` — corpus path; a directory expands to all files in it
+    (sorted), which is how the many-small-files profile is benchmarked.
+  - `--warmup <N>` (default 1 — one pass warms a cold runner's page cache;
+    more just burns time), `--runs <N>` (default 10).
   - `--flags <list>` — override the default matrix.
+  - `--title <str>` — heading for the table / step-summary section (lets the two
+    profiles be labelled distinctly).
 - **Flag matrix (default):** `'' (default l/w/c)`, `-l`, `-w`, `-c`, `-m`, `-L`,
   `-L -m`. (`-c` kept for completeness; it mostly measures startup since all
   three tools `fstat` the size.)
@@ -109,7 +124,7 @@ Example output shape:
 CI plumbing only.
 
 - **Trigger:** `workflow_dispatch` with inputs `data_size` (default `512MiB`),
-  `runs` (default `10`), `warmup` (default `3`).
+  `runs` (default `10`), `warmup` (default `1`).
 - **Runner:** `ubuntu-latest` (x86_64). Hosted x86 runners support AVX2 /
   `x86-64-v3`, which the qwc Release build targets.
 - **Steps:**
@@ -120,11 +135,14 @@ CI plumbing only.
      `-march=x86-64-v3`) → `./qwc`.
   4. **If `github.ref` ≠ `refs/heads/main`:** add a git worktree at
      `origin/main`, build it the same way → `./qwc-main`.
-  5. `python benchmarks/gen-data.py --size <data_size> --out corpus.txt`.
-  6. `python benchmarks/bench.py --qwc ./qwc [--qwc-main ./qwc-main]
-     --uuwc 'coreutils wc' --gwc wc --data corpus.txt --runs <runs>
-     --warmup <warmup>`.
-  7. Upload the hyperfine JSON + rendered markdown as a workflow artifact.
+  5. Generate **two corpora** of the same total size: `gen-data.py --out
+     corpus_big.txt` (single file) and `gen-data.py --many --out corpus_many`
+     (directory of log-uniform-sized files).
+  6. Run `bench.py` **twice**, once per corpus, each with its own `--title` and
+     `--json-out`, tee'd to a per-profile markdown file. Both append their table
+     to `$GITHUB_STEP_SUMMARY`.
+  7. Upload the hyperfine JSON + rendered markdown for both profiles as a
+     workflow artifact.
 - **Report-only:** the job never fails on a slowdown.
 
 ### Component 4 — Legacy cleanup
