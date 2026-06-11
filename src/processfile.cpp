@@ -71,7 +71,7 @@ inline void scanBuffer(
 Counts processStream( int fd, const Workload& w )
 {
   static constexpr usize WCTX = 3;  // multibyte window context per side
-  thread_local char buffer[128 * 4096 + 2 * WCTX];
+  thread_local char buffer[usize{ 128 } * 4096 + 2 * WCTX];
   ScanState s;
   Counts c{};
   // The buffer front holds up to WCTX already-scanned bytes (context for a
