@@ -52,6 +52,14 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
   - [ ] Words
     - [x] AVX2
     - [ ] NEON (re-port against the unicode/printability kernel)
+      - Primary port: 32-byte blocks (two `uint8x16_t`), building 32-bit
+        masks so the `stepMasks` state machine and carry logic are reused
+        verbatim from the shared kernel.
+      - [ ] Investigate an alternative 16-byte-block NEON port (single
+        `uint8x16_t`, native 16-bit masks, `stepMasks` driven with `n=16`)
+        and benchmark it against the 32-byte port to see whether the
+        smaller/cheaper per-block movemask outweighs reusing the 32-bit
+        state machine unchanged.
   - [x] Multibyte characters
     - [x] AVX2
     - [x] NEON
