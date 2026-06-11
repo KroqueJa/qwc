@@ -26,8 +26,8 @@ on:
         description: "hyperfine runs per command"
         default: "10"
       warmup:
-        description: "hyperfine warmup runs"
-        default: "3"
+        description: "hyperfine warmup runs (1 is enough to warm a cold runner's cache)"
+        default: "1"
 
 concurrency:
   group: benchmark-${{ github.ref }}
@@ -79,26 +79,35 @@ jobs:
           cmake --build build-main --target qwc
           cp /tmp/main-tree/qwc ./qwc-main
 
-      - name: Generate corpus
-        run: python3 benchmarks/gen-data.py --size "${{ inputs.data_size }}" --out corpus.txt
+      # Two corpora, same total size: one big file (stresses in-file chunk
+      # parallelism + the SIMD kernels) and a directory of many varied-size files
+      # (stresses the per-file open/fstat dispatch). File sizes are log-uniform
+      # so the many-files profile sweeps the whole per-file-overhead curve.
+      - name: Generate corpora
+        run: |
+          python3 benchmarks/gen-data.py --size "${{ inputs.data_size }}" --out corpus_big.txt
+          python3 benchmarks/gen-data.py --many --size "${{ inputs.data_size }}" --out corpus_many
 
-      - name: Run benchmark
+      - name: Run benchmarks
         run: |
           set -euo pipefail
           MAIN_ARG=""
           if [ -f ./qwc-main ]; then MAIN_ARG="--qwc-main ./qwc-main"; fi
-          python3 benchmarks/bench.py \
-            --qwc ./qwc-branch $MAIN_ARG \
-            --uuwc "coreutils wc" --gwc wc \
-            --data corpus.txt \
-            --runs "${{ inputs.runs }}" --warmup "${{ inputs.warmup }}" \
-            --json-out bench-result.json \
-            | tee bench-result.md
+          common=(--qwc ./qwc-branch $MAIN_ARG --uuwc "coreutils wc" --gwc wc
+                  --runs "${{ inputs.runs }}" --warmup "${{ inputs.warmup }}")
+          python3 benchmarks/bench.py "${common[@]}" \
+            --title "Single large file (${{ inputs.data_size }})" \
+            --data corpus_big.txt --json-out bench-big.json | tee bench-big.md
+          python3 benchmarks/bench.py "${common[@]}" \
+            --title "Many small files (~${{ inputs.data_size }}, log-uniform 4KiB-1MiB)" \
+            --data corpus_many --json-out bench-many.json | tee bench-many.md
 
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-results
           path: |
-            bench-result.md
-            bench-result.json
+            bench-big.md
+            bench-big.json
+            bench-many.md
+            bench-many.json

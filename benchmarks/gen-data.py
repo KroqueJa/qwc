@@ -4,13 +4,24 @@
 Produces realistic `wc`-shaped text -- space-separated words, newline-terminated
 lines, a sprinkling of multibyte UTF-8 so that `-m` differs from `-c` and
 character-mode `-L` is exercised, and the occasional long line so `-L` is not
-constant. The same --seed and --size always yield identical bytes, so branch and
-main are measured on exactly the same input.
+constant. The same --seed (and size args) always yield identical bytes, so
+branch and main are measured on exactly the same input.
+
+Two corpus shapes:
+  * default      -- one file of --size (stresses in-file chunk parallelism + the
+                    SIMD kernels).
+  * --many       -- a directory of many files totalling ~--size, with sizes drawn
+                    LOG-uniformly from [--min-file, --max-file] (stresses the
+                    per-file open/fstat dispatch). Log-uniform spans the size
+                    regimes evenly per octave, so the benchmark samples the whole
+                    per-file-overhead-vs-throughput curve instead of one point.
 
 Deliberately NOT random binary/control-byte data: that is not meaningful for
 wc-style tools (the lesson from the legacy generator this replaces).
 """
 import argparse
+import math
+import os
 import random
 import sys
 
@@ -51,51 +62,89 @@ def build_word_pool(rng: random.Random, n: int, multibyte_fraction: float) -> li
     return pool
 
 
-def generate(out_path: str, size: int, seed: int, multibyte_fraction: float) -> None:
+def write_text(f, target: int, pool: list, rng: random.Random) -> int:
+    """Write newline-terminated word-lines to `f` until ~`target` bytes. Returns
+    the number of characters produced (a close proxy for bytes; multibyte words
+    make the file marginally larger). Termination counts the pending buffer too,
+    so it works for KiB-sized targets, not just multi-MiB ones."""
+    buf = []
+    pending = 0   # chars buffered since the last flush
+    produced = 0  # total chars produced so far
+    FLUSH = 1 << 20
+    while produced < target:
+        # ~1% of lines are long (so -L is non-trivial); the rest are normal.
+        n_words = rng.randint(80, 200) if rng.random() < 0.01 else rng.randint(3, 18)
+        line = " ".join(rng.choices(pool, k=n_words)) + "\n"
+        buf.append(line)
+        pending += len(line)
+        produced += len(line)
+        if pending >= FLUSH:
+            f.write("".join(buf).encode("utf-8"))
+            buf = []
+            pending = 0
+    if buf:
+        f.write("".join(buf).encode("utf-8"))
+    return produced
+
+
+def generate_single(out_path: str, size: int, seed: int, mbfrac: float) -> None:
     rng = random.Random(seed)
-    pool = build_word_pool(rng, 50_000, multibyte_fraction)
-
-    written = 0
-    chunk = []          # list[str], flushed periodically
-    chunk_bytes = 0
-    FLUSH_AT = 8 * 1024 * 1024  # ~8 MiB of text per write
-
+    pool = build_word_pool(rng, 50_000, mbfrac)
     with open(out_path, "wb") as f:
-        while written < size:
-            # ~1% of lines are long (so -L is non-trivial); the rest are normal.
-            if rng.random() < 0.01:
-                n_words = rng.randint(80, 200)
-            else:
-                n_words = rng.randint(3, 18)
-            line = " ".join(rng.choices(pool, k=n_words)) + "\n"
-            chunk.append(line)
-            chunk_bytes += len(line)  # approx (chars); refined on encode
-            if chunk_bytes >= FLUSH_AT:
-                data = "".join(chunk).encode("utf-8")
-                f.write(data)
-                written += len(data)
-                chunk.clear()
-                chunk_bytes = 0
-        if chunk:
-            data = "".join(chunk).encode("utf-8")
-            f.write(data)
-            written += len(data)
+        write_text(f, size, pool, rng)
+    actual = os.path.getsize(out_path)
+    print(f"wrote {actual} bytes ({actual / 1024**2:.1f} MiB) to {out_path} "
+          f"(seed={seed})", file=sys.stderr)
 
-    print(f"wrote {written} bytes ({written / 1024**2:.1f} MiB) to {out_path} "
+
+def generate_many(out_dir: str, total: int, seed: int, mbfrac: float,
+                  min_file: int, max_file: int) -> None:
+    rng = random.Random(seed)
+    pool = build_word_pool(rng, 50_000, mbfrac)
+    os.makedirs(out_dir, exist_ok=True)
+
+    lo, hi = math.log(min_file), math.log(max_file)
+    produced = 0
+    idx = 0
+    # Zero-padded names so a shell/Python sort gives a stable, predictable order.
+    while produced < total:
+        fsize = int(math.exp(rng.uniform(lo, hi)))
+        fsize = max(min_file, min(max_file, fsize))
+        path = os.path.join(out_dir, f"f{idx:07d}")
+        with open(path, "wb") as f:
+            produced += write_text(f, fsize, pool, rng)
+        idx += 1
+
+    print(f"wrote {idx} files (~{produced / 1024**2:.1f} MiB) to {out_dir}/ "
+          f"with log-uniform sizes in [{min_file}, {max_file}] bytes "
           f"(seed={seed})", file=sys.stderr)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--size", default="512MiB",
-                    help="target size, e.g. 512MiB, 1GB, 100000000 (default 512MiB)")
+                    help="total target size, e.g. 512MiB, 1GB (default 512MiB)")
     ap.add_argument("--seed", type=int, default=20260610,
                     help="RNG seed (default fixed, for determinism)")
     ap.add_argument("--multibyte-fraction", type=float, default=0.08,
                     help="fraction of pool words that are multibyte (default 0.08)")
-    ap.add_argument("--out", required=True, help="output file path")
+    ap.add_argument("--out", required=True,
+                    help="output file (default) or directory (--many)")
+    ap.add_argument("--many", action="store_true",
+                    help="generate many varied-size files into --out (a directory)")
+    ap.add_argument("--min-file", default="4KiB",
+                    help="--many: smallest file size (default 4KiB)")
+    ap.add_argument("--max-file", default="1MiB",
+                    help="--many: largest file size (default 1MiB)")
     args = ap.parse_args()
-    generate(args.out, parse_size(args.size), args.seed, args.multibyte_fraction)
+
+    if args.many:
+        generate_many(args.out, parse_size(args.size), args.seed,
+                      args.multibyte_fraction, parse_size(args.min_file),
+                      parse_size(args.max_file))
+    else:
+        generate_single(args.out, parse_size(args.size), args.seed,
+                        args.multibyte_fraction)
 
 
 if __name__ == "__main__":
