@@ -8,11 +8,10 @@
 // `scalarUtf8`, and the mask state machine `stepMasks` are pure C++ over u32
 // masks and bytes -- no intrinsics -- so the AVX2 and NEON kernels share them.
 //
-// These are duplicated verbatim from words_scalar.cpp / words_avx2.cpp (the
-// TUs are never linked together; words_avx2.cpp keeps its own copy because it
-// cannot be built on this arm64 machine -- mirror edits across all copies).
-// words_neon.cpp includes this header and supplies only the NEON mask
-// primitives and the words() driver.
+// words_avx2.cpp and words_neon.cpp both include this header and supply only
+// their arch's mask primitives and the words() driver. words_scalar.cpp -- the
+// standalone semantic reference -- keeps its own copies of the decoder,
+// classifiers and step on purpose; mirror edits there.
 
 namespace qwc::words_kernel {
 
