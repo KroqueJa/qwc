@@ -57,6 +57,12 @@ def curated() -> list[tuple[str, bytes]]:
         ("utf8-bom", "﻿hello world\n".encode("utf-8")),
         ("utf8-nbsp", "foo bar baz\n".encode("utf-8")),           # non-breaking space
         ("utf8-ideographic-space", "a　b c\n".encode("utf-8")),    # U+3000
+        ("utf8-nbsp-separates", "a\u00a0b\n".encode("utf-8")),
+        ("utf8-barren-zwsp", " \u200b \n".encode("utf-8")),
+        ("utf8-barren-rescued", " \u200bx \n".encode("utf-8")),
+        ("utf8-unassigned-word", " \u03a2 \n".encode("utf-8")),
+        ("c-ctrl-barren", b" \x01\x02 \n"),
+        ("c-highbyte-barren", b" \xff \n"),
         ("utf8-line-sep-2028", "line1 line2 word\n".encode("utf-8")),
         ("utf8-long", ("héllo wörld " * 1000 + "\n").encode("utf-8")),
         ("utf8-no-trailing-nl", "café 你好 façade".encode("utf-8")),
@@ -79,13 +85,22 @@ def curated() -> list[tuple[str, bytes]]:
 _ASCII_WS = " \t\n\v\f\r"
 _ASCII_WORD = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,;!?-"
 
-# Unicode whitespace code points are deliberately excluded from word content so
-# that "valid UTF-8" fuzz inputs stay comparable to `wc -w` on ASCII whitespace.
-_UNICODE_WS = {
+# Unicode whitespace/separator code points are excluded from random *word
+# content* so a generated "word" stays one word; separators are emitted
+# deliberately between words instead (see _rand_utf8).
+_UNICODE_SEP_OR_WS = {
     0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x20, 0x85, 0xA0, 0x1680, 0x2000, 0x2001,
     0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A,
     0x2028, 0x2029, 0x202F, 0x205F, 0x3000,
 }
+
+# Separators GNU wc honours in a UTF-8 locale (plus ASCII ws). Probed against
+# wc 9.4 / glibc C.UTF-8 -- see scripts/probe-wc-words.py.
+_UNICODE_SEP = [0xA0, 0x1680, *range(0x2000, 0x200B), 0x202F, 0x205F, 0x3000]
+
+# Format/control code points that are neither separators nor printable: word
+# runs made only of these are "barren" and not counted by wc.
+_BARREN = [0x01, 0x07, 0x7F, 0x200B, 0x2028, 0x2060, 0xFEFF, 0x0378]
 
 
 def _rand_binary(rng: random.Random, n: int) -> bytes:
@@ -116,7 +131,7 @@ def _rand_codepoint(rng: random.Random) -> str:
         cp = rng.randint(0x21, 0x10FFFF)
         if 0xD800 <= cp <= 0xDFFF:        # surrogates are not valid scalars
             continue
-        if cp in _UNICODE_WS:             # keep word content non-whitespace
+        if cp in _UNICODE_SEP_OR_WS:      # keep word content non-whitespace
             continue
         if 0xFDD0 <= cp <= 0xFDEF:        # noncharacters
             continue
@@ -129,9 +144,22 @@ def _rand_utf8(rng: random.Random, n_words: int) -> bytes:
     out: list[str] = []
     for _ in range(n_words):
         wlen = rng.randint(1, 8)
-        out.append("".join(_rand_codepoint(rng) for _ in range(wlen)))
-        # Separate words with ASCII whitespace only (see _UNICODE_WS note).
-        out.append("".join(rng.choice(" \t\n") for _ in range(rng.randint(1, 3))))
+        # ~10% of words are barren (unprintable-only) or barely rescued by a
+        # single printable, exercising the printability rule across runs.
+        if rng.random() < 0.10:
+            w = "".join(chr(rng.choice(_BARREN)) for _ in range(rng.randint(1, 4)))
+            if rng.random() < 0.5:
+                w += rng.choice(_ASCII_WORD)   # rescued by one printable
+            out.append(w)
+        else:
+            out.append("".join(_rand_codepoint(rng) for _ in range(wlen)))
+        seps = []
+        for _ in range(rng.randint(1, 3)):
+            if rng.random() < 0.35:
+                seps.append(chr(rng.choice(_UNICODE_SEP)))
+            else:
+                seps.append(rng.choice(" \t\n"))
+        out.append("".join(seps))
     if out and rng.random() < 0.5:
         out.pop()
     return "".join(out).encode("utf-8")

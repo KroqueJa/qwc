@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <climits>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -20,35 +21,34 @@ static const u32 MAX_THREADS = std::thread::hardware_concurrency();
 
 namespace {
 
-// Per-stream/per-chunk running state for every scanned counter. `inWord` and
-// `line` carry across the successive read buffers of one byte range; the
-// startsInWord/endsInWord edges let neighbouring chunks be stitched.
+// Per-stream/per-chunk running state for every scanned counter. `wordScan` and
+// `line` carry across the successive read buffers of one byte range; their
+// leading/trailing-run facts let neighbouring chunks be stitched.
 struct ScanState
 {
   usize lines = 0;
-  usize words = 0;
   usize chars = 0;
   usize target = 0;
-  bool inWord = false;  // word-counting carry within this range
-  bool startsInWord =
-      false;  // first byte non-whitespace (for cross-chunk stitch)
-  bool sawFirst = false;
-  LineScan line;  // longest-line carry within this range
+  WordScan wordScan;  // word-counting carries + seam facts for this range
+  LineScan line;      // longest-line carry within this range
 };
 
-// Run every requested counter over one buffer, threading the carries in `s`.
-// Each counter scans the (cache-resident) buffer independently; the data is
-// read from the file only once, by the caller.
+// Run every requested counter over the owned region [ownedBegin, ownedEnd) of
+// one buffer, threading the carries in `s`. Bytes outside the owned region are
+// context for the word scanner only (multibyte separator windows may peek up
+// to WCTX bytes either side); every other counter sees just the owned bytes,
+// so nothing is double-counted. Each counter scans the (cache-resident) buffer
+// independently; the data is read from the file only once, by the caller.
 inline void scanBuffer(
-    const char* buf, usize g, const Workload& w, ScanState& s
+    const char* buf, const usize len, const usize ownedBegin,
+    const usize ownedEnd, const Workload& w, ScanState& s
 )
 {
-  if ( w.lines ) s.lines += count( buf, g, '\n' );
-  if ( w.target ) s.target += count( buf, g, w.targetByte );
-  if ( w.words ) {
-    if ( !s.sawFirst && g > 0 ) s.startsInWord = !isWordSpace( buf[0] );
-    s.words += words( buf, g, s.inWord );
-  }
+  const char* owned = buf + ownedBegin;
+  const usize g = ownedEnd - ownedBegin;
+  if ( w.lines ) s.lines += count( owned, g, '\n' );
+  if ( w.target ) s.target += count( owned, g, w.targetByte );
+  if ( w.words ) words( buf, len, ownedBegin, ownedEnd, s.wordScan, w.wordsMode );
 
   // chars and the longest line interact: `wc -L -m` measures the longest line in
   // characters, and that count and the character total walk the same UTF-8
@@ -56,13 +56,11 @@ inline void scanBuffer(
   // otherwise each is computed on its own. (w.maxLineInChars implies w.chars --
   // both are set exactly by -m -- so the fused path covers the char total.)
   if ( w.maxLine && w.maxLineInChars ) {
-    maxLineLenChars( buf, g, s.line, s.chars );
+    maxLineLenChars( owned, g, s.line, s.chars );
   } else {
-    if ( w.chars ) s.chars += chars( buf, g );
-    if ( w.maxLine ) maxLineLen( buf, g, s.line, w.maxLineInChars );
+    if ( w.chars ) s.chars += chars( owned, g );
+    if ( w.maxLine ) maxLineLen( owned, g, s.line, w.maxLineInChars );
   }
-
-  if ( g > 0 ) s.sawFirst = true;
 }
 
 // Serial single-pass scan of a stream that can only be consumed once and whose
@@ -72,17 +70,40 @@ inline void scanBuffer(
 // always-correct path -- no threads, no pread, no size assumptions.
 Counts processStream( int fd, const Workload& w )
 {
-  thread_local char buffer[128 * 4096];
+  static constexpr usize WCTX = 3;  // multibyte window context per side
+  thread_local char buffer[128 * 4096 + 2 * WCTX];
   ScanState s;
   Counts c{};
+  // The buffer front holds up to WCTX already-scanned bytes (context for a
+  // multibyte window opening the next read) followed by up to WCTX withheld
+  // unscanned bytes (a window the next read may complete); the fresh read
+  // lands after them.
+  usize ctx = 0;      // already-scanned context bytes at the buffer front
+  usize pending = 0;  // withheld unscanned bytes after the context
   isize bytesRead;
-  while ( ( bytesRead = read( fd, buffer, sizeof( buffer ) ) ) > 0 ) {
-    const auto g = static_cast<usize>( bytesRead );
-    if ( w.bytes ) c.bytes += g;  // no usable fstat size; tally as we read
-    scanBuffer( buffer, g, w, s );
+  while ( ( bytesRead = read( fd, buffer + ctx + pending,
+                              sizeof( buffer ) - ctx - pending ) ) > 0 ) {
+    const auto fresh = static_cast<usize>( bytesRead );
+    if ( w.bytes ) c.bytes += fresh;  // only fresh bytes, never re-counted
+    const usize len = ctx + pending + fresh;
+    // Withhold the final <= WCTX bytes: they may begin a window the next read
+    // completes. EOF flushes them below.
+    const usize hold = std::min( pending + fresh, WCTX );
+    const usize ownedEnd = len - hold;
+    scanBuffer( buffer, len, ctx, ownedEnd, w, s );
+    // Slide the tail down: the last <= WCTX scanned bytes become the new
+    // context, the withheld bytes follow them.
+    const usize keep = std::min( ownedEnd, WCTX );
+    std::memmove( buffer, buffer + ownedEnd - keep, keep + hold );
+    ctx = keep;
+    pending = hold;
   }
+  // EOF: scan the withheld bytes (their window can no longer grow).
+  if ( pending > 0 )
+    scanBuffer( buffer, ctx + pending, ctx, ctx + pending, w, s );
   c.lines = s.lines;
-  c.words = s.words;
+  wordsFlush( s.wordScan );  // EOF terminates the stream's trailing word
+  c.words = s.wordScan.words;
   c.chars = s.chars;
   c.target = s.target;
   // wc -L ignores a trailing line with no final newline, so drop the open run.
@@ -181,24 +202,31 @@ Counts processFile(
   // and the kernel bulk-copies straight from the warmed page cache. The whole
   // workload is computed on each buffer before moving on -- one read, every
   // requested counter.
+  static constexpr usize WCTX = 3;  // multibyte window context per side
   for ( u32 i = 0; i < numThreads; ++i ) {
     usize start = i * chunkSize;
     usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
-    threads.emplace_back( [fd, start, size, &results, i, &work]() {
+    threads.emplace_back( [fd, start, size, fileSize, &results, i, &work]() {
       static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
-      std::vector<char> buffer( BUF_SIZE );
+      std::vector<char> buffer( BUF_SIZE + 2 * WCTX );
       ScanState s;
       usize remaining = size;
       usize pos = start;
       while ( remaining > 0 ) {
+        // Fetch up to WCTX context bytes on both sides of the owned slice so
+        // a multibyte separator window straddling the seam is visible whole.
         const usize want = std::min( BUF_SIZE, remaining );
-        const isize got =
-            pread( fd, buffer.data(), want, static_cast<off_t>( pos ) );
-        if ( got <= 0 ) break;
-        const auto g = static_cast<usize>( got );
-        scanBuffer( buffer.data(), g, work, s );
-        remaining -= g;
-        pos += g;
+        const usize front = std::min( WCTX, pos );
+        const usize back = std::min( WCTX, fileSize - ( pos + want ) );
+        const isize got = pread( fd, buffer.data(), front + want + back,
+                                 static_cast<off_t>( pos - front ) );
+        if ( got <= static_cast<isize>( front ) ) break;
+        const usize ownedEnd =
+            std::min( static_cast<usize>( got ), front + want );
+        scanBuffer( buffer.data(), static_cast<usize>( got ), front, ownedEnd,
+                    work, s );
+        remaining -= ownedEnd - front;
+        pos += ownedEnd - front;
       }
       results[i] = s;
     } );
@@ -207,19 +235,38 @@ Counts processFile(
   for ( auto& t: threads ) t.join();
   close( fd );
 
-  // Lines, chars and target just sum. Words need a boundary stitch: each chunk
-  // counted as if whitespace preceded it, so a word straddling a boundary is
-  // counted twice (tail of the left chunk, fresh start of the right). When the
-  // previous chunk ended mid-word and this one starts mid-word, drop the dupe.
-  bool wordCarry = false;
+  // Lines, chars and target just sum. Words are counted at run END inside each
+  // chunk, so a run straddling a seam was counted only by the chunk where it
+  // ends -- no dupe to subtract. What the merge must add is judgement over the
+  // seam: a run's barren-ness spans its whole extent, so the carry threads
+  // inWord+hasPrintable forward and (a) rescues a run the ending chunk saw as
+  // barren but an earlier chunk satisfied, (b) counts a run that ended exactly
+  // at a seam (which neither side counted). The run still open after the last
+  // chunk is the file's trailing word -- EOF terminates it.
+  bool carryInWord = false, carryHasP = false;
   for ( const ScanState& s: results ) {
     result.lines += s.lines;
     result.chars += s.chars;
     result.target += s.target;
-    result.words += s.words;
-    if ( wordCarry && s.startsInWord ) --result.words;
-    wordCarry = s.inWord;
+    const WordScan& wsc = s.wordScan;
+    result.words += wsc.words;
+    if ( !wsc.sawByte ) continue;  // empty chunk: carry passes through
+    if ( carryInWord ) {
+      if ( wsc.startsInWord ) {
+        if ( wsc.leadingEnded && !wsc.leadingHasPrintable && carryHasP )
+          ++result.words;  // rescue: the earlier part had the printable
+      } else if ( carryHasP ) {
+        ++result.words;  // run ended exactly at the seam
+      }
+    }
+    if ( carryInWord && wsc.startsInWord && !wsc.sawSeparator ) {
+      carryHasP = carryHasP || wsc.runHasPrintable;  // one run spans the chunk
+    } else {
+      carryInWord = wsc.inWord;
+      carryHasP = wsc.runHasPrintable;
+    }
   }
+  if ( carryInWord && carryHasP ) ++result.words;
 
   // Longest line: a line split across a boundary is the previous chunk's open
   // run (`carry`) plus this chunk's prefix (bytes up to its first newline), but

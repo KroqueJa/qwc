@@ -171,11 +171,12 @@ def required_to_match(regime: str, mode: Mode, meta: Meta, wc_ok: bool) -> bool:
     # unterminated final line that qwc ignores (so the input must end in '\n').
     if mode.has_maxline and not (meta.ascii_print and meta.nl_terminated):
         return False
-    # Word splitting: GNU `wc` defers to libc whitespace classification, which
-    # diverges from qwc's locale-independent rule on ASCII control bytes (NUL,
-    # 0x01-0x1F, 0x7F) and on non-ASCII bytes. Require parity only on
-    # printable-ASCII text (printable bytes plus ASCII whitespace).
-    if mode.kind == "word" and not meta.ascii_text:
+    # Word splitting now follows wc's model in both supported regimes: ASCII
+    # whitespace + the printability rule in C (where classification is purely
+    # bytewise, so parity holds on ANY input), plus the unicode separator set
+    # under a UTF-8 locale (parity on all valid UTF-8; invalid sequences keep
+    # qwc's own resync rule).
+    if mode.kind == "word" and regime != "C" and not meta.valid_utf8:
         return False
     # Characters (-m): bytes under the C locale (universal); code points under a
     # UTF-8 locale, which agree only on well-formed UTF-8.

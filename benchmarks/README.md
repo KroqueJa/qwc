@@ -118,6 +118,36 @@ page-cache-warm) and the kernel advantage reappears exactly as Finding 1 predict
   Silicon, AVX2 "ties" under WSL): it was storage, not ISA or compiler. The Mac
   reads from fast native APFS and is not I/O-bound; WSL `/mnt/c` is.
 
+## Finding 4 — the unicode/printability words kernel on AVX2
+
+Measured **2026-06-11**, after the `-w` rewrite (unicode separators + the
+≥1-printable-char rule, see `docs/superpowers/specs/2026-06-10-unicode-whitespace-words-design.md`).
+`qwc` (AVX2 words kernel) vs `qwc-scalar` (unified scalar kernel), 256 MiB
+`gen-data.py` corpora on `/tmp` (ext4, page-cache-warm), `hyperfine -m 8`,
+threaded full-binary wall clock:
+
+| corpus / locale                  | qwc      | qwc-scalar | speedup |
+|----------------------------------|----------|------------|---------|
+| ASCII, `LC_ALL=C`                | 6.1 GB/s | 0.89 GB/s  | 6.9×    |
+| ASCII, `LC_ALL=C.UTF-8`          | 6.2 GB/s | 0.98 GB/s  | 6.3×    |
+| mixed UTF-8, `LC_ALL=C.UTF-8`    | 2.4 GB/s | 0.94 GB/s  | 2.6×    |
+
+**How the kernel gets there:** per 32-byte block it builds separator/printable
+bitmasks in vectors, then a bit-parallel fast path (popcount of nonsep→sep
+transitions) consumes blocks with no barren bytes — i.e. all real text — in a
+handful of scalar ops. Blocks containing anything the vector model can't
+classify bit-identically to the scalar kernel (3/4-byte UTF-8, invalid bytes,
+leads with unassigned holes like 0xCE, C1 controls) fall back per-block: first
+to a run-granular mask walk, ultimately to the scalar classifier. That is why
+mixed text with CJK shows 2.6× rather than ~7×: its multibyte-bearing blocks
+take the scalar path by design (correctness first — the AVX2 and scalar
+kernels agree on *all* input, not just valid UTF-8).
+
+**Context vs the old kernel:** the pre-unicode `-w` numbers in Finding 3
+(10.82 GB/s) measured a much simpler problem — maximal non-whitespace runs,
+no printability rule, no UTF-8. The new semantics cost ~40% of the old
+headline throughput but make `-w` byte-for-byte wc-faithful in both locales.
+
 ## Reproducing
 
 The per-core sweep uses a throwaway harness that `#include`s the kernel headers

@@ -1,5 +1,7 @@
 # QWC
-Have you used `wc` before? I have - it's great! But it's not as fast as it could be. Hence, some people wrote [uutils](https://github.com/uutils/coreutils) containing `uu-wc`. Which is even greater! But it's not as fast as it could be. `qwc` is as fast as it can be.
+Have you used `wc` before? I have - it's great! But it's not as fast as it could be. Hence, some people wrote [uutils](https://github.com/uutils/coreutils) containing `uu-wc`. Which is even greater! But it's not as fast as it could be. So I wrote `qwc`. 
+
+`qwc` is as fast as it can be.
 
 Why is it faster than the above mentioned byte counters? Many reasons:
 1. It doesn't hold itself to as rigorous a standard of correctness with regards to exotic locales. `qwc` specializes in the UTF-8 and C locales, where 99.99% of modern use cases live.
@@ -37,23 +39,24 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
 - [x] Fuzzy correctness suite
 - [x] Conform to GNU `wc` instead of BSD
 - [x] Center dispatch architecture more cleanly around `S_ISREG`
-- [ ] Support for valid unicode whitespace in line with GNU `wc`
+- [x] Support for valid unicode whitespace in line with GNU `wc`
 - [ ] Reconcile `-cm` with GNU
 - [ ] Comprehensive multi-system performance benchmarking
-- [x] Vectorized versions of the scalar algorithms
+- [ ] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
     - [x] AVX2
     - [x] NEON
   - [x] Max line length
     - [x] AVX2
     - [x] NEON
-  - [x] Words
+  - [ ] Words
     - [x] AVX2
-    - [x] NEON
+    - [ ] NEON (re-port against the unicode/printability kernel)
   - [x] Multibyte characters
     - [x] AVX2
     - [x] NEON
 - [ ] Investigate a 4-wide (128-byte) newline-free fast path for the AVX2
   scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
   and benchmark it against the current 1×32-byte loop
-- [ ] Detect lone `-c` and don't spin up any threads.
+- [x] Lone `-c` thread economy
+- [ ] `inline constexpr` iswprint table

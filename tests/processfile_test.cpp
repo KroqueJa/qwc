@@ -642,3 +642,49 @@ TEST_F( StdinFixture, StdinFusedLargerThanReadBuffer )
   EXPECT_EQ( c.words, refWords( content ) );
   EXPECT_EQ( c.bytes, content.size() );
 }
+
+// ---------------------------------------------------------------------------
+// Unicode word splitting across chunk boundaries: multibyte separators split
+// by the chunk seam, and barren/printable straddles, must merge exactly.
+// ---------------------------------------------------------------------------
+TEST( ProcessFileWordsUnicode, MultibyteSeparatorOnEveryBoundary )
+{
+  std::string content;
+  for ( int i = 0; i < 500; ++i ) content += "ab\xE3\x80\x80";  // 'ab' U+3000
+  content += "tail";
+  const WordsMode m{ true, true };
+  const size_t expected = refWords( content, true );  // 501
+  TempFile f( content );
+  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
+                       size_t( 64 ), size_t( 4096 ), size_t( 100000 ) } )
+    EXPECT_EQ( pfWords( f.path(), bpt, m ), expected )
+        << "bytesPerThread=" << bpt;
+}
+
+TEST( ProcessFileWordsUnicode, BarrenStraddleRescuedAcrossSeam )
+{
+  // "a<ctrl run> <ctrl run>b": each barren half must be judged over the whole
+  // straddling run, for every chunk size.
+  std::string content = "a";
+  content += std::string( 300, '\x01' );
+  content += ' ';
+  content += std::string( 300, '\x01' );
+  content += 'b';
+  const size_t expected = refWords( content, false );  // 2
+  TempFile f( content );
+  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 299 ),
+                       size_t( 301 ), size_t( 4096 ) } )
+    EXPECT_EQ( pfWords( f.path(), bpt, WordsMode{} ), expected )
+        << "bytesPerThread=" << bpt;
+}
+
+TEST( ProcessFileWordsUnicode, BarrenOnlyFileIsZero )
+{
+  std::string content = " ";
+  content += std::string( 5000, '\x02' );
+  content += ' ';
+  TempFile f( content );
+  for ( size_t bpt : { size_t( 1 ), size_t( 64 ), size_t( 4096 ) } )
+    EXPECT_EQ( pfWords( f.path(), bpt, WordsMode{} ), 0u )
+        << "bytesPerThread=" << bpt;
+}

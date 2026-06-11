@@ -1,5 +1,6 @@
 #pragma once
 #include "typedef.h"
+#include "words.h"
 
 // Which counts to produce for an input. The frontend sets these from the
 // command line once, up front, and a single pass computes every requested
@@ -20,6 +21,7 @@ struct Workload
       false;  // -L measures characters (when -m is active), not bytes
   bool target = false;
   char targetByte = '\n';
+  WordsMode wordsMode;  // locale-resolved word splitting (set once in main)
 
   // Does anything here require scanning the file contents? Bytes alone come
   // from fstat, so a pure `-c` needs no scan at all.

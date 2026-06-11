@@ -77,7 +77,9 @@ if( QWC_SCALAR )
   set( QWC_SIMD_FLAGS )
 elseif( CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64" )
   set( QWC_COUNTLINES src/count_neon.cpp)
-  set( QWC_WORDS src/words_neon.cpp)
+  # The unicode/printability words rewrite obsoleted the old NEON kernel; ARM
+  # uses the unified scalar kernel until the NEON re-port (see README roadmap).
+  set( QWC_WORDS src/words_scalar.cpp)
   set( QWC_MAXLINE src/maxlinelen_neon.cpp)
   set( QWC_CHARS src/chars_neon.cpp)
   # Bare like the old Makefile: Apple clang targets the native Apple Silicon

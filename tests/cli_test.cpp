@@ -914,3 +914,40 @@ TEST( CliWcCompat, MultipleFilesMatchWcIncludingTotal )
   }
   std::system( ( "rm -f " + a + " " + b ).c_str() );
 }
+
+// ---------------------------------------------------------------------------
+// Locale-aware word splitting (-w): UTF-8 locales split on unicode whitespace
+// like GNU wc; the C locale does not. POSIXLY_CORRECT disables the
+// non-breaking-space separators. LC_ALL resolution comes via setlocale("").
+// Multibyte payloads are literal UTF-8 bytes (C++ \x escapes), so the shell
+// passes them through untouched.
+// ---------------------------------------------------------------------------
+TEST( CliLocale, Utf8LocaleSplitsOnIdeographicSpace )
+{
+  // 'a' U+3000 'b'
+  CmdResult r =
+      run( "printf 'a\xE3\x80\x80" "b' | LC_ALL=C.UTF-8 " + kBin + " -w" );
+  EXPECT_EQ( r.out, line( 2 ) );
+}
+
+TEST( CliLocale, CLocaleDoesNotSplitOnIdeographicSpace )
+{
+  CmdResult r = run( "printf 'a\xE3\x80\x80" "b' | LC_ALL=C " + kBin + " -w" );
+  EXPECT_EQ( r.out, line( 1 ) );
+}
+
+TEST( CliLocale, PosixlyCorrectKeepsNbspJoined )
+{
+  // 'a' U+00A0 'b'
+  CmdResult r = run( "printf 'a\xC2\xA0" "b' | LC_ALL=C.UTF-8 POSIXLY_CORRECT=1 " +
+                     kBin + " -w" );
+  EXPECT_EQ( r.out, line( 1 ) );
+  CmdResult r2 = run( "printf 'a\xC2\xA0" "b' | LC_ALL=C.UTF-8 " + kBin + " -w" );
+  EXPECT_EQ( r2.out, line( 2 ) );
+}
+
+TEST( CliLocale, ControlOnlyRunIsNotAWord )
+{
+  CmdResult r = run( "printf ' \\001 ' | LC_ALL=C " + kBin + " -w" );
+  EXPECT_EQ( r.out, line( 0 ) );
+}

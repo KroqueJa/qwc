@@ -8,6 +8,7 @@
 
 #include "chars.h"
 #include "countlines.h"
+#include "iswprint_table.h"
 #include "maxlinelen.h"
 #include "processfile.h"
 #include "typedef.h"
@@ -26,10 +27,12 @@ inline usize pfLines( const char* path, usize bpt = kDefaultBpt )
   w.lines = true;
   return processFile( path, w, bpt ).lines;
 }
-inline usize pfWords( const char* path, usize bpt = kDefaultBpt )
+inline usize pfWords( const char* path, usize bpt = kDefaultBpt,
+                      const WordsMode m = {} )
 {
   Workload w;
   w.words = true;
+  w.wordsMode = m;
   return processFile( path, w, bpt ).words;
 }
 inline usize pfBytes( const char* path, usize bpt = kDefaultBpt )
@@ -90,26 +93,76 @@ inline bool refIsSpace( unsigned char c )
          c == '\r';
 }
 
-inline usize refWords( const std::string& s )
+// Reference word count, wc semantics: a word is a maximal non-separator run
+// containing >= 1 printable character. Independent of the kernel's structure
+// (one linear walk with local state, no owned-region/window machinery); uses
+// the same generated iswprint table, which words_test.cpp spot-checks against
+// known glibc classifications.
+inline usize refWords( const std::string& s, const bool utf8 = false,
+                       const bool nbspace = true )
 {
-  usize n = 0;
-  size_t i = 0;
-  while ( i < s.size() ) {
-    while ( i < s.size() && refIsSpace( static_cast<unsigned char>( s[i] ) ) )
-      ++i;
-    if ( i >= s.size() ) break;
-    ++n;  // start of a word
-    while ( i < s.size() && !refIsSpace( static_cast<unsigned char>( s[i] ) ) )
-      ++i;
+  const auto* p = reinterpret_cast<const unsigned char*>( s.data() );
+  const usize n = s.size();
+  usize count = 0, i = 0;
+  bool inWord = false, hasPrint = false;
+  while ( i < n ) {
+    u32 cp = p[i];
+    usize len = 1;
+    bool valid = cp < 0x80;
+    if ( utf8 && cp >= 0xC2 && cp <= 0xF4 ) {  // possible multibyte lead
+      const usize need = cp < 0xE0 ? 2 : cp < 0xF0 ? 3 : 4;
+      if ( i + need <= n ) {
+        u32 v = cp & ( 0xFFu >> ( need + 1 ) );
+        valid = true;
+        for ( usize k = 1; k < need; ++k ) {
+          if ( ( p[i + k] & 0xC0 ) != 0x80 ) {
+            valid = false;
+            break;
+          }
+          v = ( v << 6 ) | ( p[i + k] & 0x3F );
+        }
+        // Strictness mirrors mbrtowc: no overlongs, no surrogates, <= 10FFFF.
+        static const u32 lo[5] = { 0, 0, 0x80, 0x800, 0x10000 };
+        if ( valid && ( v < lo[need] || v > 0x10FFFF ||
+                        ( v >= 0xD800 && v <= 0xDFFF ) ) )
+          valid = false;
+        if ( valid ) {
+          cp = v;
+          len = need;
+        } else {
+          valid = false;
+        }
+      } else {
+        valid = false;
+      }
+    } else if ( cp >= 0x80 ) {
+      valid = false;  // continuation byte or invalid lead (also the C path)
+    }
+    const bool sep = utf8 ? ( valid && isSepCp( cp, nbspace ) )
+                          : refIsSpace( static_cast<unsigned char>( cp ) );
+    const bool print = utf8 ? ( valid && qwcIswprint( cp ) )
+                            : ( cp >= 0x21 && cp <= 0x7E );
+    if ( sep ) {
+      if ( inWord && hasPrint ) ++count;
+      inWord = false;
+      hasPrint = false;
+    } else {
+      inWord = true;
+      if ( print ) hasPrint = true;
+    }
+    i += len;
   }
-  return n;
+  if ( inWord && hasPrint ) ++count;
+  return count;
 }
 
-// Run `words` over a whole string in one shot (fresh in-word state).
-inline usize wordsStr( const std::string& s )
+// Run `words` over a whole string in one shot (fresh state, then flushed).
+inline usize wordsStr( const std::string& s, const WordsMode m = {} )
 {
-  bool inWord = false;
-  return words( s.data(), s.size(), inWord );
+  WordScan ws;
+  words( s.data(), s.size(), 0, s.size(), ws, m );
+  wordsFlush( ws );
+  return ws.words;
 }
 
 // Independent reference for `chars` (UTF-8 code points). Structured differently
@@ -221,16 +274,24 @@ inline std::pair<usize, usize> fusedLineCharsChunked(
   return { ls.maxComplete, cc };
 }
 
-// Run `words` feeding the string in fixed-size pieces, carrying in-word state
-// across them -- the way a single thread streams successive read buffers. Must
-// agree with wordsStr/refWords regardless of where the splits land.
-inline usize wordsChunked( const std::string& s, size_t chunk )
+// Run `words` feeding the string in fixed-size pieces, carrying state across
+// them the way a single thread streams successive read buffers: each call owns
+// its piece and sees up to 3 bytes of context on both sides, mirroring the
+// overlap reads in processfile. Must agree with wordsStr/refWords regardless
+// of where the splits land.
+inline usize wordsChunked( const std::string& s, size_t chunk,
+                           const WordsMode m = {} )
 {
-  bool inWord = false;
-  usize total = 0;
-  for ( size_t i = 0; i < s.size(); i += chunk )
-    total += words( s.data() + i, std::min( chunk, s.size() - i ), inWord );
-  return total;
+  WordScan ws;
+  for ( size_t i = 0; i < s.size(); i += chunk ) {
+    const size_t end = std::min( i + chunk, s.size() );
+    const size_t front = std::min<size_t>( i, 3 );
+    const size_t back = std::min<size_t>( s.size() - end, 3 );
+    words( s.data() + i - front, ( end + back ) - ( i - front ), front,
+           front + ( end - i ), ws, m );
+  }
+  wordsFlush( ws );
+  return ws.words;
 }
 
 }  // namespace qwctest

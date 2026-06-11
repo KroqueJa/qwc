@@ -1,9 +1,12 @@
+#include <langinfo.h>
+
 #include <atomic>
 #include <clocale>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -50,21 +53,23 @@ int main( int argc, char** argv )
   Options opt;
   if ( const std::optional<int> rc = parseArgs( argc, argv, opt ) ) return *rc;
 
-  // The char/byte column counts characters (-m) in the locale's encoding. In a
-  // single-byte locale (e.g. C/POSIX) a character is just a byte, so wc's -m
-  // collapses to -c. Mirror that: adopt the environment's locale and, when it
-  // isn't multibyte, count bytes for that column instead of scanning code
-  // points.
-  if ( opt.charByte && opt.charsNotBytes ) {
-    // Called once at startup, before any worker threads are spawned, so the
-    // concurrency-mt-unsafe warning does not apply here.
-    std::setlocale( LC_CTYPE, "" );  // NOLINT(concurrency-mt-unsafe)
-    if ( MB_CUR_MAX <= 1 ) opt.charsNotBytes = false;
-  }
+  // Adopt the environment's locale once, before any worker threads exist.
+  // setlocale(LC_CTYPE, "") performs the POSIX LC_ALL > LC_CTYPE > LANG
+  // resolution -- the same environment handling as wc. The codeset decides
+  // both the -m collapse (a character is just a byte in single-byte locales,
+  // so -m becomes -c) and the word-splitting flavour; POSIXLY_CORRECT disables
+  // coreutils' non-breaking-space separators, exactly like wc.
+  std::setlocale( LC_CTYPE, "" );  // NOLINT(concurrency-mt-unsafe)
+  if ( opt.charByte && opt.charsNotBytes && MB_CUR_MAX <= 1 )
+    opt.charsNotBytes = false;
 
   // Resolve the requested columns into a single counting workload, computed
   // once per file in a single pass.
-  const Workload work = opt.workload();
+  Workload work = opt.workload();
+  const char* codeset = nl_langinfo( CODESET );
+  work.wordsMode.utf8 =
+      codeset != nullptr && std::string_view( codeset ) == "UTF-8";
+  work.wordsMode.nbspace = std::getenv( "POSIXLY_CORRECT" ) == nullptr;
 
   // No file arguments: count standard input. wc prints just the padded
   // count(s), with no name.

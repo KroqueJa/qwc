@@ -14,6 +14,48 @@
 #define NBLOCKS (NCP / BLOCK)
 #define BBYTES (BLOCK / 8)
 
+/* Mirror of isSepCp in include/words.h (the probe-pinned wc separator set);
+ * keep the two in sync. */
+static int is_sep(unsigned cp, int nbspace)
+{
+  if (cp == 0x20 || (cp >= 0x09 && cp <= 0x0D)) return 1;
+  if (cp == 0x1680 || (cp >= 0x2000 && cp <= 0x200A && cp != 0x2007) ||
+      cp == 0x205F || cp == 0x3000)
+    return 1;
+  if (nbspace && (cp == 0x00A0 || cp == 0x2007 || cp == 0x202F || cp == 0x2060))
+    return 1;
+  return 0;
+}
+
+/* The AVX2 words kernel vectorizes exactly: ASCII, plus well-formed 2-byte
+ * sequences whose lead is "clean". Its in-vector model classifies U+0080-009F
+ * as non-printable (the C2 window), U+00A0 as separator when nbspace is on
+ * (printable when off), and every other 2-byte code point as printable word
+ * content. A lead byte is a CANDIDATE (forces the block to the scalar
+ * classifier) if any code point it can begin deviates from that model in
+ * either nbspace mode. 3/4-byte leads and invalid bytes are candidates
+ * unconditionally: the vector path doesn't model them. */
+static int cand_lead(unsigned lead)
+{
+  unsigned c2, nb;
+  if (lead < 0x80) return 0;                 /* ASCII: never consulted */
+  if (lead < 0xC2 || lead > 0xDF) return 1;  /* not a 2-byte lead */
+  for (c2 = 0x80; c2 <= 0xBF; ++c2) {
+    unsigned cp = ((lead & 0x1Fu) << 6) | (c2 & 0x3Fu);
+    int tp = !!iswprint((wint_t)cp);
+    for (nb = 0; nb <= 1; ++nb) {
+      int ts = is_sep(cp, (int)nb);
+      /* model: 0 = separator, 1 = printable, 2 = other (non-printable) */
+      int model = (lead == 0xC2 && c2 <= 0x9F) ? 2
+                : (lead == 0xC2 && c2 == 0xA0 && nb) ? 0
+                : 1;
+      int truth = ts ? 0 : tp ? 1 : 2;
+      if (model != truth) return 1;
+    }
+  }
+  return 0;
+}
+
 int main(void)
 {
   if (!setlocale(LC_CTYPE, "C.UTF-8") && !setlocale(LC_CTYPE, "C.utf8")) {
@@ -54,5 +96,13 @@ int main(void)
   printf("  if ( cp >= 0x110000 ) return false;\n");
   printf("  const u8* block = kIswprintBlocks[kIswprintIndex[cp >> 8]];\n");
   printf("  return ( block[( cp & 0xFF ) >> 3] >> ( cp & 7 ) ) & 1;\n}\n");
+  printf("\n// Candidate leads for the AVX2 words kernel: 1 = a byte that may\n");
+  printf("// begin a code point the in-vector 2-byte model misclassifies (or\n");
+  printf("// that is not a 2-byte lead at all), so its block must take the\n");
+  printf("// scalar path. See cand_lead() in scripts/gen-iswprint-table.c.\n");
+  printf("static const u8 kCandLead[256] = {\n");
+  for (unsigned b = 0; b < 256; ++b)
+    printf("%d,%s", cand_lead(b), (b % 32 == 31) ? "\n" : "");
+  printf("};\n");
   return 0;
 }

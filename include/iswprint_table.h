@@ -425,3 +425,18 @@ inline bool qwcIswprint( const u32 cp )
   const u8* block = kIswprintBlocks[kIswprintIndex[cp >> 8]];
   return ( block[( cp & 0xFF ) >> 3] >> ( cp & 7 ) ) & 1;
 }
+
+// Candidate leads for the AVX2 words kernel: 1 = a byte that may
+// begin a code point the in-vector 2-byte model misclassifies (or
+// that is not a 2-byte lead at all), so its block must take the
+// scalar path. See cand_lead() in scripts/gen-iswprint-table.c.
+static const u8 kCandLead[256] = {
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+1,1,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1,
+1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
+};
