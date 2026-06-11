@@ -33,12 +33,10 @@ static const u32 MAX_THREADS = std::max( std::thread::hardware_concurrency(), 1u
 // stored at the matching index so the output order mirrors opt.files.
 //
 // GCC 13's -fanalyzer mis-models the libstdc++ vector constructor and reports a
-// bogus "use of uninitialized value" for the value-initialized `output` below;
-// silence just that false positive (GCC only -- clang has no such option).
-#if defined( __GNUC__ ) && !defined( __clang__ )
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wanalyzer-use-of-uninitialized-value"
-#endif
+// bogus "use of uninitialized value" for the value-initialized `output` below.
+// The diagnostic carries no source location, so no #pragma region can catch
+// it; it is muted for this TU via -Wno-analyzer-use-of-uninitialized-value in
+// CMakeLists.txt (GCC only).
 template <typename T, typename Fn>
 static std::vector<T> mapFiles( usize numFiles, u32 numThreads, Fn perFile )
 {
@@ -66,9 +64,6 @@ static std::vector<T> mapFiles( usize numFiles, u32 numThreads, Fn perFile )
   for ( auto& t: pool ) t.join();
   return output;
 }
-#if defined( __GNUC__ ) && !defined( __clang__ )
-#pragma GCC diagnostic pop
-#endif
 
 int main( int argc, char** argv )
 {

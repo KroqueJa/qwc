@@ -122,6 +122,18 @@ message( STATUS "qwc: building ${QWC_COUNTLINES}, ${QWC_WORDS}, ${QWC_MAXLINE} a
 # each target explicitly, so the common set is just the frontend and dispatcher.
 set( QWC_COMMON_SOURCES src/main.cpp src/cli.cpp src/processfile.cpp )
 
+# GCC 13's -fanalyzer mis-models the libstdc++ vector constructor and reports
+# a bogus, LOCATION-LESS -Wanalyzer-use-of-uninitialized-value against the
+# value-initialized results vector in main.cpp's mapFiles. A diagnostic with
+# no source location cannot be silenced by any #pragma region, only by the
+# command-line option -- so mute exactly that check, only for this one TU,
+# only under GCC. (The option is inert without -fanalyzer; clang would warn
+# about the unknown -Wno- flag, hence the compiler gate.)
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+  set_source_files_properties( src/main.cpp PROPERTIES
+    COMPILE_OPTIONS "-Wno-analyzer-use-of-uninitialized-value" )
+endif()
+
 # ---------------------------------------------------------------------------
 # Shared config applied to a target
 # ---------------------------------------------------------------------------
