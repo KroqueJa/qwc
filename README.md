@@ -35,13 +35,8 @@ Most software does not become slow because the underlying problems are challengi
 Hence; this project is equally a challenge, a hobby, and a small act of protest. If we could spend less time waiting for our pocket computers to turn on, we could spend more time with our children, in the sun, or hand-tuning SIMD.
 
 # Roadmap
-- [x] Combined flags (`-L -m` etc)
-- [x] Fuzzy correctness suite
-- [x] Conform to GNU `wc` instead of BSD
-- [x] Center dispatch architecture more cleanly around `S_ISREG`
 - [x] Support for valid unicode whitespace in line with GNU `wc`
 - [ ] Reconcile `-cm` with GNU
-- [ ] Comprehensive multi-system performance benchmarking
 - [ ] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
     - [x] AVX2
@@ -49,12 +44,12 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
   - [x] Max line length
     - [x] AVX2
     - [x] NEON
-  - [ ] Words
+  - [x] Words
     - [x] AVX2
-    - [ ] NEON (re-port against the unicode/printability kernel)
-      - Primary port: 32-byte blocks (two `uint8x16_t`), building 32-bit
-        masks so the `stepMasks` state machine and carry logic are reused
-        verbatim from the shared kernel.
+    - [x] NEON (re-ported against the unicode/printability kernel)
+      - 32-byte blocks (two `uint8x16_t`) build 32-bit masks, so the
+        `stepMasks` state machine and carry logic are reused verbatim from
+        the shared `words_kernel.h`.
       - [ ] Investigate an alternative 16-byte-block NEON port (single
         `uint8x16_t`, native 16-bit masks, `stepMasks` driven with `n=16`)
         and benchmark it against the 32-byte port to see whether the
