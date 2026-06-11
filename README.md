@@ -59,4 +59,3 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
   scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
   and benchmark it against the current 1×32-byte loop
 - [x] Lone `-c` thread economy
-- [ ] `inline constexpr` iswprint table
