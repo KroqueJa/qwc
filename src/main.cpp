@@ -15,8 +15,12 @@
 #include "processfile.h"
 
 // hardware_concurrency() can report 0 when it cannot tell; treat that as 1 so we
-// never end up with an empty worker pool.
-static const u32 MAX_THREADS = std::max( std::thread::hardware_concurrency(), 1u );
+// never end up with an empty worker pool. Spelled as a ternary over the
+// noexcept hardware_concurrency() rather than std::max, which is not noexcept
+// and so could (in principle) throw during static initialization.
+static const u32 MAX_THREADS = std::thread::hardware_concurrency() > 0
+                                   ? std::thread::hardware_concurrency()
+                                   : 1;
 
 // Files per worker on the no-scan (bytes-only, `-c`) path: each file is a bare
 // fstat (~microseconds on a warm local cache), so a worker only earns its
@@ -83,9 +87,13 @@ int main( int argc, char** argv )
   // Resolve the requested columns into a single counting workload, computed
   // once per file in a single pass.
   Workload work = opt.workload();
+  // Like setlocale above: called once at startup, before any worker threads
+  // are spawned, so the thread-safety warnings do not apply here.
+  // NOLINTNEXTLINE(concurrency-mt-unsafe)
   const char* codeset = nl_langinfo( CODESET );
   work.wordsMode.utf8 =
       codeset != nullptr && std::string_view( codeset ) == "UTF-8";
+  // NOLINTNEXTLINE(concurrency-mt-unsafe)
   work.wordsMode.nbspace = std::getenv( "POSIXLY_CORRECT" ) == nullptr;
 
   // No file arguments: count standard input. wc prints just the padded
