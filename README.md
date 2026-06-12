@@ -62,3 +62,28 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
   scanner, mirroring the 4-accumulator unrolling in `count_avx2`/`chars_avx2`,
   and benchmark it against the current 1×32-byte loop
 - [x] Lone `-c` thread economy
+  - [ ] Lone `-c` still slow
+- [ ] Kernel-fusion experiments: `scanBuffer` currently runs one kernel pass
+  per requested counter over the same buffer; fusing fills more `ScanState`
+  fields in one pass while the seam carries and chunk merge stay untouched.
+  Only pays on compute-bound legs — benchmark like Finding 4 in
+  `benchmarks/README.md` (warm `/tmp` ext4, both locales, per-core sweep).
+  - [ ] `-lw`: fold a newline tally into the words kernel — the bare default
+    invocation (lines/words/bytes, bytes fstat-free) is the most common wc
+    call, and `\n` is already in the kernel's per-block separator mask, so
+    counting it costs one extra `vpcmpeqb`+`vpsubb` on in-register data
+    (~5% on the fast path) instead of a whole second `count()` pass
+    (~30–50% of the words pass). Fallback block paths walk bytes anyway;
+    AVX2 and scalar must stay bit-identical on all input. Expected 20–30%
+    on compute-bound default-invocation runs. Stretch, only if this pans
+    out: optional chars output too (free on ASCII fast-path blocks),
+    covering `-lwm` in one pass.
+  - [ ] `-lL`: fold a newline tally into the longest-line kernel — it
+    already locates every newline to reset its run length, so the line
+    count is nearly a byproduct. Rarer combo but almost free; ride along
+    with the next change that touches that kernel. Expected: `-lL`
+    approaches lone `-L` cost.
+  - Not worth fusing (recorded so it isn't re-litigated): `-c` combos
+    (bytes never scan), `--char` combos (niche extension), `-wL` (the two
+    stateful carry-heavy kernels for the rarest combo), and a dedicated
+    lone-`-l` harness path (measured 1.00×, Finding 5).
