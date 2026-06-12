@@ -69,7 +69,9 @@ Run benchmarks before and after any change to a SIMD or hot path, and include th
 
 ## Commits
 
-Plain, short, imperative subject lines — `Fix release flow`, `Improve line counting thread economy` — under ~72 characters, with the "why" in the body when it isn't obvious from the diff. The project does not use Conventional Commits or commit-message-driven release tooling. Releases are tags (`vX.Y.Z`) cut by the maintainer; `--version` reports the release tag (or the commit for dev builds).
+The project does not use Conventional Commits or commit-message-driven release tooling. Releases are tags (`vX.Y.Z`) cut by the maintainer; `--version` reports the release tag (or the commit for dev builds).
+
+Unless very difficult, should end the phrase "This commit will...". Always start with a capital letter.
 
 ## Pull requests
 
