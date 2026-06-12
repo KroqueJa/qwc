@@ -386,8 +386,9 @@ TEST( Cli, MaxLineLengthChunkedMatchesTotal )
 
 // ---------------------------------------------------------------------------
 // Combined count flags. wc prints the selected columns in a fixed order --
-// lines, words, char/byte, longest line -- regardless of the order (or bundling)
-// of the flags. -c and -m share one column; whichever is last wins.
+// lines, words, chars, bytes, longest line -- regardless of the order (or
+// bundling) of the flags. -c and -m together print both a chars and a bytes
+// column, exactly like GNU wc.
 // ---------------------------------------------------------------------------
 TEST( CliCombined, BundledShortFlags )
 {
@@ -423,13 +424,36 @@ TEST( CliCombined, FourColumns )
   EXPECT_EQ( r.out, cols( { 2, 3, 6, 3 } ) );
 }
 
-TEST( CliCombined, CharByteLastWinsBytes )
+TEST( CliCombined, CharsAndBytesAreTwoColumns )
 {
-  // -mc: -c is last, so the shared column counts bytes. ASCII keeps it locale-
-  // independent ("abcde" -> 5 either way, but the column must be present once).
-  CmdResult r = run( piped( "abcde", "-mc" ) );
+  // -cm / -mc: GNU wc prints a chars column AND a bytes column, chars first,
+  // regardless of flag order. ASCII input keeps the values locale-independent
+  // ("abcde" -> 5 5 either way).
+  CmdResult cm = run( piped( "abcde", "-cm" ) );
+  EXPECT_EQ( cm.exitCode, 0 );
+  EXPECT_EQ( cm.out, cols( { 5, 5 } ) );
+  CmdResult mc = run( piped( "abcde", "-mc" ) );
+  EXPECT_EQ( mc.out, cm.out );
+}
+
+TEST( CliCombined, CharsColumnPrintsBeforeBytes )
+{
+  // Multibyte input under a UTF-8 locale pulls the two columns apart:
+  // "héllo\n" is 6 characters but 7 bytes, and chars must print first
+  // (GNU's fixed column order). Literal UTF-8 bytes, like the CliLocale tests.
+  CmdResult r = run( "printf 'h\xC3\xA9llo\\n' | LC_ALL=C.UTF-8 " + kBin +
+                     " -cm" );
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out, cols( { 5 } ) );  // exactly one column, not two
+  EXPECT_EQ( r.out, cols( { 6, 7 } ) );
+}
+
+TEST( CliCombined, FiveColumns )
+{
+  // -lwmcL: lines, words, chars, bytes, longest line. "a b\nc\n" = 2 lines,
+  // 3 words, 6 chars, 6 bytes, longest line "a b" = 3.
+  CmdResult r = run( piped( "a b\\nc\\n", "-lwmcL" ) );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out, cols( { 2, 3, 6, 6, 3 } ) );
 }
 
 TEST( CliCombined, CharExtensionCombinesAndComesLast )
@@ -858,11 +882,9 @@ TEST( CliTop, MissingValueErrors )
 // same filename/"total" labels count as a match regardless of field width --
 // GNU and BSD wc pad differently, and field-splitting tools like awk don't care.
 //
-// -cm/-mc are deliberately absent: GNU wc prints two columns there while BSD wc
-// (and qwc) collapse them to one on a last-flag-wins basis, a genuine semantic
-// divergence in column *count* that no single binary can match on both systems.
-// qwc's chosen single-column behavior is asserted directly by the CliCombined
-// tests instead.
+// -cm/-mc print two columns -- chars, then bytes -- matching GNU wc. (BSD wc
+// collapses them to one column on a last-flag-wins basis; qwc follows GNU,
+// its conformance target.)
 // ---------------------------------------------------------------------------
 namespace {
 
@@ -876,7 +898,10 @@ const Mode kCoreModes[] = {
     { "-c", "-c" },    { "-m", "-m" },     { "-L", "-L" },
     // Combinations: column order and selection must match wc exactly.
     { "-lw", "-lw" },  { "-lc", "-lc" },   { "-wc", "-wc" },
-    { "-lwc", "-lwc" },{ "-lwcL", "-lwcL" } };
+    { "-lwc", "-lwc" },{ "-lwcL", "-lwcL" },
+    // -c and -m together: GNU prints both columns (chars, then bytes),
+    // regardless of flag order.
+    { "-cm", "-cm" },  { "-mc", "-mc" },   { "-lwmcL", "-lwmcL" } };
 
 }  // namespace
 

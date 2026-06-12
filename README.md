@@ -36,7 +36,7 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
 
 # Roadmap
 - [x] Support for valid unicode whitespace in line with GNU `wc`
-- [ ] Reconcile `-cm` with GNU
+- [x] Reconcile `-cm` with GNU
 - [ ] Vectorized versions of the scalar algorithms
   - [x] Lines (/ bytes)
     - [x] AVX2

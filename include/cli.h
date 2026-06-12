@@ -20,18 +20,22 @@ enum class SortMode
 
 // Everything the frontend parses out of the command line. The count flags map
 // to wc's output columns, which always print in a fixed order regardless of the
-// order the flags were given: lines, words, char/byte, longest line.
+// order the flags were given: lines, words, chars, bytes, longest line.
 struct Options
 {
   usize bytesPerThread = 64ull * 1024 * 1024;
 
   // Selected columns. With no count flag at all, qwc shows lines, words and
   // bytes -- exactly like bare `wc`.
-  bool lines = false;     // -l
-  bool words = false;     // -w
-  bool charByte = false;  // -c or -m: the single shared char/byte column
-  bool charsNotBytes =
-      false;             // within charByte: -m counts chars, -c counts bytes
+  bool lines = false;  // -l
+  bool words = false;  // -w
+  bool bytes = false;  // -c: the byte column
+  bool chars = false;  // -m: the character column (GNU prints both for -cm)
+  // Resolved in main() after setlocale: in a single-byte locale a character
+  // IS a byte, so the -m column displays the byte count and no character
+  // scan is needed. The column itself still prints (GNU -cm in the C locale
+  // shows two identical numbers).
+  bool charsAreBytes = false;
   bool maxLine = false;  // -L
   bool target = false;   // --char: qwc extension (counts targetByte)
   char targetByte = '\n';
@@ -46,12 +50,12 @@ struct Options
   int columnCount() const
   {
     return static_cast<int>( lines ) + static_cast<int>( words ) +
-           static_cast<int>( charByte ) + static_cast<int>( maxLine ) +
-           static_cast<int>( target );
+           static_cast<int>( chars ) + static_cast<int>( bytes ) +
+           static_cast<int>( maxLine ) + static_cast<int>( target );
   }
 
-  // The counting workload these options imply (resolves the char/byte column to
-  // either a byte or a character count).
+  // The counting workload these options imply (in a single-byte locale the
+  // chars column is served by the byte count, so no character scan runs).
   Workload workload() const;
 };
 

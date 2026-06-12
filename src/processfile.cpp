@@ -54,7 +54,8 @@ inline void scanBuffer(
   // characters, and that count and the character total walk the same UTF-8
   // continuation bytes. When both are wanted, one fused pass produces both;
   // otherwise each is computed on its own. (w.maxLineInChars implies w.chars --
-  // both are set exactly by -m -- so the fused path covers the char total.)
+  // both are set exactly when -m is active in a multibyte locale -- so the
+  // fused path covers the char total.)
   if ( w.maxLine && w.maxLineInChars ) {
     maxLineLenChars( owned, g, s.line, s.chars );
   } else {

@@ -80,21 +80,18 @@ Every mode `wc` and qwc have in common:
 | `-m` | `-m` | characters (code points in a UTF-8 locale) |
 | `-L` | `-L` | length of the longest line |
 
-**Combinations** are tested too (`-lw`, `-lwc`, `-lwcL`, …): `wc`
-prints the selected columns in a fixed order — lines, words, char/byte, longest
-line — regardless of the order the flags were given. The longest-line column is
-measured in the active char/byte unit (characters when `-m` is in effect, bytes
-otherwise). The suite assigns a combination the most restrictive parity rule of
-its parts, since every column must agree for the row to match.
+**Combinations** are tested too (`-lw`, `-lwc`, `-lwcL`, `-cm`, `-lwmcL`, …):
+`wc` prints the selected columns in a fixed order — lines, words, chars, bytes,
+longest line — regardless of the order the flags were given. The longest-line
+column is measured in characters when `-m` is in effect, bytes otherwise. The
+suite assigns a combination the most restrictive parity rule of its parts,
+since every column must agree for the row to match.
 
-**`-cm`/`-mc` are deliberately excluded from the differential suite.** GNU `wc`
-prints *both* a byte and a character column for these, whereas qwc collapses `-c`
-and `-m` into one shared char/byte column on a last-flag-wins basis — `-cm`
-counts characters, `-mc` counts bytes — emitting one column. That is a divergence
-from GNU in column *count*, not formatting, so the differential harness cannot
-include them; qwc's single-column choice is pinned directly by the `CliCombined`
-C++ tests under `tests/`. (Reconciling this with GNU — emitting two columns — is
-a separate decision, out of scope for this suite.)
+**`-cm`/`-mc` are in the matrix.** GNU `wc` prints *both* a chars and a bytes
+column for these — chars first, regardless of flag order — and qwc matches.
+(BSD `wc` instead collapses them into one last-flag-wins column; qwc follows
+GNU, its conformance target.) Both flag orders and the full five-column
+`-lwmcL` form are exercised.
 
 ## Where qwc is allowed to differ, and why
 

@@ -34,9 +34,11 @@ void printHelp()
          "\n"
          "Count flags (combine freely, e.g. -lw or -l -w; their order never "
          "changes\n"
-         "the column order. With none, qwc prints lines, words and bytes like "
-         "bare\n"
-         "`wc`. -c and -m share one column; whichever comes last wins):\n"
+         "the column order: lines, words, chars, bytes, longest line. With "
+         "none, qwc\n"
+         "prints lines, words and bytes like bare `wc`. -c and -m together "
+         "print both\n"
+         "columns, chars first, exactly like GNU wc):\n"
          "  -l, --lines           Count lines (newline characters), like `wc "
          "-l`.\n"
          "  -w, --words           Count whitespace-separated words, like `wc "
@@ -148,13 +150,11 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
         countFlag = true;
         return true;
       case 'c':
-        opt.charByte = true;
-        opt.charsNotBytes = false;
+        opt.bytes = true;
         countFlag = true;
         return true;
       case 'm':
-        opt.charByte = true;
-        opt.charsNotBytes = true;
+        opt.chars = true;
         countFlag = true;
         return true;
       case 'L':
@@ -206,13 +206,11 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
         countFlag = true;
         fileStart += 1;
       } else if ( std::strcmp( arg, "--bytes" ) == 0 ) {
-        opt.charByte = true;
-        opt.charsNotBytes = false;
+        opt.bytes = true;
         countFlag = true;
         fileStart += 1;
       } else if ( std::strcmp( arg, "--chars" ) == 0 ) {
-        opt.charByte = true;
-        opt.charsNotBytes = true;
+        opt.chars = true;
         countFlag = true;
         fileStart += 1;
       } else if ( std::strcmp( arg, "--max-line-length" ) == 0 ) {
@@ -277,8 +275,7 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
   if ( !countFlag ) {
     opt.lines = true;
     opt.words = true;
-    opt.charByte = true;
-    opt.charsNotBytes = false;  // the char/byte column defaults to bytes
+    opt.bytes = true;
   }
 
   for ( int i = fileStart; i < argc; ++i ) opt.files.emplace_back( argv[i] );
@@ -293,13 +290,14 @@ Workload Options::workload() const
   w.maxLine = maxLine;
   w.target = target;
   w.targetByte = targetByte;
-  if ( charByte ) {
-    w.chars = charsNotBytes;
-    w.bytes = !charsNotBytes;
-  }
-  // wc measures the longest line in the same unit as the active char/byte
-  // column: characters when -m is in effect, bytes otherwise.
-  w.maxLineInChars = charByte && charsNotBytes;
+  // In a single-byte locale the -m column is served by the byte count
+  // (fstat-cheap, no scan); otherwise -m scans for characters. -c and -m are
+  // independent columns, so both may be requested at once (GNU wc -cm).
+  w.chars = chars && !charsAreBytes;
+  w.bytes = bytes || ( chars && charsAreBytes );
+  // wc measures the longest line in characters the moment -m is in effect
+  // (even alongside -c), bytes otherwise.
+  w.maxLineInChars = chars && !charsAreBytes;
   return w;
 }
 
@@ -341,13 +339,15 @@ bool collectFiles( Options& opt )
 
 namespace {
 
-// qwc's output columns, in wc's fixed order. The --char tally (qwc-only) has no
-// wc counterpart, so it is appended last.
+// qwc's output columns, in wc's fixed order: lines, words, chars, bytes,
+// longest line. The --char tally (qwc-only) has no wc counterpart, so it is
+// appended last.
 enum class Column
 {
   Lines,
   Words,
-  CharByte,
+  Chars,
+  Bytes,
   MaxLine,
   Target
 };
@@ -357,7 +357,8 @@ std::vector<Column> selectedColumns( const Options& opt )
   std::vector<Column> cols;
   if ( opt.lines ) cols.push_back( Column::Lines );
   if ( opt.words ) cols.push_back( Column::Words );
-  if ( opt.charByte ) cols.push_back( Column::CharByte );
+  if ( opt.chars ) cols.push_back( Column::Chars );
+  if ( opt.bytes ) cols.push_back( Column::Bytes );
   if ( opt.maxLine ) cols.push_back( Column::MaxLine );
   if ( opt.target ) cols.push_back( Column::Target );
   return cols;
@@ -370,8 +371,12 @@ usize columnValue( const Counts& c, const Column col, const Options& opt )
       return c.lines;
     case Column::Words:
       return c.words;
-    case Column::CharByte:
-      return opt.charsNotBytes ? c.chars : c.bytes;
+    case Column::Chars:
+      // Single-byte locale: a character is a byte, and only bytes were
+      // counted (see Options::workload).
+      return opt.charsAreBytes ? c.bytes : c.chars;
+    case Column::Bytes:
+      return c.bytes;
     case Column::MaxLine:
       return c.maxLine;
     case Column::Target:

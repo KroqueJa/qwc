@@ -78,11 +78,11 @@ int main( int argc, char** argv )
   // setlocale(LC_CTYPE, "") performs the POSIX LC_ALL > LC_CTYPE > LANG
   // resolution -- the same environment handling as wc. The codeset decides
   // both the -m collapse (a character is just a byte in single-byte locales,
-  // so -m becomes -c) and the word-splitting flavour; POSIXLY_CORRECT disables
-  // coreutils' non-breaking-space separators, exactly like wc.
+  // so the -m column displays the byte count) and the word-splitting flavour;
+  // POSIXLY_CORRECT disables coreutils' non-breaking-space separators, exactly
+  // like wc.
   std::setlocale( LC_CTYPE, "" );  // NOLINT(concurrency-mt-unsafe)
-  if ( opt.charByte && opt.charsNotBytes && MB_CUR_MAX <= 1 )
-    opt.charsNotBytes = false;
+  if ( opt.chars && MB_CUR_MAX <= 1 ) opt.charsAreBytes = true;
 
   // Resolve the requested columns into a single counting workload, computed
   // once per file in a single pass.

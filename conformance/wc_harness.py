@@ -90,13 +90,15 @@ MODES: tuple[Mode, ...] = (
     Mode("l+w+c",   ("-l", "-w", "-c"),       ("-l", "-w", "-c"),       "word", 3),
     Mode("l+w+c+L", ("-l", "-w", "-c", "-L"), ("-l", "-w", "-c", "-L"), "word", 4,
          has_maxline=True),
-    # NB: -cm/-mc are intentionally absent. GNU `wc` prints both a byte and a char
-    # column for these, whereas qwc deliberately collapses -c and -m into one
-    # shared char/byte column on a last-flag-wins basis (-cm counts chars, -mc
-    # counts bytes). That is a divergence from GNU in column *count*, not
-    # formatting, so the differential harness cannot include them; qwc's
-    # single-column choice is pinned directly by the CliCombined tests under
-    # tests/. (Reconciling this with GNU is a separate decision, out of scope here.)
+    # -c and -m together: GNU wc prints both columns -- chars first, then
+    # bytes -- regardless of flag order. Both orders are exercised to pin the
+    # fixed column order; the five-column form covers the full matrix.
+    Mode("c+m",     ("-c", "-m"),             ("-c", "-m"),             "char", 2),
+    Mode("m+c",     ("-m", "-c"),             ("-m", "-c"),             "char", 2),
+    Mode("l+w+m+c+L",
+         ("-l", "-w", "-m", "-c", "-L"),
+         ("-l", "-w", "-m", "-c", "-L"),
+         "word", 5, has_maxline=True),
 )
 
 MODE_BY_NAME = {m.name: m for m in MODES}

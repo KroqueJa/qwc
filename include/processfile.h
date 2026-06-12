@@ -6,10 +6,9 @@
 // command line once, up front, and a single pass computes every requested
 // counter at once -- so `qwc -l -w -m -L` reads the data once, not four times.
 //
-// `bytes` and `chars` are never both set: wc shows a single char/byte column
-// and the frontend picks which (-c => bytes, -m => chars). `target` is the
-// qwc-only
-// `--char` extension (count occurrences of `targetByte`).
+// `bytes` and `chars` may both be set (GNU wc -cm shows both columns); bytes
+// alone still needs no scan (fstat). `target` is the qwc-only `--char`
+// extension (count occurrences of `targetByte`).
 struct Workload
 {
   bool lines = false;
