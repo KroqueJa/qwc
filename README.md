@@ -87,3 +87,19 @@ Hence; this project is equally a challenge, a hobby, and a small act of protest.
     (bytes never scan), `--char` combos (niche extension), `-wL` (the two
     stateful carry-heavy kernels for the rarest combo), and a dedicated
     lone-`-l` harness path (measured 1.00×, Finding 5).
+- [ ] Per-byte pipeline cost: qwc burns ~2.5× the CPU per byte that GNU `wc`
+  does on `-l` (measured 2026-06-12: 349 ms total CPU vs 137 ms for the same
+  warm 536 MiB; uu-wc does it in 70 ms single-threaded). Plenty of cores hide
+  it; a 4-vCPU CI runner does not (475 ms ÷ 4 ≈ the observed 119 ms wall,
+  0.64× vs wc on the many-files corpus). Per-file overhead is already fixed
+  (Finding 5), so this is the read+scan pipeline itself.
+  - [ ] Scan-buffer size sweep (128/256/512 KiB vs the current 1 MiB):
+    leading suspect — the pread copy destination plus scan working set blow
+    a 512 KiB L2, writing every byte to L3 and reading it back, while
+    wc/uu-wc stream through ~256 KiB buffers that stay cache-resident.
+    Run on the many-files corpus AND the single big file, pinned to 4 cores
+    (`taskset -c 0-3`) to mimic the runner.
+  - Needs the native Linux box: WSL2 syscall/copy costs distort exactly the
+    thing under test, and hosted-runner results are only comparable
+    host-line to host-line (EPYC 9V74 vs 7763 swung big-file `-l` 3×
+    between runs with identical binaries).
