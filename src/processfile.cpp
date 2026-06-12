@@ -100,8 +100,9 @@ void scanRange(
     const usize want = std::min( BUF_SIZE, remaining );
     const usize front = std::min( WCTX, pos );
     const usize back = std::min( WCTX, fileSize - ( pos + want ) );
-    const isize got =
-        pread( fd, buffer, front + want + back, static_cast<off_t>( pos - front ) );
+    const isize got = pread(
+        fd, buffer, front + want + back, static_cast<off_t>( pos - front )
+    );
     if ( got <= static_cast<isize>( front ) ) break;
     const usize ownedEnd = std::min( static_cast<usize>( got ), front + want );
     scanBuffer( buffer, static_cast<usize>( got ), front, ownedEnd, *work, s );
@@ -233,22 +234,22 @@ Counts processFile(
   // on a many-small-files run the advice itself becomes measurable overhead.
   if ( fileSize > BUF_SIZE ) {
 #if defined( __APPLE__ )
-  // On macOS F_RDADVISE is the most effective hint (MADV_WILLNEED is largely a
-  // no-op). radvisory::ra_count is an int, so issue the advice in <=INT_MAX
-  // chunks.
-  for ( usize off = 0; off < fileSize; ) {
-    usize remaining = fileSize - off;
-    radvisory ra{};
-    ra.ra_offset = static_cast<i64>( off );
-    ra.ra_count =
-        static_cast<int>( std::min( remaining, static_cast<usize>( INT_MAX ) )
-        );
-    fcntl( fd, F_RDADVISE, &ra );
-    off += static_cast<usize>( ra.ra_count );
-  }
+    // On macOS F_RDADVISE is the most effective hint (MADV_WILLNEED is largely
+    // a no-op). radvisory::ra_count is an int, so issue the advice in <=INT_MAX
+    // chunks.
+    for ( usize off = 0; off < fileSize; ) {
+      usize remaining = fileSize - off;
+      radvisory ra{};
+      ra.ra_offset = static_cast<i64>( off );
+      ra.ra_count =
+          static_cast<int>( std::min( remaining, static_cast<usize>( INT_MAX ) )
+          );
+      fcntl( fd, F_RDADVISE, &ra );
+      off += static_cast<usize>( ra.ra_count );
+    }
 #elif defined( POSIX_FADV_SEQUENTIAL )
-  // On Linux posix_fadvise gives the kernel both the access pattern and an
-  // explicit readahead hint over the whole range.
+    // On Linux posix_fadvise gives the kernel both the access pattern and an
+    // explicit readahead hint over the whole range.
     posix_fadvise(
         fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_SEQUENTIAL
     );

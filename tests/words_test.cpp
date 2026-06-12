@@ -1,3 +1,5 @@
+#include "words.h"
+
 #include <gtest/gtest.h>
 
 #include <random>
@@ -5,7 +7,6 @@
 
 #include "iswprint_table.h"
 #include "test_util.h"
-#include "words.h"
 
 using qwctest::refWords;
 using qwctest::wordsChunked;
@@ -30,8 +31,10 @@ usize wordsSplit( const std::string& s, const usize at, const WordsMode m = {} )
   const usize ctxEnd = std::min( s.size(), at + 3 );
   words( s.data(), ctxEnd, 0, at, ws, m );
   const usize back = at < 3 ? at : 3;
-  words( s.data() + at - back, s.size() - ( at - back ), back,
-         s.size() - ( at - back ), ws, m );
+  words(
+      s.data() + at - back, s.size() - ( at - back ), back,
+      s.size() - ( at - back ), ws, m
+  );
   wordsFlush( ws );
   return ws.words;
 }
@@ -76,9 +79,11 @@ TEST( WordsC, PrintabilityRule )
   EXPECT_EQ( wordsStr( " \x01g " ), 1u );  // rescued by 'g'
   EXPECT_EQ( wordsStr( " \x7F " ), 0u );   // DEL is not printable
   EXPECT_EQ( wordsStr( " \xFF " ), 0u );   // high byte: not printable in C
-  EXPECT_EQ( wordsStr( "a\xFF"
-                       "b" ),
-             1u );  // ...but word-constituent
+  EXPECT_EQ(
+      wordsStr( "a\xFF"
+                "b" ),
+      1u
+  );  // ...but word-constituent
 }
 
 // ---------------------------------------------------------------------------
@@ -87,61 +92,109 @@ TEST( WordsC, PrintabilityRule )
 // ---------------------------------------------------------------------------
 TEST( WordsUtf8, UnicodeSeparators )
 {
-  EXPECT_EQ( wordsStr( "a\xC2\xA0"           // U+00A0 NBSP
-                       "b",
-                       kUtf8 ),
-             2u );
-  EXPECT_EQ( wordsStr( "a\xE3\x80\x80"       // U+3000 ideographic space
-                       "b",
-                       kUtf8 ),
-             2u );
-  EXPECT_EQ( wordsStr( "a\xE2\x80\x83"       // U+2003 em space
-                       "b\xE1\x9A\x80"       // U+1680 ogham space
-                       "c",
-                       kUtf8 ),
-             3u );
-  EXPECT_EQ( wordsStr( "a\xE2\x80\x8B"       // U+200B ZWSP: NOT a separator
-                       "b",
-                       kUtf8 ),
-             1u );
-  EXPECT_EQ( wordsStr( "a\xE2\x80\xA8"       // U+2028 LS: NOT a separator
-                       "b",
-                       kUtf8 ),
-             1u );
-  EXPECT_EQ( wordsStr( "a\xC2\x85"           // U+0085 NEL: NOT a separator
-                       "b",
-                       kUtf8 ),
-             1u );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xC2\xA0"  // U+00A0 NBSP
+          "b",
+          kUtf8
+      ),
+      2u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE3\x80\x80"  // U+3000 ideographic space
+          "b",
+          kUtf8
+      ),
+      2u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x80\x83"  // U+2003 em space
+          "b\xE1\x9A\x80"  // U+1680 ogham space
+          "c",
+          kUtf8
+      ),
+      3u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x80\x8B"  // U+200B ZWSP: NOT a separator
+          "b",
+          kUtf8
+      ),
+      1u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x80\xA8"  // U+2028 LS: NOT a separator
+          "b",
+          kUtf8
+      ),
+      1u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xC2\x85"  // U+0085 NEL: NOT a separator
+          "b",
+          kUtf8
+      ),
+      1u
+  );
 }
 
 TEST( WordsUtf8, PosixlyCorrectDropsNbspace )
 {
   // The probe-pinned nbspace four stop separating: A0, 2007, 202F, 2060.
-  EXPECT_EQ( wordsStr( "a\xC2\xA0"
-                       "b",
-                       kUtf8Posix ),
-             1u );
-  EXPECT_EQ( wordsStr( "a\xE2\x80\x87"
-                       "b",
-                       kUtf8Posix ),
-             1u );
-  EXPECT_EQ( wordsStr( "a\xE2\x80\xAF"
-                       "b",
-                       kUtf8Posix ),
-             1u );
-  EXPECT_EQ( wordsStr( "a\xE2\x81\xA0"
-                       "b",
-                       kUtf8Posix ),
-             1u );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xC2\xA0"
+          "b",
+          kUtf8Posix
+      ),
+      1u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x80\x87"
+          "b",
+          kUtf8Posix
+      ),
+      1u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x80\xAF"
+          "b",
+          kUtf8Posix
+      ),
+      1u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x81\xA0"
+          "b",
+          kUtf8Posix
+      ),
+      1u
+  );
   // The base (iswspace) set survives POSIXLY_CORRECT.
-  EXPECT_EQ( wordsStr( "a\xE2\x80\x82"      // U+2002 en space
-                       "b",
-                       kUtf8Posix ),
-             2u );
-  EXPECT_EQ( wordsStr( "a\xE3\x80\x80"
-                       "b",
-                       kUtf8Posix ),
-             2u );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE2\x80\x82"  // U+2002 en space
+          "b",
+          kUtf8Posix
+      ),
+      2u
+  );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xE3\x80\x80"
+          "b",
+          kUtf8Posix
+      ),
+      2u
+  );
 }
 
 TEST( WordsUtf8, BarrenAndRescuedRuns )
@@ -149,20 +202,24 @@ TEST( WordsUtf8, BarrenAndRescuedRuns )
   // ZWSP is printable per glibc (probe-confirmed: wc counts it), so a
   // ZWSP-only run IS a word.
   EXPECT_EQ( wordsStr( " \xE2\x80\x8B ", kUtf8 ), 1u );
-  EXPECT_EQ( wordsStr( " \x01\x02 ", kUtf8 ), 0u );           // ctrl: barren
-  EXPECT_EQ( wordsStr( " \x01x ", kUtf8 ), 1u );              // rescued
-  EXPECT_EQ( wordsStr( " \xE4\xB8\x80 ", kUtf8 ), 1u );       // U+4E00 CJK
-  EXPECT_EQ( wordsStr( " \xCE\xA2 ", kUtf8 ), 0u );           // U+03A2 unassigned
-  EXPECT_EQ( wordsStr( " \xCE\xA2\xCE\xB1 ", kUtf8 ), 1u );   // rescued by alpha
+  EXPECT_EQ( wordsStr( " \x01\x02 ", kUtf8 ), 0u );      // ctrl: barren
+  EXPECT_EQ( wordsStr( " \x01x ", kUtf8 ), 1u );         // rescued
+  EXPECT_EQ( wordsStr( " \xE4\xB8\x80 ", kUtf8 ), 1u );  // U+4E00 CJK
+  EXPECT_EQ( wordsStr( " \xCE\xA2 ", kUtf8 ), 0u );      // U+03A2 unassigned
+  EXPECT_EQ( wordsStr( " \xCE\xA2\xCE\xB1 ", kUtf8 ), 1u );  // rescued by alpha
 }
 
 TEST( WordsUtf8, InvalidBytesAreWordStuffButNotPrintable )
 {
   EXPECT_EQ( wordsStr( " \xFF ", kUtf8 ), 0u );  // invalid-only run: barren
-  EXPECT_EQ( wordsStr( "a\xFF"
-                       "b",
-                       kUtf8 ),
-             1u );
+  EXPECT_EQ(
+      wordsStr(
+          "a\xFF"
+          "b",
+          kUtf8
+      ),
+      1u
+  );
   EXPECT_EQ( wordsStr( "a\xFF b", kUtf8 ), 2u );
   // Truncated lead at end of input: word-constituent, not printable.
   EXPECT_EQ( wordsStr( " \xE3\x80", kUtf8 ), 0u );
@@ -171,7 +228,8 @@ TEST( WordsUtf8, InvalidBytesAreWordStuffButNotPrintable )
 TEST( WordsUtf8, MatchesReferenceOnMixedText )
 {
   const std::string s =
-      "caf\xC3\xA9 au\xE3\x80\x80lait \xE2\x80\x8B \x01 \xE4\xB8\xAD\xE6\x96\x87 ok\n";
+      "caf\xC3\xA9 au\xE3\x80\x80lait \xE2\x80\x8B \x01 "
+      "\xE4\xB8\xAD\xE6\x96\x87 ok\n";
   EXPECT_EQ( wordsStr( s, kUtf8 ), refWords( s, true ) );
 }
 
@@ -193,15 +251,14 @@ TEST( WordsSplit, ChunkedFeedAgreesAcrossSizes )
 {
   std::string s;
   std::mt19937 rng( 42 );
-  const char* toks[] = { "word",         "\xE3\x80\x80", " ",
-                         "\xC2\xA0",     "x",            "\xE2\x80\x8B",
-                         "\x01",         "\xE4\xB8\x80", "\t",
-                         "\xCE\xA2" };
+  const char* toks[] = { "word", "\xE3\x80\x80", " ",    "\xC2\xA0",
+                         "x",    "\xE2\x80\x8B", "\x01", "\xE4\xB8\x80",
+                         "\t",   "\xCE\xA2" };
   for ( int i = 0; i < 2000; ++i ) s += toks[rng() % 10];
   const usize whole = wordsStr( s, kUtf8 );
   EXPECT_EQ( whole, refWords( s, true ) );
-  for ( usize chunk : { usize( 1 ), usize( 2 ), usize( 3 ), usize( 7 ),
-                        usize( 64 ), usize( 4096 ) } )
+  for ( usize chunk: { usize( 1 ), usize( 2 ), usize( 3 ), usize( 7 ),
+                       usize( 64 ), usize( 4096 ) } )
     EXPECT_EQ( wordsChunked( s, chunk, kUtf8 ), whole ) << "chunk=" << chunk;
 }
 
@@ -213,7 +270,7 @@ TEST( WordsSplit, CModeChunkedAgrees )
   for ( int i = 0; i < 3000; ++i ) s += toks[rng() % 6];
   const usize whole = wordsStr( s );
   EXPECT_EQ( whole, refWords( s ) );
-  for ( usize chunk : { usize( 1 ), usize( 3 ), usize( 64 ), usize( 1024 ) } )
+  for ( usize chunk: { usize( 1 ), usize( 3 ), usize( 64 ), usize( 1024 ) } )
     EXPECT_EQ( wordsChunked( s, chunk ), whole ) << "chunk=" << chunk;
 }
 

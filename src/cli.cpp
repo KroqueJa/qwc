@@ -1,142 +1,140 @@
 #include "cli.h"
 
-#include <algorithm>
+#include <dirent.h>
+#include <sys/stat.h>
 
-#include "qwc_version.h"
-#include <cstdint>
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <filesystem>
 #include <numeric>
-#include <string>
-#include <system_error>
 #include <vector>
 
-namespace fs = std::filesystem;
+#include "qwc_version.h"
 
 void printHelp()
 {
   std::fputs(
       "qwc - quick wc: count lines, words, bytes and more, fast.\n"
-         "\n"
-         "With no count flag qwc prints the line, word and byte counts of each "
-         "file,\n"
-         "exactly like `wc`. It reads big files in parallel, so it stays quick "
-         "even\n"
-         "on very large inputs.\n"
-         "\n"
-         "Usage:\n"
-         "  qwc [options] [file ...]\n"
-         "  qwc [options]            (reads from standard input)\n"
-         "\n"
-         "If you don't name any files, qwc reads from standard input - so you "
-         "can\n"
-         "pipe data straight into it, e.g.  cat access.log | qwc\n"
-         "\n"
-         "Count flags (combine freely, e.g. -lw or -l -w; their order never "
-         "changes\n"
-         "the column order: lines, words, chars, bytes, longest line. With "
-         "none, qwc\n"
-         "prints lines, words and bytes like bare `wc`. -c and -m together "
-         "print both\n"
-         "columns, chars first, exactly like GNU wc):\n"
-         "  -l, --lines           Count lines (newline characters), like `wc "
-         "-l`.\n"
-         "  -w, --words           Count whitespace-separated words, like `wc "
-         "-w`.\n"
-         "  -c, --bytes           Count bytes, like `wc -c`. The size is read\n"
-         "                        straight from the filesystem, so no scanning "
-         "of\n"
-         "                        the file contents is needed.\n"
-         "  -m, --chars           Count characters, like `wc -m`. In a UTF-8 "
-         "locale\n"
-         "                        this counts code points (so an accented "
-         "letter is\n"
-         "                        one character, not two bytes); in a "
-         "single-byte\n"
-         "                        locale it falls back to bytes, exactly as wc "
-         "does.\n"
-         "  -L, --max-line-length Print the length of the longest line in "
-         "bytes,\n"
-         "                        like `wc -L`. The trailing newline is not "
-         "counted,\n"
-         "                        and with several files the \"total\" line "
-         "reports\n"
-         "                        the longest line across all of them (the "
-         "maximum,\n"
-         "                        not a sum).\n"
-         "      --char C          Count occurrences of the byte C (a qwc "
-         "extension,\n"
-         "                        not in wc). Handy for tallying commas in a "
-         "CSV\n"
-         "                        (--char ,) or any other single character.\n"
-         "\n"
-         "Other options:\n"
-         "  -r, --recursive       Treat directory arguments as whole trees: "
-         "qwc\n"
-         "                        walks into them and counts every file it "
-         "finds,\n"
-         "                        something wc can't do on its own.\n"
-         "      --sort-by-count   When listing several files, order them by "
-         "their\n"
-         "                        count, smallest first - so the biggest ones "
-         "end\n"
-         "                        up at the bottom, right next to the grand "
-         "total\n"
-         "                        where they're easy to spot.\n"
-         "      --sort-by-name    Order the listing alphabetically by file "
-         "name.\n"
-         "      --sort-by-size    Order the listing by file size on disk, "
-         "smallest\n"
-         "                        first.\n"
-         "      --reverse         Flip the active sort order (e.g. put the "
-         "biggest\n"
-         "                        counts at the top instead). Without a sort "
-         "flag\n"
-         "                        or --top there is no order to flip, so it "
-         "does\n"
-         "                        nothing.\n"
-         "      --top N           Show only the N files that rank highest by "
-         "the\n"
-         "                        active sort (counts, if none is given). The "
-         "grand\n"
-         "                        total still covers every file, not just the "
-         "N\n"
-         "                        shown.\n"
-         "      --bytes-per-thread N\n"
-         "                        Tune how much data each worker thread "
-         "handles\n"
-         "                        before another thread is spun up (default "
-         "64\n"
-         "                        MiB). You rarely need this; it's here for\n"
-         "                        squeezing out performance on unusual "
-         "hardware.\n"
-         "      --version         Print the qwc version and exit. Release\n"
-         "                        builds show the release tag (e.g. v1.2.0);\n"
-         "                        dev builds show the git commit they were\n"
-         "                        built from.\n"
-         "  -h, --help            Show this message and exit.\n"
-         "\n"
-         "Output:\n"
-         "  qwc matches wc's layout so it can stand in for it: each file "
-         "prints its\n"
-         "  right-aligned count(s) followed by the file name, piped input "
-         "prints just\n"
-         "  the count(s), and counting several files adds a final \"total\" "
-         "line.\n"
-         "\n"
-         "Examples:\n"
-         "  qwc notes.txt                 lines, words and bytes in notes.txt\n"
-         "  qwc *.log                     counts for each log, plus a total\n"
-         "  qwc -l notes.txt              lines in notes.txt\n"
-         "  qwc -c notes.txt              bytes in notes.txt\n"
-         "  qwc -w notes.txt              words in notes.txt\n"
-         "  qwc -m notes.txt              characters in notes.txt\n"
-         "  qwc -L notes.txt              length of the longest line in "
-         "notes.txt\n"
-         "  qwc --char , data.csv         commas in data.csv\n"
-         "  qwc --recursive src           counts for every file under src/\n"
-         "  qwc -r --top 10 src           the 10 biggest files under src/\n",
+      "\n"
+      "With no count flag qwc prints the line, word and byte counts of each "
+      "file,\n"
+      "exactly like `wc`. It reads big files in parallel, so it stays quick "
+      "even\n"
+      "on very large inputs.\n"
+      "\n"
+      "Usage:\n"
+      "  qwc [options] [file ...]\n"
+      "  qwc [options]            (reads from standard input)\n"
+      "\n"
+      "If you don't name any files, qwc reads from standard input - so you "
+      "can\n"
+      "pipe data straight into it, e.g.  cat access.log | qwc\n"
+      "\n"
+      "Count flags (combine freely, e.g. -lw or -l -w; their order never "
+      "changes\n"
+      "the column order: lines, words, chars, bytes, longest line. With "
+      "none, qwc\n"
+      "prints lines, words and bytes like bare `wc`. -c and -m together "
+      "print both\n"
+      "columns, chars first, exactly like GNU wc):\n"
+      "  -l, --lines           Count lines (newline characters), like `wc "
+      "-l`.\n"
+      "  -w, --words           Count whitespace-separated words, like `wc "
+      "-w`.\n"
+      "  -c, --bytes           Count bytes, like `wc -c`. The size is read\n"
+      "                        straight from the filesystem, so no scanning "
+      "of\n"
+      "                        the file contents is needed.\n"
+      "  -m, --chars           Count characters, like `wc -m`. In a UTF-8 "
+      "locale\n"
+      "                        this counts code points (so an accented "
+      "letter is\n"
+      "                        one character, not two bytes); in a "
+      "single-byte\n"
+      "                        locale it falls back to bytes, exactly as wc "
+      "does.\n"
+      "  -L, --max-line-length Print the length of the longest line in "
+      "bytes,\n"
+      "                        like `wc -L`. The trailing newline is not "
+      "counted,\n"
+      "                        and with several files the \"total\" line "
+      "reports\n"
+      "                        the longest line across all of them (the "
+      "maximum,\n"
+      "                        not a sum).\n"
+      "      --char C          Count occurrences of the byte C (a qwc "
+      "extension,\n"
+      "                        not in wc). Handy for tallying commas in a "
+      "CSV\n"
+      "                        (--char ,) or any other single character.\n"
+      "\n"
+      "Other options:\n"
+      "  -r, --recursive       Treat directory arguments as whole trees: "
+      "qwc\n"
+      "                        walks into them and counts every file it "
+      "finds,\n"
+      "                        something wc can't do on its own.\n"
+      "      --sort-by-count   When listing several files, order them by "
+      "their\n"
+      "                        count, smallest first - so the biggest ones "
+      "end\n"
+      "                        up at the bottom, right next to the grand "
+      "total\n"
+      "                        where they're easy to spot.\n"
+      "      --sort-by-name    Order the listing alphabetically by file "
+      "name.\n"
+      "      --sort-by-size    Order the listing by file size on disk, "
+      "smallest\n"
+      "                        first.\n"
+      "      --reverse         Flip the active sort order (e.g. put the "
+      "biggest\n"
+      "                        counts at the top instead). Without a sort "
+      "flag\n"
+      "                        or --top there is no order to flip, so it "
+      "does\n"
+      "                        nothing.\n"
+      "      --top N           Show only the N files that rank highest by "
+      "the\n"
+      "                        active sort (counts, if none is given). The "
+      "grand\n"
+      "                        total still covers every file, not just the "
+      "N\n"
+      "                        shown.\n"
+      "      --bytes-per-thread N\n"
+      "                        Tune how much data each worker thread "
+      "handles\n"
+      "                        before another thread is spun up (default "
+      "64\n"
+      "                        MiB). You rarely need this; it's here for\n"
+      "                        squeezing out performance on unusual "
+      "hardware.\n"
+      "      --version         Print the qwc version and exit. Release\n"
+      "                        builds show the release tag (e.g. v1.2.0);\n"
+      "                        dev builds show the git commit they were\n"
+      "                        built from.\n"
+      "  -h, --help            Show this message and exit.\n"
+      "\n"
+      "Output:\n"
+      "  qwc matches wc's layout so it can stand in for it: each file "
+      "prints its\n"
+      "  right-aligned count(s) followed by the file name, piped input "
+      "prints just\n"
+      "  the count(s), and counting several files adds a final \"total\" "
+      "line.\n"
+      "\n"
+      "Examples:\n"
+      "  qwc notes.txt                 lines, words and bytes in notes.txt\n"
+      "  qwc *.log                     counts for each log, plus a total\n"
+      "  qwc -l notes.txt              lines in notes.txt\n"
+      "  qwc -c notes.txt              bytes in notes.txt\n"
+      "  qwc -w notes.txt              words in notes.txt\n"
+      "  qwc -m notes.txt              characters in notes.txt\n"
+      "  qwc -L notes.txt              length of the longest line in "
+      "notes.txt\n"
+      "  qwc --char , data.csv         commas in data.csv\n"
+      "  qwc --recursive src           counts for every file under src/\n"
+      "  qwc -r --top 10 src           the 10 biggest files under src/\n",
       stdout
   );
 }
@@ -201,7 +199,9 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
         fileStart += 2;
       } else if ( std::strcmp( arg, "--char" ) == 0 ) {
         if ( fileStart + 1 >= argc || argv[fileStart + 1][0] == '\0' ) {
-          std::fputs( "Error: --char requires a single-character value\n", stderr );
+          std::fputs(
+              "Error: --char requires a single-character value\n", stderr
+          );
           return 1;
         }
         opt.target = true;
@@ -292,7 +292,7 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
     opt.bytes = true;
   }
 
-  for ( int i = fileStart; i < argc; ++i ) opt.files.emplace_back( argv[i] );
+  for ( int i = fileStart; i < argc; ++i ) opt.files.push_back( argv[i] );
   return std::nullopt;
 }
 
@@ -315,34 +315,94 @@ Workload Options::workload() const
   return w;
 }
 
+namespace {
+
+// "dir/name" in a fresh heap string the caller owns (the separator is omitted
+// after a trailing slash, so `qwc -r /` joins to "/etc", not "//etc").
+char* joinPath( const char* dir, const char* name )
+{
+  const usize dlen = std::strlen( dir );
+  const usize nlen = std::strlen( name );
+  const bool sep = dlen > 0 && dir[dlen - 1] != '/';
+  char* out = static_cast<char*>( std::malloc( dlen + sep + nlen + 1 ) );
+  if ( !out ) {
+    std::fputs( "Error: out of memory\n", stderr );
+    std::_Exit( 1 );
+  }
+  std::memcpy( out, dir, dlen );
+  if ( sep ) out[dlen] = '/';
+  std::memcpy( out + dlen + sep, name, nlen + 1 );
+  return out;
+}
+
+// Append every regular file beneath `dir` to `out` as a heap path that lives
+// for the rest of the process (it lands in opt.files, which never frees).
+// Unreadable or unstattable entries are skipped, directory symlinks are not
+// walked, and a symlink to a regular file counts as that file -- the same
+// stance fs::recursive_directory_iterator(skip_permission_denied) +
+// is_regular_file took before this was hand-rolled. Returns false only when
+// `dir` itself cannot be opened; deeper failures just prune that subtree.
+bool walkDir( const char* dir, std::vector<const char*>& out )
+{
+  DIR* d = opendir( dir );
+  if ( !d ) return false;
+  while ( const dirent* e = readdir( d ) ) {
+    const char* name = e->d_name;
+    if ( name[0] == '.' &&
+         ( name[1] == '\0' || ( name[1] == '.' && name[2] == '\0' ) ) )
+      continue;
+    char* path = joinPath( dir, name );
+    // d_type is free when the filesystem provides it; DT_UNKNOWN means "go
+    // ask" (lstat, so a symlink is still recognized as one), and a symlink is
+    // followed one step (stat) to see whether a regular file is behind it.
+    unsigned char type = e->d_type;
+    if ( type == DT_UNKNOWN || type == DT_LNK ) {
+      struct stat st
+      {
+      };
+      if ( type == DT_UNKNOWN && lstat( path, &st ) == 0 ) {
+        if ( S_ISDIR( st.st_mode ) )
+          type = DT_DIR;
+        else if ( S_ISREG( st.st_mode ) )
+          type = DT_REG;
+        else if ( S_ISLNK( st.st_mode ) )
+          type = DT_LNK;
+      }
+      if ( type == DT_LNK && stat( path, &st ) == 0 && S_ISREG( st.st_mode ) )
+        type = DT_REG;
+    }
+    if ( type == DT_REG ) {
+      out.push_back( path );  // ownership moves to the file list
+      continue;
+    }
+    if ( type == DT_DIR ) walkDir( path, out );
+    std::free( path );
+  }
+  closedir( d );
+  return true;
+}
+
+}  // namespace
+
 bool collectFiles( Options& opt )
 {
   // With --recursive, a directory argument is replaced by every regular file
   // beneath it; plain file arguments and the top-level argument order are left
-  // untouched.
-  std::vector<std::string> expanded;
-  for ( const std::string& path: opt.files ) {
-    if ( std::error_code ec; opt.recursive && fs::is_directory( path, ec ) ) {
-      std::vector<std::string> dirFiles;
-      fs::recursive_directory_iterator it(
-          path, fs::directory_options::skip_permission_denied, ec
-      );
-      if ( ec ) {
-        std::fprintf( stderr, "Error reading directory: %s\n", path.c_str() );
+  // untouched. Files come back in directory-iteration order, which is
+  // unspecified and may differ between runs. That is fine: without a sort flag
+  // qwc does not promise any output order (and with one, the whole list is
+  // re-ordered at print time anyway), so alphabetizing here would be pure
+  // wasted work on the file-heavy recursive runs.
+  std::vector<const char*> expanded;
+  for ( const char* path: opt.files ) {
+    struct stat st
+    {
+    };
+    if ( opt.recursive && stat( path, &st ) == 0 && S_ISDIR( st.st_mode ) ) {
+      if ( !walkDir( path, expanded ) ) {
+        std::fprintf( stderr, "Error reading directory: %s\n", path );
         return false;
       }
-      const fs::recursive_directory_iterator end;
-      for ( ; it != end; it.increment( ec ) ) {
-        if ( ec ) continue;  // skip entries we can't stat and keep going
-        if ( it->is_regular_file( ec ) && !ec )
-          dirFiles.push_back( it->path().string() );
-      }
-      // Files come back in directory-iteration order, which is unspecified and
-      // may differ between runs. That is fine: without a sort flag qwc does
-      // not promise any output order (and with one, the whole list is
-      // re-ordered at print time anyway), so alphabetizing here would be pure
-      // wasted work on the file-heavy recursive runs.
-      expanded.insert( expanded.end(), dirFiles.begin(), dirFiles.end() );
     } else {
       expanded.push_back( path );
     }
@@ -440,13 +500,17 @@ void printResults( const Options& opt, const std::vector<Counts>& output )
     const Column col = selectedColumns( opt ).front();
 
     // File sizes are only needed for --sort-by-size, so fetch them lazily.
-    std::vector<std::uintmax_t> sizes;
+    // An unstattable file ranks as size 0, like the old error_code path.
+    std::vector<usize> sizes;
     if ( opt.sortMode == SortMode::Size ) {
       sizes.resize( numFiles );
       for ( usize i = 0; i < numFiles; ++i ) {
-        std::error_code ec;
-        const std::uintmax_t s = fs::file_size( opt.files[i], ec );
-        sizes[i] = ec ? 0 : s;
+        struct stat st
+        {
+        };
+        sizes[i] = stat( opt.files[i], &st ) == 0
+                       ? static_cast<usize>( st.st_size )
+                       : 0;
       }
     }
 
@@ -460,7 +524,7 @@ void printResults( const Options& opt, const std::vector<Counts>& output )
       } else if ( opt.sortMode == SortMode::Size && sizes[a] != sizes[b] ) {
         return sizes[a] < sizes[b];
       }
-      return opt.files[a] < opt.files[b];
+      return std::strcmp( opt.files[a], opt.files[b] ) < 0;
     } );
   }
 
@@ -475,8 +539,7 @@ void printResults( const Options& opt, const std::vector<Counts>& output )
     std::reverse( order.begin(), order.end() );
 
   // wc prints one row per file -- including for a single file (with its name).
-  for ( const usize i: order )
-    printCounts( opt, output[i], opt.files[i].c_str() );
+  for ( const usize i: order ) printCounts( opt, output[i], opt.files[i] );
 
   // The "total" row appears only when more than one file was counted, matching
   // wc. (--top may narrow the listing above, but the total still covers every

@@ -4,9 +4,8 @@
 #include <atomic>
 #include <clocale>
 #include <cstdlib>
+#include <cstring>
 #include <optional>
-#include <string>
-#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -92,7 +91,7 @@ int main( int argc, char** argv )
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
   const char* codeset = nl_langinfo( CODESET );
   work.wordsMode.utf8 =
-      codeset != nullptr && std::string_view( codeset ) == "UTF-8";
+      codeset != nullptr && std::strcmp( codeset, "UTF-8" ) == 0;
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
   work.wordsMode.nbspace = std::getenv( "POSIXLY_CORRECT" ) == nullptr;
 
@@ -120,7 +119,7 @@ int main( int argc, char** argv )
 
   const std::vector<Counts> output =
       mapFiles<Counts>( numFiles, numThreads, [&]( const usize idx ) {
-        return processFile( opt.files[idx].c_str(), work, opt.bytesPerThread );
+        return processFile( opt.files[idx], work, opt.bytesPerThread );
       } );
   printResults( opt, output );
   return 0;

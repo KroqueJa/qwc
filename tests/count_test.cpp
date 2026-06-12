@@ -68,9 +68,9 @@ TEST( Count, OnlyTargets )
 // ---------------------------------------------------------------------------
 TEST( Count, RespectsLengthShorterThanBuffer )
 {
-  const char buf[] = "a\nb\nc\n";  // 3 newlines total
-  EXPECT_EQ( count( buf, 3, '\n' ), 1u );   // "a\nb" -> 1
-  EXPECT_EQ( count( buf, 4, '\n' ), 2u );   // "a\nb\n" -> 2
+  const char buf[] = "a\nb\nc\n";          // 3 newlines total
+  EXPECT_EQ( count( buf, 3, '\n' ), 1u );  // "a\nb" -> 1
+  EXPECT_EQ( count( buf, 4, '\n' ), 2u );  // "a\nb\n" -> 2
 }
 
 TEST( Count, CountsEmbeddedNulBytes )
@@ -107,7 +107,10 @@ TEST( Count, HighByteTarget0x80 )
 {
   std::string s( 200, 'a' );
   for ( size_t i = 0; i < s.size(); i += 4 ) s[i] = static_cast<char>( 0x80 );
-  EXPECT_EQ( countStr( s, static_cast<char>( 0x80 ) ), refCount( s, static_cast<char>( 0x80 ) ) );
+  EXPECT_EQ(
+      countStr( s, static_cast<char>( 0x80 ) ),
+      refCount( s, static_cast<char>( 0x80 ) )
+  );
 }
 
 TEST( Count, EveryByteValueAsTarget )
@@ -129,9 +132,9 @@ TEST( Count, EveryByteValueAsTarget )
 // ---------------------------------------------------------------------------
 TEST( Count, LengthsAroundSimdBoundaries )
 {
-  const size_t widths[] = { 1, 15, 16, 17, 31, 32, 33, 47, 48, 63,
+  const size_t widths[] = { 1,  15, 16, 17, 31,  32,  33,  47,  48,  63,
                             64, 65, 95, 96, 127, 128, 129, 255, 256, 257 };
-  for ( size_t len : widths ) {
+  for ( size_t len: widths ) {
     std::string all( len, '\n' );
     EXPECT_EQ( countStr( all ), len ) << "all-target len=" << len;
 
@@ -141,7 +144,10 @@ TEST( Count, LengthsAroundSimdBoundaries )
     // Every other byte is a target.
     std::string alt( len, 'x' );
     size_t expected = 0;
-    for ( size_t i = 0; i < len; i += 2 ) { alt[i] = '\n'; ++expected; }
+    for ( size_t i = 0; i < len; i += 2 ) {
+      alt[i] = '\n';
+      ++expected;
+    }
     EXPECT_EQ( countStr( alt ), expected ) << "alternating len=" << len;
   }
 }
@@ -167,7 +173,10 @@ TEST( Count, UnalignedStartPointer )
     std::vector<char> backing( payload + 64, 'x' );
     char* p = backing.data() + off;
     size_t expected = 0;
-    for ( size_t i = 0; i < payload; i += 3 ) { p[i] = '\n'; ++expected; }
+    for ( size_t i = 0; i < payload; i += 3 ) {
+      p[i] = '\n';
+      ++expected;
+    }
     EXPECT_EQ( count( p, payload, '\n' ), expected ) << "offset=" << off;
   }
 }
@@ -179,8 +188,8 @@ TEST( Count, UnalignedStartPointer )
 // ---------------------------------------------------------------------------
 TEST( Count, LargeDenseDoesNotOverflowLanes )
 {
-  for ( size_t len : { size_t( 16320 ), size_t( 32640 ), size_t( 65280 ),
-                       size_t( 100000 ), size_t( 262144 ) } ) {
+  for ( size_t len: { size_t( 16320 ), size_t( 32640 ), size_t( 65280 ),
+                      size_t( 100000 ), size_t( 262144 ) } ) {
     std::string all( len, '\n' );
     EXPECT_EQ( countStr( all ), len ) << "len=" << len;
   }
@@ -191,7 +200,10 @@ TEST( Count, LargeBufferSpansManyDrainCycles )
   // > 4 NEON drain cycles and > 2 AVX2 drain cycles, mixed density.
   std::string s( 200000, 'x' );
   size_t expected = 0;
-  for ( size_t i = 0; i < s.size(); i += 7 ) { s[i] = '\n'; ++expected; }
+  for ( size_t i = 0; i < s.size(); i += 7 ) {
+    s[i] = '\n';
+    ++expected;
+  }
   EXPECT_EQ( countStr( s ), expected );
 }
 
@@ -212,8 +224,8 @@ TEST( Count, FuzzAgainstReference )
 
     const char target = static_cast<char>( byteDist( rng ) );
     EXPECT_EQ( countStr( s, target ), refCount( s, target ) )
-        << "iter=" << iter << " len=" << len
-        << " target=" << static_cast<int>( static_cast<unsigned char>( target ) );
+        << "iter=" << iter << " len=" << len << " target="
+        << static_cast<int>( static_cast<unsigned char>( target ) );
   }
 }
 
@@ -228,7 +240,7 @@ TEST( Count, FuzzUnalignedAgainstReference )
     const size_t len = lenDist( rng );
     const size_t off = offDist( rng );
     std::vector<char> backing( len + 64 );
-    for ( auto& c : backing ) c = static_cast<char>( byteDist( rng ) );
+    for ( auto& c: backing ) c = static_cast<char>( byteDist( rng ) );
     const char target = static_cast<char>( byteDist( rng ) );
 
     const char* p = backing.data() + off;

@@ -1,6 +1,7 @@
-#include <gtest/gtest.h>
+#include "processfile.h"
 
 #include <fcntl.h>
+#include <gtest/gtest.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -13,7 +14,6 @@
 #include <string>
 #include <thread>
 
-#include "processfile.h"
 #include "test_util.h"
 
 using qwctest::pfBytes;
@@ -53,7 +53,6 @@ class TempFile
   TempFile& operator=( const TempFile& ) = delete;
 
   const char* path() const { return path_.c_str(); }
-
  private:
   std::string path_;
 };
@@ -74,7 +73,8 @@ class TempFifo
   TempFifo()
   {
     char tmpl[] = "/tmp/qwc_pf_fifo_XXXXXX";
-    int fd = mkstemp( tmpl );  // reserve a unique name, then re-create as a FIFO
+    int fd =
+        mkstemp( tmpl );  // reserve a unique name, then re-create as a FIFO
     if ( fd < 0 ) std::abort();
     ::close( fd );
     ::unlink( tmpl );
@@ -85,7 +85,6 @@ class TempFifo
   TempFifo( const TempFifo& ) = delete;
   TempFifo& operator=( const TempFifo& ) = delete;
   const char* path() const { return path_.c_str(); }
-
  private:
   std::string path_;
 };
@@ -182,9 +181,9 @@ TEST( ProcessFileWords, ChunkBoundariesDoNotMiscount )
   const size_t expected = refWords( content );
   TempFile f( content );
 
-  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
-                       size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
-                       size_t( 64 * 1024 * 1024 ) } ) {
+  for ( size_t bpt:
+        { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ), size_t( 1024 ),
+          size_t( 4096 ), size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
     EXPECT_EQ( pfWords( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
   }
 }
@@ -196,7 +195,7 @@ TEST( ProcessFileWords, BoundaryInsideWhitespaceRun )
   content += "beta";
   const size_t expected = refWords( content );  // 2
   TempFile f( content );
-  for ( size_t bpt : { size_t( 1 ), size_t( 8 ), size_t( 64 ), size_t( 256 ) } )
+  for ( size_t bpt: { size_t( 1 ), size_t( 8 ), size_t( 64 ), size_t( 256 ) } )
     EXPECT_EQ( pfWords( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
 }
 
@@ -250,9 +249,9 @@ TEST( ProcessFileChars, ChunkBoundariesDoNotMiscount )
   const size_t expected = refChars( content );
   TempFile f( content );
 
-  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
-                       size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
-                       size_t( 64 * 1024 * 1024 ) } ) {
+  for ( size_t bpt:
+        { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ), size_t( 1024 ),
+          size_t( 4096 ), size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
     EXPECT_EQ( pfChars( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
   }
 }
@@ -260,7 +259,8 @@ TEST( ProcessFileChars, ChunkBoundariesDoNotMiscount )
 TEST( ProcessFileChars, LargerThanReadBuffer )
 {
   std::string content;
-  while ( content.size() < 5 * 1024 * 1024 ) content += "lorem \xE2\x98\x83 ip ";
+  while ( content.size() < 5 * 1024 * 1024 )
+    content += "lorem \xE2\x98\x83 ip ";
   const size_t expected = refChars( content );
   TempFile f( content );
   EXPECT_EQ( pfChars( f.path() ), expected );
@@ -302,9 +302,9 @@ TEST( ProcessFileMaxLine, ChunkBoundariesDoNotMiscount )
   ASSERT_EQ( expected, 9000u );
   TempFile f( content );
 
-  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ),
-                       size_t( 1024 ), size_t( 4096 ), size_t( 100000 ),
-                       size_t( 64 * 1024 * 1024 ) } ) {
+  for ( size_t bpt:
+        { size_t( 1 ), size_t( 2 ), size_t( 7 ), size_t( 64 ), size_t( 1024 ),
+          size_t( 4096 ), size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
     EXPECT_EQ( pfMaxLine( f.path(), bpt ), expected )
         << "bytesPerThread=" << bpt;
   }
@@ -316,7 +316,7 @@ TEST( ProcessFileMaxLine, BoundaryOnNewline )
   for ( int i = 0; i < 2000; ++i ) content += "abcd\n";  // every line length 4
   const size_t expected = refMaxLineLen( content );      // 4
   TempFile f( content );
-  for ( size_t bpt : { size_t( 1 ), size_t( 5 ), size_t( 64 ), size_t( 256 ) } )
+  for ( size_t bpt: { size_t( 1 ), size_t( 5 ), size_t( 64 ), size_t( 256 ) } )
     EXPECT_EQ( pfMaxLine( f.path(), bpt ), expected )
         << "bytesPerThread=" << bpt;
 }
@@ -341,11 +341,10 @@ TEST( ProcessFileLines, ChunkBoundariesDoNotMiscount )
   const size_t expected = refCount( content, '\n' );
   TempFile f( content );
 
-  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 1024 ),
-                       size_t( 4096 ), size_t( 100000 ),
-                       size_t( 64 * 1024 * 1024 ) } ) {
-    EXPECT_EQ( pfLines( f.path(), bpt ), expected )
-        << "bytesPerThread=" << bpt;
+  for ( size_t bpt:
+        { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 1024 ),
+          size_t( 4096 ), size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
+    EXPECT_EQ( pfLines( f.path(), bpt ), expected ) << "bytesPerThread=" << bpt;
   }
 }
 
@@ -387,8 +386,8 @@ TEST( ProcessFileLines, Deterministic )
 
 // ---------------------------------------------------------------------------
 // The fused engine: a Workload requesting several counts computes them all in
-// one pass, and each must equal the single-counter result -- across chunk sizes,
-// so the words/longest-line stitching survives alongside the others.
+// one pass, and each must equal the single-counter result -- across chunk
+// sizes, so the words/longest-line stitching survives alongside the others.
 // ---------------------------------------------------------------------------
 TEST( ProcessFileFused, AllCountersMatchIndividualPasses )
 {
@@ -401,8 +400,8 @@ TEST( ProcessFileFused, AllCountersMatchIndividualPasses )
   w.lines = w.words = w.bytes = w.chars = w.maxLine = w.target = true;
   w.targetByte = 'o';
 
-  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 4096 ),
-                       size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
+  for ( size_t bpt: { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 4096 ),
+                      size_t( 100000 ), size_t( 64 * 1024 * 1024 ) } ) {
     const Counts c = processFile( f.path(), w, bpt );
     EXPECT_EQ( c.lines, pfLines( f.path(), bpt ) ) << "bpt=" << bpt;
     EXPECT_EQ( c.words, pfWords( f.path(), bpt ) ) << "bpt=" << bpt;
@@ -434,7 +433,8 @@ TEST( ProcessFileDeathTest, MissingFileExitsWithCode1 )
 {
   EXPECT_EXIT(
       pfLines( "/nonexistent/qwc/path/should/not/exist_zzz" ),
-      ::testing::ExitedWithCode( 1 ), "Error opening file" );
+      ::testing::ExitedWithCode( 1 ), "Error opening file"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -478,17 +478,19 @@ TEST( ProcessFileNonRegular, FifoCountsLikeItsContents )
 }
 
 // A procfs file is a *regular* file (S_ISREG is true) whose fstat size is 0 yet
-// which has real content. Trusting st_size==0 as "empty" silently reports zeros,
-// so a zero-size regular file must also fall back to the serial read. Uses
-// /proc/version, whose contents are byte-stable within a run (unlike cpuinfo,
-// whose "cpu MHz" can change between reads). Linux-only vehicle.
+// which has real content. Trusting st_size==0 as "empty" silently reports
+// zeros, so a zero-size regular file must also fall back to the serial read.
+// Uses /proc/version, whose contents are byte-stable within a run (unlike
+// cpuinfo, whose "cpu MHz" can change between reads). Linux-only vehicle.
 TEST( ProcessFileNonRegular, ZeroSizeRegularProcFileWithContent )
 {
   const char* path = "/proc/version";
   std::ifstream probe( path );
   if ( !probe.good() ) GTEST_SKIP() << path << " not available";
-  const std::string content( ( std::istreambuf_iterator<char>( probe ) ),
-                             std::istreambuf_iterator<char>() );
+  const std::string content(
+      ( std::istreambuf_iterator<char>( probe ) ),
+      std::istreambuf_iterator<char>()
+  );
   ASSERT_FALSE( content.empty() );
 
   Workload w;
@@ -597,7 +599,8 @@ TEST_F( StdinFixture, StdinCharCount )
 TEST_F( StdinFixture, StdinCharsLargerThanReadBuffer )
 {
   std::string content;
-  while ( content.size() < 2 * 1024 * 1024 ) content += "lorem \xE2\x98\x83 ip ";
+  while ( content.size() < 2 * 1024 * 1024 )
+    content += "lorem \xE2\x98\x83 ip ";
   const size_t expected = refChars( content );
   feedStdin( content );
   EXPECT_EQ( pfChars( "" ), expected );
@@ -655,8 +658,8 @@ TEST( ProcessFileWordsUnicode, MultibyteSeparatorOnEveryBoundary )
   const WordsMode m{ true, true };
   const size_t expected = refWords( content, true );  // 501
   TempFile f( content );
-  for ( size_t bpt : { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
-                       size_t( 64 ), size_t( 4096 ), size_t( 100000 ) } )
+  for ( size_t bpt: { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
+                      size_t( 64 ), size_t( 4096 ), size_t( 100000 ) } )
     EXPECT_EQ( pfWords( f.path(), bpt, m ), expected )
         << "bytesPerThread=" << bpt;
 }
@@ -672,8 +675,8 @@ TEST( ProcessFileWordsUnicode, BarrenStraddleRescuedAcrossSeam )
   content += 'b';
   const size_t expected = refWords( content, false );  // 2
   TempFile f( content );
-  for ( size_t bpt : { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 299 ),
-                       size_t( 301 ), size_t( 4096 ) } )
+  for ( size_t bpt: { size_t( 1 ), size_t( 7 ), size_t( 64 ), size_t( 299 ),
+                      size_t( 301 ), size_t( 4096 ) } )
     EXPECT_EQ( pfWords( f.path(), bpt, WordsMode{} ), expected )
         << "bytesPerThread=" << bpt;
 }
@@ -684,7 +687,7 @@ TEST( ProcessFileWordsUnicode, BarrenOnlyFileIsZero )
   content += std::string( 5000, '\x02' );
   content += ' ';
   TempFile f( content );
-  for ( size_t bpt : { size_t( 1 ), size_t( 64 ), size_t( 4096 ) } )
+  for ( size_t bpt: { size_t( 1 ), size_t( 64 ), size_t( 4096 ) } )
     EXPECT_EQ( pfWords( f.path(), bpt, WordsMode{} ), 0u )
         << "bytesPerThread=" << bpt;
 }

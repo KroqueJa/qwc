@@ -1,7 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <string>
 #include <vector>
 
 #include "processfile.h"
@@ -42,9 +41,12 @@ struct Options
 
   bool recursive = false;  // expand directory arguments
   SortMode sortMode = SortMode::None;
-  bool reverse = false;            // flip the display order
-  usize topN = 0;                  // keep only the highest N (0 == show all)
-  std::vector<std::string> files;  // positional args; expanded by collectFiles
+  bool reverse = false;  // flip the display order
+  usize topN = 0;        // keep only the highest N (0 == show all)
+  // Positional args; expanded by collectFiles. Entries either point into argv
+  // or at heap paths allocated by the --recursive walk; both live for the whole
+  // process, so nothing here is ever copied or freed.
+  std::vector<const char*> files;
 
   // How many output columns are selected.
   int columnCount() const

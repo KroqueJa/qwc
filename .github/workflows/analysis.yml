@@ -1,6 +1,8 @@
 # Static & dynamic analysis gate for qwc.
 #
-# Four independent checks, none of which touch the benchmark build:
+# Five independent checks, none of which touch the benchmark build:
+#   * clang-format -- formatting gate over every hand-written C++ file
+#                    (scripts/check-format.sh; .clang-format is authoritative).
 #   * clang-tidy  -- the curated static-analysis gate (.clang-tidy), run on both
 #                    Linux (AVX2 + scalar sources) and macOS (NEON sources), since
 #                    each SIMD translation unit only compiles on its own arch.
@@ -26,6 +28,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # no submodules: only repo sources are checked
+
+      - name: Install clang-format
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq clang-format
+
+      - name: Check formatting (scripts/check-format.sh --fix to repair locally)
+        run: ./scripts/check-format.sh
+
   clang-tidy:
     name: clang-tidy (${{ matrix.os }})
     strategy:

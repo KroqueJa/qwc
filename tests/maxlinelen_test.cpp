@@ -1,9 +1,10 @@
+#include "maxlinelen.h"
+
 #include <gtest/gtest.h>
 
 #include <random>
 #include <string>
 
-#include "maxlinelen.h"
 #include "test_util.h"
 
 using qwctest::charModeMaxLine;
@@ -15,8 +16,8 @@ using qwctest::maxLineLenStr;
 using qwctest::refMaxLineLen;
 
 // The longest-line length, like `wc -L`: the most bytes between newlines, with
-// the newline itself excluded. Only newline-terminated lines count -- a trailing
-// run with no final newline is ignored (matching macOS/BSD wc).
+// the newline itself excluded. Only newline-terminated lines count -- a
+// trailing run with no final newline is ignored (matching macOS/BSD wc).
 
 // ---------------------------------------------------------------------------
 // Basic / edge cases
@@ -92,14 +93,15 @@ TEST( MaxLineLen, CarryAcrossBuffersMatchesWhole )
   const std::string s = "short\nmuch longer line here\ntiny\n";
   const usize expected = refMaxLineLen( s );
   ASSERT_EQ( maxLineLenStr( s ), expected );
-  for ( size_t chunk : { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
-                         size_t( 7 ), size_t( 8 ), size_t( 16 ) } )
+  for ( size_t chunk: { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
+                        size_t( 7 ), size_t( 8 ), size_t( 16 ) } )
     EXPECT_EQ( maxLineLenChunked( s, chunk ), expected ) << "chunk=" << chunk;
 }
 
 TEST( MaxLineLen, SplitInsideLongLineDoesNotMiscount )
 {
-  // One long (terminated) line split anywhere must still report its full length.
+  // One long (terminated) line split anywhere must still report its full
+  // length.
   const std::string s = std::string( 50, 'x' ) + "\n";
   for ( size_t chunk = 1; chunk <= s.size(); ++chunk )
     EXPECT_EQ( maxLineLenChunked( s, chunk ), 50u ) << "chunk=" << chunk;
@@ -140,7 +142,8 @@ TEST( MaxLineLen, FuzzAgainstReference )
 // ---------------------------------------------------------------------------
 TEST( MaxLineLenChars, MatchesSeparatePassesKnown )
 {
-  // "héllo wörld" (11 chars) is the longest line; total = 11 + nl + 5 + nl = 18.
+  // "héllo wörld" (11 chars) is the longest line; total = 11 + nl + 5 + nl
+  // = 18.
   const std::string s = "h\xC3\xA9llo w\xC3\xB6rld\nshort\n";
   const auto [maxLine, chars] = fusedLineChars( s );
   EXPECT_EQ( maxLine, 11u );
@@ -180,7 +183,8 @@ TEST( MaxLineLenChars, FuzzMatchesSeparatePasses )
 
     // Split at a random point (state carried) -- must still match.
     std::uniform_int_distribution<size_t> splitDist( 1, len + 1 );
-    const auto [mlChunk, ccChunk] = fusedLineCharsChunked( s, splitDist( rng ) );
+    const auto [mlChunk, ccChunk] =
+        fusedLineCharsChunked( s, splitDist( rng ) );
     EXPECT_EQ( mlChunk, expMaxLine ) << "iter=" << iter << " len=" << len;
     EXPECT_EQ( ccChunk, expChars ) << "iter=" << iter << " len=" << len;
   }

@@ -27,8 +27,9 @@ inline usize pfLines( const char* path, usize bpt = kDefaultBpt )
   w.lines = true;
   return processFile( path, w, bpt ).lines;
 }
-inline usize pfWords( const char* path, usize bpt = kDefaultBpt,
-                      const WordsMode m = {} )
+inline usize pfWords(
+    const char* path, usize bpt = kDefaultBpt, const WordsMode m = {}
+)
 {
   Workload w;
   w.words = true;
@@ -98,8 +99,9 @@ inline bool refIsSpace( unsigned char c )
 // (one linear walk with local state, no owned-region/window machinery); uses
 // the same generated iswprint table, which words_test.cpp spot-checks against
 // known glibc classifications.
-inline usize refWords( const std::string& s, const bool utf8 = false,
-                       const bool nbspace = true )
+inline usize refWords(
+    const std::string& s, const bool utf8 = false, const bool nbspace = true
+)
 {
   const auto* p = reinterpret_cast<const unsigned char*>( s.data() );
   const usize n = s.size();
@@ -140,8 +142,8 @@ inline usize refWords( const std::string& s, const bool utf8 = false,
     }
     const bool sep = utf8 ? ( valid && isSepCp( cp, nbspace ) )
                           : refIsSpace( static_cast<unsigned char>( cp ) );
-    const bool print = utf8 ? ( valid && qwcIswprint( cp ) )
-                            : ( cp >= 0x21 && cp <= 0x7E );
+    const bool print =
+        utf8 ? ( valid && qwcIswprint( cp ) ) : ( cp >= 0x21 && cp <= 0x7E );
     if ( sep ) {
       if ( inWord && hasPrint ) ++count;
       inWord = false;
@@ -166,9 +168,10 @@ inline usize wordsStr( const std::string& s, const WordsMode m = {} )
 }
 
 // Independent reference for `chars` (UTF-8 code points). Structured differently
-// from the implementation under test: it walks the leading byte of each sequence
-// and skips the continuation bytes, rather than counting non-continuation bytes,
-// so a shared bug is unlikely. For well-formed UTF-8 it equals `wc -m`.
+// from the implementation under test: it walks the leading byte of each
+// sequence and skips the continuation bytes, rather than counting
+// non-continuation bytes, so a shared bug is unlikely. For well-formed UTF-8 it
+// equals `wc -m`.
 inline usize refChars( const std::string& s )
 {
   usize n = 0;
@@ -176,10 +179,14 @@ inline usize refChars( const std::string& s )
   while ( i < s.size() ) {
     const auto b = static_cast<unsigned char>( s[i] );
     size_t len = 1;
-    if ( ( b & 0x80 ) == 0x00 ) len = 1;        // 0xxxxxxx
-    else if ( ( b & 0xE0 ) == 0xC0 ) len = 2;   // 110xxxxx
-    else if ( ( b & 0xF0 ) == 0xE0 ) len = 3;   // 1110xxxx
-    else if ( ( b & 0xF8 ) == 0xF0 ) len = 4;   // 11110xxx
+    if ( ( b & 0x80 ) == 0x00 )
+      len = 1;  // 0xxxxxxx
+    else if ( ( b & 0xE0 ) == 0xC0 )
+      len = 2;  // 110xxxxx
+    else if ( ( b & 0xF0 ) == 0xE0 )
+      len = 3;  // 1110xxxx
+    else if ( ( b & 0xF8 ) == 0xF0 )
+      len = 4;  // 11110xxx
     i += len;
     ++n;
   }
@@ -279,16 +286,19 @@ inline std::pair<usize, usize> fusedLineCharsChunked(
 // its piece and sees up to 3 bytes of context on both sides, mirroring the
 // overlap reads in processfile. Must agree with wordsStr/refWords regardless
 // of where the splits land.
-inline usize wordsChunked( const std::string& s, size_t chunk,
-                           const WordsMode m = {} )
+inline usize wordsChunked(
+    const std::string& s, size_t chunk, const WordsMode m = {}
+)
 {
   WordScan ws;
   for ( size_t i = 0; i < s.size(); i += chunk ) {
     const size_t end = std::min( i + chunk, s.size() );
     const size_t front = std::min<size_t>( i, 3 );
     const size_t back = std::min<size_t>( s.size() - end, 3 );
-    words( s.data() + i - front, ( end + back ) - ( i - front ), front,
-           front + ( end - i ), ws, m );
+    words(
+        s.data() + i - front, ( end + back ) - ( i - front ), front,
+        front + ( end - i ), ws, m
+    );
   }
   wordsFlush( ws );
   return ws.words;

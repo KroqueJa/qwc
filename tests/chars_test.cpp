@@ -1,10 +1,11 @@
+#include "chars.h"
+
 #include <gtest/gtest.h>
 
 #include <random>
 #include <string>
 #include <vector>
 
-#include "chars.h"
 #include "test_util.h"
 
 using qwctest::charsChunked;
@@ -95,14 +96,15 @@ TEST( Chars, ChunkedMatchesWholeMixed )
   for ( int i = 0; i < 500; ++i ) s += "a\xC3\xA9z\xE2\x98\x83 ";
   const usize expected = refChars( s );
   ASSERT_EQ( charsStr( s ), expected );
-  for ( size_t chunk : { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
-                         size_t( 7 ), size_t( 16 ), size_t( 64 ) } )
+  for ( size_t chunk: { size_t( 1 ), size_t( 2 ), size_t( 3 ), size_t( 5 ),
+                        size_t( 7 ), size_t( 16 ), size_t( 64 ) } )
     EXPECT_EQ( charsChunked( s, chunk ), expected ) << "chunk=" << chunk;
 }
 
 // ---------------------------------------------------------------------------
-// Randomized differential test: build valid UTF-8 from random code points so the
-// expected character count is known by construction and matches the reference.
+// Randomized differential test: build valid UTF-8 from random code points so
+// the expected character count is known by construction and matches the
+// reference.
 // ---------------------------------------------------------------------------
 TEST( Chars, FuzzValidUtf8AgainstReference )
 {
@@ -112,19 +114,22 @@ TEST( Chars, FuzzValidUtf8AgainstReference )
 
   auto appendCodePoint = []( std::string& s, int kind, std::mt19937_64& r ) {
     switch ( kind ) {
-      case 0: {  // 1 byte: U+0000..U+007F
+      case 0:
+      {  // 1 byte: U+0000..U+007F
         std::uniform_int_distribution<int> d( 0, 0x7F );
         s.push_back( static_cast<char>( d( r ) ) );
         break;
       }
-      case 1: {  // 2 bytes: U+0080..U+07FF
+      case 1:
+      {  // 2 bytes: U+0080..U+07FF
         std::uniform_int_distribution<int> d( 0x80, 0x7FF );
         const int cp = d( r );
         s.push_back( static_cast<char>( 0xC0 | ( cp >> 6 ) ) );
         s.push_back( static_cast<char>( 0x80 | ( cp & 0x3F ) ) );
         break;
       }
-      case 2: {  // 3 bytes: U+0800..U+FFFF
+      case 2:
+      {  // 3 bytes: U+0800..U+FFFF
         std::uniform_int_distribution<int> d( 0x800, 0xFFFF );
         const int cp = d( r );
         s.push_back( static_cast<char>( 0xE0 | ( cp >> 12 ) ) );
@@ -132,7 +137,8 @@ TEST( Chars, FuzzValidUtf8AgainstReference )
         s.push_back( static_cast<char>( 0x80 | ( cp & 0x3F ) ) );
         break;
       }
-      default: {  // 4 bytes: U+10000..U+10FFFF
+      default:
+      {  // 4 bytes: U+10000..U+10FFFF
         std::uniform_int_distribution<int> d( 0x10000, 0x10FFFF );
         const int cp = d( r );
         s.push_back( static_cast<char>( 0xF0 | ( cp >> 18 ) ) );
@@ -154,9 +160,10 @@ TEST( Chars, FuzzValidUtf8AgainstReference )
 
     // Split at a random byte (possibly mid-sequence) and verify it still sums.
     std::uniform_int_distribution<size_t> splitDist( 1, s.size() + 1 );
-    EXPECT_EQ( charsChunked( s, splitDist( rng ) ),
-               static_cast<usize>( count ) )
-        << "iter=" << iter;
+    EXPECT_EQ(
+        charsChunked( s, splitDist( rng ) ), static_cast<usize>( count )
+    ) << "iter="
+      << iter;
   }
 }
 
@@ -196,7 +203,8 @@ TEST( Chars, CrossesAccumulatorDrainBoundary )
   // iterations); exceed that so the drain/refill path runs, with continuation
   // bytes throughout. "a\xC3\xA9" is 3 bytes / 2 characters.
   std::string s;
-  const size_t reps = 15000;  // 45000 bytes, well past any per-lane drain window
+  const size_t reps =
+      15000;  // 45000 bytes, well past any per-lane drain window
   for ( size_t i = 0; i < reps; ++i ) s += "a\xC3\xA9";
   const usize expected = 2 * reps;
   EXPECT_EQ( charsStr( s ), expected );
