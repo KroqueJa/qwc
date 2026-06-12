@@ -14,8 +14,8 @@
 #include "cli.h"
 #include "processfile.h"
 
-// hardware_concurrency() can report 0 when it cannot tell; treat that as 1 so we
-// never end up with an empty worker pool. Spelled as a ternary over the
+// hardware_concurrency() can report 0 when it cannot tell; treat that as 1 so
+// we never end up with an empty worker pool. Spelled as a ternary over the
 // noexcept hardware_concurrency() rather than std::max, which is not noexcept
 // and so could (in principle) throw during static initialization.
 static const u32 MAX_THREADS = std::thread::hardware_concurrency() > 0
@@ -25,9 +25,10 @@ static const u32 MAX_THREADS = std::thread::hardware_concurrency() > 0
 // Files per worker on the no-scan (bytes-only, `-c`) path: each file is a bare
 // fstat (~microseconds on a warm local cache), so a worker only earns its
 // ~tens-of-microseconds spawn cost once it has this many files to chew through.
-// Below this the glob runs serially; above it we scale up to MAX_THREADS. A cold
-// or networked open() costs far more and parallelises sooner, so this warm-tuned
-// default is deliberately conservative. Override with -DQWC_FILES_PER_THREAD=N.
+// Below this the glob runs serially; above it we scale up to MAX_THREADS. A
+// cold or networked open() costs far more and parallelises sooner, so this
+// warm-tuned default is deliberately conservative. Override with
+// -DQWC_FILES_PER_THREAD=N.
 #ifndef QWC_FILES_PER_THREAD
 #define QWC_FILES_PER_THREAD 32
 #endif
@@ -108,14 +109,15 @@ int main( int argc, char** argv )
 
   // Choose the worker count before spawning anything. A bytes-only workload is
   // a bare fstat per file, so it scales workers with the glob (one per
-  // QWC_FILES_PER_THREAD files) and small globs stay serial. A scanning workload
-  // is heavy per file, so it uses as many workers as files (capped) and leans on
-  // each file's own internal chunk-parallelism for the rest.
+  // QWC_FILES_PER_THREAD files) and small globs stay serial. A scanning
+  // workload is heavy per file, so it uses as many workers as files (capped)
+  // and leans on each file's own internal chunk-parallelism for the rest.
   const u32 numThreads =
       work.needsScan()
           ? static_cast<u32>( std::min<usize>( numFiles, MAX_THREADS ) )
           : static_cast<u32>( std::clamp<usize>(
-                numFiles / QWC_FILES_PER_THREAD, 1, MAX_THREADS ) );
+                numFiles / QWC_FILES_PER_THREAD, 1, MAX_THREADS
+            ) );
 
   const std::vector<Counts> output =
       mapFiles<Counts>( numFiles, numThreads, [&]( const usize idx ) {

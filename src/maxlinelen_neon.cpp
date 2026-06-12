@@ -57,13 +57,14 @@ void maxLineLen(
   const uint8x16_t contMask = vdupq_n_u8( 0xC0 );
   const uint8x16_t contTag = vdupq_n_u8( 0x80 );
 
-  // Character mode counts the continuation bytes of a run of newline-free blocks
-  // into byte lanes (the same overflow-safe trick as chars_neon / count_neon)
-  // and folds the run into `cur` only when it ends -- at a newline block, every
-  // 255 blocks (before a lane could overflow), or the loop's end. This keeps the
-  // hot path free of the per-block horizontal reduction (and the per-block scalar
-  // arithmetic it feeds) that the byte path never pays: a run of newline-free
-  // blocks all belongs to the same open line, so `cur` only needs the total.
+  // Character mode counts the continuation bytes of a run of newline-free
+  // blocks into byte lanes (the same overflow-safe trick as chars_neon /
+  // count_neon) and folds the run into `cur` only when it ends -- at a newline
+  // block, every 255 blocks (before a lane could overflow), or the loop's end.
+  // This keeps the hot path free of the per-block horizontal reduction (and the
+  // per-block scalar arithmetic it feeds) that the byte path never pays: a run
+  // of newline-free blocks all belongs to the same open line, so `cur` only
+  // needs the total.
   uint8x16_t contAcc = vdupq_n_u8( 0 );
   usize pendingBytes = 0;
   unsigned pendingBlocks = 0;
@@ -81,15 +82,16 @@ void maxLineLen(
     const uint8x16_t v = vld1q_u8( tmp );
 
     if ( vmaxvq_u8( vceqq_u8( v, newline ) ) != 0 ) {
-      // A newline splits this block into segments. Fold any pending newline-free
-      // run into `cur` first (the per-byte pass reads it for prefix/maxComplete),
-      // then hand the block to the scalar state machine.
+      // A newline splits this block into segments. Fold any pending
+      // newline-free run into `cur` first (the per-byte pass reads it for
+      // prefix/maxComplete), then hand the block to the scalar state machine.
       if ( countChars ) flushRun();
       for ( int i = 0; i < 16; ++i ) scalarStep( tmp[i], s, countChars );
     } else if ( countChars ) {
       // Newline-free block: add its continuation bytes to the running lanes
       // (vceqq yields 0xFF == -1 per hit, so vsubq adds 1). No reduction here.
-      contAcc = vsubq_u8( contAcc, vceqq_u8( vandq_u8( v, contMask ), contTag ) );
+      contAcc =
+          vsubq_u8( contAcc, vceqq_u8( vandq_u8( v, contMask ), contTag ) );
       pendingBytes += 16;
       if ( ++pendingBlocks == 255 ) flushRun();
     } else {
@@ -99,7 +101,8 @@ void maxLineLen(
     tmp += 16;
     processed += 16;
   }
-  if ( countChars ) flushRun();  // fold the final run before the scalar epilogue
+  if ( countChars )
+    flushRun();  // fold the final run before the scalar epilogue
 
   // Scalar epilogue for the remaining < 16 bytes.
   while ( processed < length ) {
@@ -110,11 +113,12 @@ void maxLineLen(
 }
 
 // One byte through the fused state machine for `-L -m`: it maintains the
-// character-mode longest line (like scalarStep with countChars) and, at the same
-// time, the running character total. The newline is itself a character but does
-// not extend the line; a continuation byte is neither.
-static inline void stepBoth( const unsigned char c, LineScan& s,
-                             usize& charCount )
+// character-mode longest line (like scalarStep with countChars) and, at the
+// same time, the running character total. The newline is itself a character but
+// does not extend the line; a continuation byte is neither.
+static inline void stepBoth(
+    const unsigned char c, LineScan& s, usize& charCount
+)
 {
   if ( c == '\n' ) {
     ++charCount;
@@ -151,10 +155,10 @@ void maxLineLenChars(
   const uint8x16_t contTag = vdupq_n_u8( 0x80 );
 
   // A run of newline-free blocks is one continuous stretch of the open line, so
-  // its non-continuation bytes contribute equally to the line length (`cur`) and
-  // to the character total. Count continuation bytes into byte lanes and fold
-  // the run into BOTH at run end -- one vector pass yields both answers, with no
-  // per-block reduction and no second traversal for chars().
+  // its non-continuation bytes contribute equally to the line length (`cur`)
+  // and to the character total. Count continuation bytes into byte lanes and
+  // fold the run into BOTH at run end -- one vector pass yields both answers,
+  // with no per-block reduction and no second traversal for chars().
   uint8x16_t contAcc = vdupq_n_u8( 0 );
   usize pendingBytes = 0;
   unsigned pendingBlocks = 0;
@@ -173,7 +177,8 @@ void maxLineLenChars(
     const uint8x16_t v = vld1q_u8( tmp );
 
     if ( vmaxvq_u8( vceqq_u8( v, newline ) ) != 0 ) {
-      flushRun();  // realize the run (into cur and charCount) before the newline
+      flushRun(
+      );  // realize the run (into cur and charCount) before the newline
       for ( int i = 0; i < 16; ++i ) stepBoth( tmp[i], s, charCount );
     } else {
       contAcc =

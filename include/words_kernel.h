@@ -15,7 +15,12 @@
 
 namespace qwc::words_kernel {
 
-enum class Cls : u8 { Sep, Print, Other };
+enum class Cls : u8
+{
+  Sep,
+  Print,
+  Other
+};
 
 // Strict UTF-8 decode at p (window-bounded by end). On success returns the
 // scalar value and sets seqLen; on any invalid/truncated sequence consumes
@@ -35,8 +40,7 @@ inline u32 decodeCp( const u8* p, const u8* end, usize& seqLen )
     cp = ( cp << 6 ) | ( p[k] & 0x3F );
   }
   static constexpr u32 kMin[5] = { 0, 0, 0x80, 0x800, 0x10000 };
-  if ( cp < kMin[need] || cp > 0x10FFFF ||
-       ( cp >= 0xD800 && cp <= 0xDFFF ) )
+  if ( cp < kMin[need] || cp > 0x10FFFF || ( cp >= 0xD800 && cp <= 0xDFFF ) )
     return 0xFFFFFFFF;
   seqLen = need;
   return cp;
@@ -85,8 +89,10 @@ inline void step( const Cls c, WordScan& s )
 // [base, base+len): the entry path for a leading continuation byte, punted
 // vector blocks, and the epilogue. Consumes whole code points (the last one
 // may overhang `stop`); returns the first unconsumed position.
-inline usize scalarUtf8( const u8* base, const usize len, const usize from,
-                         const usize stop, WordScan& s, const bool nbspace )
+inline usize scalarUtf8(
+    const u8* base, const usize len, const usize from, const usize stop,
+    WordScan& s, const bool nbspace
+)
 {
   const u8* end = base + len;
   usize i = from;
@@ -123,8 +129,9 @@ inline usize scalarUtf8( const u8* base, const usize len, const usize from,
 // repeated Sep steps re-close a closed run and repeated word-byte steps
 // re-open an open one, so only the transitions -- identical either way --
 // matter.
-inline void stepMasks( const u32 sMask, const u32 pMask, const u32 n,
-                       WordScan& s )
+inline void stepMasks(
+    const u32 sMask, const u32 pMask, const u32 n, WordScan& s
+)
 {
   // Fast path: every byte is a separator or printable (no barren "Other"
   // bytes), which is all of real text. Then every run that ends in this block
@@ -146,15 +153,14 @@ inline void stepMasks( const u32 sMask, const u32 pMask, const u32 n,
         // The range's leading run ends at this block's first separator; it
         // has a printable if any of its bytes are in this block.
         s.leadingEnded = true;
-        s.leadingHasPrintable =
-            __builtin_ctz( sMask ) > 0 || s.runHasPrintable;
+        s.leadingHasPrintable = __builtin_ctz( sMask ) > 0 || s.runHasPrintable;
       }
       s.sawSeparator = true;
       const bool open = ( sMask >> 31 ) == 0;  // trailing run after last sep
       s.inWord = open;
       s.runHasPrintable = open;  // its bytes here are all printable
     } else {
-      s.inWord = true;           // the whole block extends one printable run
+      s.inWord = true;  // the whole block extends one printable run
       s.runHasPrintable = true;
     }
     return;

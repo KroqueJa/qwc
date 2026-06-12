@@ -48,10 +48,11 @@ inline void scanBuffer(
   const usize g = ownedEnd - ownedBegin;
   if ( w.lines ) s.lines += count( owned, g, '\n' );
   if ( w.target ) s.target += count( owned, g, w.targetByte );
-  if ( w.words ) words( buf, len, ownedBegin, ownedEnd, s.wordScan, w.wordsMode );
+  if ( w.words )
+    words( buf, len, ownedBegin, ownedEnd, s.wordScan, w.wordsMode );
 
-  // chars and the longest line interact: `wc -L -m` measures the longest line in
-  // characters, and that count and the character total walk the same UTF-8
+  // chars and the longest line interact: `wc -L -m` measures the longest line
+  // in characters, and that count and the character total walk the same UTF-8
   // continuation bytes. When both are wanted, one fused pass produces both;
   // otherwise each is computed on its own. (w.maxLineInChars implies w.chars --
   // both are set exactly when -m is active in a multibyte locale -- so the
@@ -82,8 +83,9 @@ Counts processStream( int fd, const Workload& w )
   usize ctx = 0;      // already-scanned context bytes at the buffer front
   usize pending = 0;  // withheld unscanned bytes after the context
   isize bytesRead;
-  while ( ( bytesRead = read( fd, buffer + ctx + pending,
-                              sizeof( buffer ) - ctx - pending ) ) > 0 ) {
+  while ( ( bytesRead = read(
+                fd, buffer + ctx + pending, sizeof( buffer ) - ctx - pending
+            ) ) > 0 ) {
     const auto fresh = static_cast<usize>( bytesRead );
     if ( w.bytes ) c.bytes += fresh;  // only fresh bytes, never re-counted
     const usize len = ctx + pending + fresh;
@@ -122,15 +124,17 @@ Counts processFile(
 
   // processFile runs on worker threads (see mapFiles), so these fatal I/O-error
   // paths use _Exit: it terminates immediately without running atexit handlers
-  // or static destructors, which would otherwise race with the live workers (the
-  // cerr message is already flushed, and no counts have been printed yet).
+  // or static destructors, which would otherwise race with the live workers
+  // (the cerr message is already flushed, and no counts have been printed yet).
   int fd = open( filename, O_RDONLY );
   if ( fd < 0 ) {
     std::cerr << "Error opening file: " << filename << '\n';
     std::_Exit( 1 );
   }
 
-  struct stat st{};
+  struct stat st
+  {
+  };
   if ( fstat( fd, &st ) < 0 ) {
     std::cerr << "Error stating file: " << filename << '\n';
     std::_Exit( 1 );
@@ -142,8 +146,10 @@ Counts processFile(
   // nonzero size. Everything else goes through the serial stream scan:
   //   * non-regular inputs (FIFO, device, socket) -- no size, and pread can't
   //     seek them; and
-  //   * regular files whose fstat size is 0 -- either a genuinely empty file, or
-  //     a procfs/sysfs file that lies about its length and actually has content.
+  //   * regular files whose fstat size is 0 -- either a genuinely empty file,
+  //   or
+  //     a procfs/sysfs file that lies about its length and actually has
+  //     content.
   // We cannot chunk what we cannot size, and must not assume 0 means empty, so
   // such inputs are simply read to EOF: correct on everything, while the common
   // case (a normal file with a real size) keeps the threaded fast path.
@@ -172,9 +178,9 @@ Counts processFile(
     usize remaining = fileSize - off;
     radvisory ra{};
     ra.ra_offset = static_cast<i64>( off );
-    ra.ra_count = static_cast<int>(
-        std::min( remaining, static_cast<usize>( INT_MAX ) )
-    );
+    ra.ra_count =
+        static_cast<int>( std::min( remaining, static_cast<usize>( INT_MAX ) )
+        );
     fcntl( fd, F_RDADVISE, &ra );
     off += static_cast<usize>( ra.ra_count );
   }
@@ -219,13 +225,16 @@ Counts processFile(
         const usize want = std::min( BUF_SIZE, remaining );
         const usize front = std::min( WCTX, pos );
         const usize back = std::min( WCTX, fileSize - ( pos + want ) );
-        const isize got = pread( fd, buffer.data(), front + want + back,
-                                 static_cast<off_t>( pos - front ) );
+        const isize got = pread(
+            fd, buffer.data(), front + want + back,
+            static_cast<off_t>( pos - front )
+        );
         if ( got <= static_cast<isize>( front ) ) break;
         const usize ownedEnd =
             std::min( static_cast<usize>( got ), front + want );
-        scanBuffer( buffer.data(), static_cast<usize>( got ), front, ownedEnd,
-                    work, s );
+        scanBuffer(
+            buffer.data(), static_cast<usize>( got ), front, ownedEnd, work, s
+        );
         remaining -= ownedEnd - front;
         pos += ownedEnd - front;
       }

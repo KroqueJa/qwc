@@ -42,8 +42,8 @@ inline Blk loadBlk( const u8* p )
 // so vaddv_u8 sums them to the group's bitmask (a 0x00 lane adds nothing).
 inline u32 mm( const uint8x16_t lo, const uint8x16_t hi )
 {
-  static constexpr u8 kBitsArr[16] = { 1, 2, 4,  8,  16, 32, 64, 128,
-                                       1, 2, 4,  8,  16, 32, 64, 128 };
+  static constexpr u8 kBitsArr[16] = { 1, 2, 4, 8, 16, 32, 64, 128,
+                                       1, 2, 4, 8, 16, 32, 64, 128 };
   const uint8x16_t bits = vld1q_u8( kBitsArr );
   const uint8x16_t a = vandq_u8( lo, bits );
   const uint8x16_t b = vandq_u8( hi, bits );
@@ -58,8 +58,9 @@ inline u32 mm( const uint8x16_t lo, const uint8x16_t hi )
 // lo >= 1, hi <= 0xFE uses as AVX2.
 inline uint8x16_t rangeHalf( const uint8x16_t v, const u8 lo, const u8 hi )
 {
-  return vandq_u8( vcgeq_u8( v, vdupq_n_u8( lo ) ),
-                   vcleq_u8( v, vdupq_n_u8( hi ) ) );
+  return vandq_u8(
+      vcgeq_u8( v, vdupq_n_u8( lo ) ), vcleq_u8( v, vdupq_n_u8( hi ) )
+  );
 }
 
 inline u32 rangeMask( const Blk& v, const u8 lo, const u8 hi )
@@ -69,8 +70,9 @@ inline u32 rangeMask( const Blk& v, const u8 lo, const u8 hi )
 
 inline u32 eqMask( const Blk& v, const u8 c )
 {
-  return mm( vceqq_u8( v.lo, vdupq_n_u8( c ) ),
-             vceqq_u8( v.hi, vdupq_n_u8( c ) ) );
+  return mm(
+      vceqq_u8( v.lo, vdupq_n_u8( c ) ), vceqq_u8( v.hi, vdupq_n_u8( c ) )
+  );
 }
 
 // Bytes >= 0x80 (high bit set) -- the AVX2 mm(v) sign-bit mask.
@@ -99,8 +101,10 @@ inline u32 asciiPrint( const Blk& v )
 
 }  // namespace
 
-void words( const char* buf, const usize len, const usize ownedBegin,
-            const usize ownedEnd, WordScan& s, const WordsMode& m )
+void words(
+    const char* buf, const usize len, const usize ownedBegin,
+    const usize ownedEnd, WordScan& s, const WordsMode& m
+)
 {
   const u8* base = reinterpret_cast<const u8*>( buf );
   usize i = ownedBegin;
@@ -134,10 +138,9 @@ void words( const char* buf, const usize len, const usize ownedBegin,
       // pair straddling the block edge) whose lead is clean per kCandLead.
       const u32 lead2 = rangeMask( v, 0xC2, 0xDF );
       const u32 cont = rangeMask( v, 0x80, 0xBF );
-      bool clean = high == ( lead2 | cont ) &&
-                   cont == ( ( lead2 << 1 ) | carryLead );
-      if ( clean && ( lead2 >> 31 ) != 0 &&
-           ( base[i + 32] & 0xC0 ) != 0x80 )
+      bool clean =
+          high == ( lead2 | cont ) && cont == ( ( lead2 << 1 ) | carryLead );
+      if ( clean && ( lead2 >> 31 ) != 0 && ( base[i + 32] & 0xC0 ) != 0x80 )
         clean = false;  // lead at bit 31 with no continuation after the block
       if ( clean ) {
         u32 leads = lead2;
@@ -153,8 +156,9 @@ void words( const char* buf, const usize len, const usize ownedBegin,
       if ( !clean ) {
         // Scalar-classify just this block; it consumes whole code points, so
         // resume at the first unconsumed byte with no pending carries.
-        i = scalarUtf8( base, len, i, std::min( i + 32, ownedEnd ), s,
-                        m.nbspace );
+        i = scalarUtf8(
+            base, len, i, std::min( i + 32, ownedEnd ), s, m.nbspace
+        );
         carryS = carryN = carryLead = 0;
         continue;
       }

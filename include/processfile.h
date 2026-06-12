@@ -25,7 +25,9 @@ struct Workload
   // Does anything here require scanning the file contents? Bytes alone come
   // from fstat, so a pure `-c` needs no scan at all.
   bool needsScan() const
-  { return lines || words || chars || maxLine || target; }
+  {
+    return lines || words || chars || maxLine || target;
+  }
 };
 
 // Every count qwc can produce for one input. Only the fields the Workload asked
@@ -43,12 +45,12 @@ struct Counts
 // Compute the requested counts for `filename` (an empty name reads standard
 // input) in one pass. A regular file with a known, nonzero size takes the fast
 // path: bytes come straight from fstat and the scanned counters are computed in
-// parallel across chunks, with words and the longest line stitched back together
-// across chunk boundaries. Anything whose size fstat cannot be trusted for --
-// standard input, FIFOs, devices, sockets, and procfs/sysfs files that report a
-// zero size yet have content -- is instead read serially to EOF (bytes tallied
-// as read): slower, but correct everywhere. Either way every requested counter
-// shares the same read of the data.
+// parallel across chunks, with words and the longest line stitched back
+// together across chunk boundaries. Anything whose size fstat cannot be trusted
+// for -- standard input, FIFOs, devices, sockets, and procfs/sysfs files that
+// report a zero size yet have content -- is instead read serially to EOF (bytes
+// tallied as read): slower, but correct everywhere. Either way every requested
+// counter shares the same read of the data.
 Counts processFile(
     const char* filename, const Workload& work,
     usize bytesPerThread = 64ull * 1024 * 1024

@@ -36,9 +36,12 @@ inline __m256i rangeU( const __m256i v, const u8 lo, const u8 hi )
       _mm256_xor_si256( v, _mm256_set1_epi8( static_cast<char>( 0x80 ) ) );
   return _mm256_and_si256(
       _mm256_cmpgt_epi8(
-          x, _mm256_set1_epi8( static_cast<char>( ( lo ^ 0x80 ) - 1 ) ) ),
+          x, _mm256_set1_epi8( static_cast<char>( ( lo ^ 0x80 ) - 1 ) )
+      ),
       _mm256_cmpgt_epi8(
-          _mm256_set1_epi8( static_cast<char>( ( hi ^ 0x80 ) + 1 ) ), x ) );
+          _mm256_set1_epi8( static_cast<char>( ( hi ^ 0x80 ) + 1 ) ), x
+      )
+  );
 }
 
 inline u32 mm( const __m256i v )
@@ -50,24 +53,29 @@ inline u32 mm( const __m256i v )
 // signed-negative, so they fall in neither mask.
 inline u32 asciiSep( const __m256i v )
 {
-  const __m256i tabCr =
-      _mm256_and_si256( _mm256_cmpgt_epi8( v, _mm256_set1_epi8( 0x08 ) ),
-                        _mm256_cmpgt_epi8( _mm256_set1_epi8( 0x0E ), v ) );
-  return mm( _mm256_or_si256(
-      tabCr, _mm256_cmpeq_epi8( v, _mm256_set1_epi8( 0x20 ) ) ) );
+  const __m256i tabCr = _mm256_and_si256(
+      _mm256_cmpgt_epi8( v, _mm256_set1_epi8( 0x08 ) ),
+      _mm256_cmpgt_epi8( _mm256_set1_epi8( 0x0E ), v )
+  );
+  return mm(
+      _mm256_or_si256( tabCr, _mm256_cmpeq_epi8( v, _mm256_set1_epi8( 0x20 ) ) )
+  );
 }
 
 inline u32 asciiPrint( const __m256i v )
 {
-  return mm(
-      _mm256_and_si256( _mm256_cmpgt_epi8( v, _mm256_set1_epi8( 0x20 ) ),
-                        _mm256_cmpgt_epi8( _mm256_set1_epi8( 0x7F ), v ) ) );
+  return mm( _mm256_and_si256(
+      _mm256_cmpgt_epi8( v, _mm256_set1_epi8( 0x20 ) ),
+      _mm256_cmpgt_epi8( _mm256_set1_epi8( 0x7F ), v )
+  ) );
 }
 
 }  // namespace
 
-void words( const char* buf, const usize len, const usize ownedBegin,
-            const usize ownedEnd, WordScan& s, const WordsMode& m )
+void words(
+    const char* buf, const usize len, const usize ownedBegin,
+    const usize ownedEnd, WordScan& s, const WordsMode& m
+)
 {
   const u8* base = reinterpret_cast<const u8*>( buf );
   usize i = ownedBegin;
@@ -103,10 +111,9 @@ void words( const char* buf, const usize len, const usize ownedBegin,
       // pair straddling the block edge) whose lead is clean per kCandLead.
       const u32 lead2 = mm( rangeU( v, 0xC2, 0xDF ) );
       const u32 cont = mm( rangeU( v, 0x80, 0xBF ) );
-      bool clean = high == ( lead2 | cont ) &&
-                   cont == ( ( lead2 << 1 ) | carryLead );
-      if ( clean && ( lead2 >> 31 ) != 0 &&
-           ( base[i + 32] & 0xC0 ) != 0x80 )
+      bool clean =
+          high == ( lead2 | cont ) && cont == ( ( lead2 << 1 ) | carryLead );
+      if ( clean && ( lead2 >> 31 ) != 0 && ( base[i + 32] & 0xC0 ) != 0x80 )
         clean = false;  // lead at bit 31 with no continuation after the block
       if ( clean ) {
         u32 leads = lead2;
@@ -122,21 +129,21 @@ void words( const char* buf, const usize len, const usize ownedBegin,
       if ( !clean ) {
         // Scalar-classify just this block; it consumes whole code points, so
         // resume at the first unconsumed byte with no pending carries.
-        i = scalarUtf8( base, len, i, std::min( i + 32, ownedEnd ), s,
-                        m.nbspace );
+        i = scalarUtf8(
+            base, len, i, std::min( i + 32, ownedEnd ), s, m.nbspace
+        );
         carryS = carryN = carryLead = 0;
         continue;
       }
 
       // Exact C2 windows, masked at the lead position via 1-byte lookahead.
-      const __m256i v1 = _mm256_loadu_si256(
-          reinterpret_cast<const __m256i*>( base + i + 1 ) );
-      const u32 isC2 =
-          mm( _mm256_cmpeq_epi8( v, _mm256_set1_epi8( '\xC2' ) ) );
+      const __m256i v1 =
+          _mm256_loadu_si256( reinterpret_cast<const __m256i*>( base + i + 1 )
+          );
+      const u32 isC2 = mm( _mm256_cmpeq_epi8( v, _mm256_set1_epi8( '\xC2' ) ) );
       const u32 s2 =
           m.nbspace
-              ? isC2 &
-                    mm( _mm256_cmpeq_epi8( v1, _mm256_set1_epi8( '\xA0' ) ) )
+              ? isC2 & mm( _mm256_cmpeq_epi8( v1, _mm256_set1_epi8( '\xA0' ) ) )
               : 0;  // POSIXLY_CORRECT: NBSP is printable word content instead
       const u32 n2 = isC2 & mm( rangeU( v1, 0x80, 0x9F ) );  // C1 controls
 

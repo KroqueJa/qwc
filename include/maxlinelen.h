@@ -37,9 +37,9 @@ void maxLineLen(
     const char* buffer, usize length, LineScan& s, bool countChars = false
 );
 
-// Fused scan for `qwc -L -m`: in one pass, maintain the longest line measured in
-// characters (in `s`, exactly as maxLineLen with countChars=true) AND add the
-// buffer's character count to `charCount`. The character total and the
+// Fused scan for `qwc -L -m`: in one pass, maintain the longest line measured
+// in characters (in `s`, exactly as maxLineLen with countChars=true) AND add
+// the buffer's character count to `charCount`. The character total and the
 // per-line character length both walk the same UTF-8 continuation bytes, so the
 // two are computed together instead of in the two separate passes (chars() then
 // maxLineLen()) the generic engine would otherwise run for that flag pair. `s`

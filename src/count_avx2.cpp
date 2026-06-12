@@ -43,28 +43,28 @@ usize count( const char* buffer, const usize length, const char target )
           )
       );
       acc1 = _mm256_sub_epi8(
-          acc1, _mm256_cmpeq_epi8(
-                    _mm256_loadu_si256(
-                        reinterpret_cast<const __m256i*>( tmp + 32 )
-                    ),
-                    vec_target
-                )
+          acc1,
+          _mm256_cmpeq_epi8(
+              _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 32 )
+              ),
+              vec_target
+          )
       );
       acc2 = _mm256_sub_epi8(
-          acc2, _mm256_cmpeq_epi8(
-                    _mm256_loadu_si256(
-                        reinterpret_cast<const __m256i*>( tmp + 64 )
-                    ),
-                    vec_target
-                )
+          acc2,
+          _mm256_cmpeq_epi8(
+              _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 64 )
+              ),
+              vec_target
+          )
       );
       acc3 = _mm256_sub_epi8(
-          acc3, _mm256_cmpeq_epi8(
-                    _mm256_loadu_si256(
-                        reinterpret_cast<const __m256i*>( tmp + 96 )
-                    ),
-                    vec_target
-                )
+          acc3,
+          _mm256_cmpeq_epi8(
+              _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 96 )
+              ),
+              vec_target
+          )
       );
       tmp += 128;
       processedBytes += 128;

@@ -59,13 +59,14 @@ void maxLineLen(
   const __m256i contBits = _mm256_set1_epi8( static_cast<char>( 0xC0 ) );
   const __m256i contTag = _mm256_set1_epi8( static_cast<char>( 0x80 ) );
 
-  // Character mode counts the continuation bytes of a run of newline-free blocks
-  // into byte lanes (the same overflow-safe trick as chars_avx2 / count_avx2)
-  // and folds the run into `cur` only when it ends -- at a newline block, every
-  // 255 blocks (before a lane could overflow), or the loop's end. This keeps the
-  // hot path free of the per-block horizontal reduction (and the per-block scalar
-  // arithmetic it feeds) that the byte path never pays: a run of newline-free
-  // blocks all belongs to the same open line, so `cur` only needs the total.
+  // Character mode counts the continuation bytes of a run of newline-free
+  // blocks into byte lanes (the same overflow-safe trick as chars_avx2 /
+  // count_avx2) and folds the run into `cur` only when it ends -- at a newline
+  // block, every 255 blocks (before a lane could overflow), or the loop's end.
+  // This keeps the hot path free of the per-block horizontal reduction (and the
+  // per-block scalar arithmetic it feeds) that the byte path never pays: a run
+  // of newline-free blocks all belongs to the same open line, so `cur` only
+  // needs the total.
   __m256i contAcc = _mm256_setzero_si256();
   usize pendingBytes = 0;
   unsigned pendingBlocks = 0;
@@ -84,17 +85,16 @@ void maxLineLen(
         _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp ) );
 
     if ( _mm256_movemask_epi8( _mm256_cmpeq_epi8( v, newline ) ) != 0 ) {
-      // A newline splits this block into segments. Fold any pending newline-free
-      // run into `cur` first (the per-byte pass reads it for prefix/maxComplete),
-      // then hand the block to the scalar state machine.
+      // A newline splits this block into segments. Fold any pending
+      // newline-free run into `cur` first (the per-byte pass reads it for
+      // prefix/maxComplete), then hand the block to the scalar state machine.
       if ( countChars ) flushRun();
       for ( int i = 0; i < 32; ++i ) scalarStep( tmp[i], s, countChars );
     } else if ( countChars ) {
       // Newline-free block: add its continuation bytes to the running lanes
       // (cmpeq yields 0xFF == -1 per hit, so sub adds 1). No reduction here.
       contAcc = _mm256_sub_epi8(
-          contAcc,
-          _mm256_cmpeq_epi8( _mm256_and_si256( v, contBits ), contTag )
+          contAcc, _mm256_cmpeq_epi8( _mm256_and_si256( v, contBits ), contTag )
       );
       pendingBytes += 32;
       if ( ++pendingBlocks == 255 ) flushRun();
@@ -105,7 +105,8 @@ void maxLineLen(
     tmp += 32;
     processed += 32;
   }
-  if ( countChars ) flushRun();  // fold the final run before the scalar epilogue
+  if ( countChars )
+    flushRun();  // fold the final run before the scalar epilogue
 
   // Scalar epilogue for the remaining < 32 bytes.
   while ( processed < length ) {
@@ -116,11 +117,12 @@ void maxLineLen(
 }
 
 // One byte through the fused state machine for `-L -m`: it maintains the
-// character-mode longest line (like scalarStep with countChars) and, at the same
-// time, the running character total. The newline is itself a character but does
-// not extend the line; a continuation byte is neither.
-static inline void stepBoth( const unsigned char c, LineScan& s,
-                             usize& charCount )
+// character-mode longest line (like scalarStep with countChars) and, at the
+// same time, the running character total. The newline is itself a character but
+// does not extend the line; a continuation byte is neither.
+static inline void stepBoth(
+    const unsigned char c, LineScan& s, usize& charCount
+)
 {
   if ( c == '\n' ) {
     ++charCount;
@@ -157,10 +159,10 @@ void maxLineLenChars(
   const __m256i contTag = _mm256_set1_epi8( static_cast<char>( 0x80 ) );
 
   // A run of newline-free blocks is one continuous stretch of the open line, so
-  // its non-continuation bytes contribute equally to the line length (`cur`) and
-  // to the character total. Count continuation bytes into byte lanes and fold
-  // the run into BOTH at run end -- one vector pass yields both answers, with no
-  // per-block reduction and no second traversal for chars().
+  // its non-continuation bytes contribute equally to the line length (`cur`)
+  // and to the character total. Count continuation bytes into byte lanes and
+  // fold the run into BOTH at run end -- one vector pass yields both answers,
+  // with no per-block reduction and no second traversal for chars().
   __m256i contAcc = _mm256_setzero_si256();
   usize pendingBytes = 0;
   unsigned pendingBlocks = 0;
@@ -180,12 +182,12 @@ void maxLineLenChars(
         _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp ) );
 
     if ( _mm256_movemask_epi8( _mm256_cmpeq_epi8( v, newline ) ) != 0 ) {
-      flushRun();  // realize the run (into cur and charCount) before the newline
+      flushRun(
+      );  // realize the run (into cur and charCount) before the newline
       for ( int i = 0; i < 32; ++i ) stepBoth( tmp[i], s, charCount );
     } else {
       contAcc = _mm256_sub_epi8(
-          contAcc,
-          _mm256_cmpeq_epi8( _mm256_and_si256( v, contBits ), contTag )
+          contAcc, _mm256_cmpeq_epi8( _mm256_and_si256( v, contBits ), contTag )
       );
       pendingBytes += 32;
       if ( ++pendingBlocks == 255 ) flushRun();

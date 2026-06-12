@@ -15,15 +15,15 @@
 usize chars( const char* buffer, const usize length )
 {
   const uint8x16_t contBits = vdupq_n_u8( 0xC0 );  // mask off the top two bits
-  const uint8x16_t contTag = vdupq_n_u8( 0x80 );   // ...continuation == 10xxxxxx
+  const uint8x16_t contTag = vdupq_n_u8( 0x80 );  // ...continuation == 10xxxxxx
 
   usize cont = 0;  // number of UTF-8 continuation bytes
   const u8* tmp = reinterpret_cast<const u8*>( buffer );
   usize processedBytes = 0;
 
   // Align to a 16-byte boundary with a scalar prologue.
-  while ( processedBytes < length &&
-          reinterpret_cast<usize>( tmp ) % 16 != 0 ) {
+  while ( processedBytes < length && reinterpret_cast<usize>( tmp ) % 16 != 0
+  ) {
     if ( ( *tmp & 0xC0 ) == 0x80 ) ++cont;
     ++tmp;
     ++processedBytes;
@@ -45,13 +45,17 @@ usize chars( const char* buffer, const usize length )
 
     for ( usize b = 0; b < block; ++b ) {
       acc0 = vsubq_u8(
-          acc0, vceqq_u8( vandq_u8( vld1q_u8( tmp ), contBits ), contTag ) );
+          acc0, vceqq_u8( vandq_u8( vld1q_u8( tmp ), contBits ), contTag )
+      );
       acc1 = vsubq_u8(
-          acc1, vceqq_u8( vandq_u8( vld1q_u8( tmp + 16 ), contBits ), contTag ) );
+          acc1, vceqq_u8( vandq_u8( vld1q_u8( tmp + 16 ), contBits ), contTag )
+      );
       acc2 = vsubq_u8(
-          acc2, vceqq_u8( vandq_u8( vld1q_u8( tmp + 32 ), contBits ), contTag ) );
+          acc2, vceqq_u8( vandq_u8( vld1q_u8( tmp + 32 ), contBits ), contTag )
+      );
       acc3 = vsubq_u8(
-          acc3, vceqq_u8( vandq_u8( vld1q_u8( tmp + 48 ), contBits ), contTag ) );
+          acc3, vceqq_u8( vandq_u8( vld1q_u8( tmp + 48 ), contBits ), contTag )
+      );
       tmp += 64;
       processedBytes += 64;
     }

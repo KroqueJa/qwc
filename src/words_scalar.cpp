@@ -1,5 +1,4 @@
 #include "words.h"
-
 #include "words_kernel.h"
 
 // Scalar word counter -- the semantic reference for the SIMD kernels, and the
@@ -13,8 +12,10 @@
 
 using namespace qwc::words_kernel;
 
-void words( const char* buf, const usize len, const usize ownedBegin,
-            const usize ownedEnd, WordScan& s, const WordsMode& m )
+void words(
+    const char* buf, const usize len, const usize ownedBegin,
+    const usize ownedEnd, WordScan& s, const WordsMode& m
+)
 {
   const u8* base = reinterpret_cast<const u8*>( buf );
 

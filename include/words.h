@@ -18,23 +18,25 @@ struct WordsMode
 // wordsFlush() (stream end) or the chunk merge in processfile.cpp.
 struct WordScan
 {
-  usize words = 0;                  // non-barren runs that ended in-range
-  bool inWord = false;              // a run is open at the current position
-  bool runHasPrintable = false;     // that open run has seen a printable
+  usize words = 0;               // non-barren runs that ended in-range
+  bool inWord = false;           // a run is open at the current position
+  bool runHasPrintable = false;  // that open run has seen a printable
   // Seam-merge facts, relative to the start of the range:
-  bool sawByte = false;             // any owned byte processed yet
-  bool startsInWord = false;        // first owned cp was a word constituent
-  bool sawSeparator = false;        // any separator seen in-range
-  bool leadingEnded = false;        // the run open at range start terminated
-  bool leadingHasPrintable = false; // printable seen in that leading run
+  bool sawByte = false;              // any owned byte processed yet
+  bool startsInWord = false;         // first owned cp was a word constituent
+  bool sawSeparator = false;         // any separator seen in-range
+  bool leadingEnded = false;         // the run open at range start terminated
+  bool leadingHasPrintable = false;  // printable seen in that leading run
 };
 
 // Scan the owned region [ownedBegin, ownedEnd) of buf. Bytes outside the owned
 // region are context only: multibyte windows may read up to 3 bytes either
 // side, and a code point belongs to the scan owning its lead byte. Continues
 // from (and updates) `s`.
-void words( const char* buf, usize len, usize ownedBegin, usize ownedEnd,
-            WordScan& s, const WordsMode& m );
+void words(
+    const char* buf, usize len, usize ownedBegin, usize ownedEnd, WordScan& s,
+    const WordsMode& m
+);
 
 // Fold the trailing open run of a finished range into its count.
 inline void wordsFlush( WordScan& s )
@@ -63,8 +65,8 @@ inline bool isSepCp( const u32 cp, const bool nbspace )
   if ( cp == 0x1680 || ( cp >= 0x2000 && cp <= 0x200A && cp != 0x2007 ) ||
        cp == 0x205F || cp == 0x3000 )
     return true;
-  if ( nbspace && ( cp == 0x00A0 || cp == 0x2007 || cp == 0x202F ||
-                    cp == 0x2060 ) )
+  if ( nbspace &&
+       ( cp == 0x00A0 || cp == 0x2007 || cp == 0x202F || cp == 0x2060 ) )
     return true;
   return false;
 }

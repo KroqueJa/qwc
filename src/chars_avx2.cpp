@@ -55,13 +55,17 @@ usize chars( const char* buffer, const usize length )
       const __m256i v3 =
           _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp + 96 ) );
       acc0 = _mm256_sub_epi8(
-          acc0, _mm256_cmpeq_epi8( _mm256_and_si256( v0, contBits ), contTag ) );
+          acc0, _mm256_cmpeq_epi8( _mm256_and_si256( v0, contBits ), contTag )
+      );
       acc1 = _mm256_sub_epi8(
-          acc1, _mm256_cmpeq_epi8( _mm256_and_si256( v1, contBits ), contTag ) );
+          acc1, _mm256_cmpeq_epi8( _mm256_and_si256( v1, contBits ), contTag )
+      );
       acc2 = _mm256_sub_epi8(
-          acc2, _mm256_cmpeq_epi8( _mm256_and_si256( v2, contBits ), contTag ) );
+          acc2, _mm256_cmpeq_epi8( _mm256_and_si256( v2, contBits ), contTag )
+      );
       acc3 = _mm256_sub_epi8(
-          acc3, _mm256_cmpeq_epi8( _mm256_and_si256( v3, contBits ), contTag ) );
+          acc3, _mm256_cmpeq_epi8( _mm256_and_si256( v3, contBits ), contTag )
+      );
       tmp += 128;
       processedBytes += 128;
     }
