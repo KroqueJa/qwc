@@ -6,9 +6,9 @@
 
 #include <algorithm>
 #include <climits>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
 #include <thread>
 #include <vector>
 
@@ -182,10 +182,11 @@ Counts processFile(
   // processFile runs on worker threads (see mapFiles), so these fatal I/O-error
   // paths use _Exit: it terminates immediately without running atexit handlers
   // or static destructors, which would otherwise race with the live workers
-  // (the cerr message is already flushed, and no counts have been printed yet).
+  // (stderr is unbuffered so the message is already out, and no counts have
+  // been printed yet).
   int fd = open( filename, O_RDONLY );
   if ( fd < 0 ) {
-    std::cerr << "Error opening file: " << filename << '\n';
+    std::fprintf( stderr, "Error opening file: %s\n", filename );
     std::_Exit( 1 );
   }
 
@@ -193,7 +194,7 @@ Counts processFile(
   {
   };
   if ( fstat( fd, &st ) < 0 ) {
-    std::cerr << "Error stating file: " << filename << '\n';
+    std::fprintf( stderr, "Error stating file: %s\n", filename );
     std::_Exit( 1 );
   }
 

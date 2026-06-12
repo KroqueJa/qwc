@@ -4,10 +4,9 @@
 
 #include "qwc_version.h"
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
-#include <iomanip>
-#include <iostream>
 #include <numeric>
 #include <string>
 #include <system_error>
@@ -17,8 +16,8 @@ namespace fs = std::filesystem;
 
 void printHelp()
 {
-  std::cout
-      << "qwc - quick wc: count lines, words, bytes and more, fast.\n"
+  std::fputs(
+      "qwc - quick wc: count lines, words, bytes and more, fast.\n"
          "\n"
          "With no count flag qwc prints the line, word and byte counts of each "
          "file,\n"
@@ -137,7 +136,9 @@ void printHelp()
          "notes.txt\n"
          "  qwc --char , data.csv         commas in data.csv\n"
          "  qwc --recursive src           counts for every file under src/\n"
-         "  qwc -r --top 10 src           the 10 biggest files under src/\n";
+         "  qwc -r --top 10 src           the 10 biggest files under src/\n",
+      stdout
+  );
 }
 
 std::optional<int> parseArgs( int argc, char** argv, Options& opt )
@@ -189,18 +190,18 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
       // Long options.
       if ( std::strcmp( arg, "--bytes-per-thread" ) == 0 ) {
         if ( fileStart + 1 >= argc ) {
-          std::cerr << "Error: --bytes-per-thread requires a value\n";
+          std::fputs( "Error: --bytes-per-thread requires a value\n", stderr );
           return 1;
         }
         opt.bytesPerThread = std::strtoull( argv[fileStart + 1], nullptr, 10 );
         if ( opt.bytesPerThread == 0 ) {
-          std::cerr << "Error: --bytes-per-thread must be > 0\n";
+          std::fputs( "Error: --bytes-per-thread must be > 0\n", stderr );
           return 1;
         }
         fileStart += 2;
       } else if ( std::strcmp( arg, "--char" ) == 0 ) {
         if ( fileStart + 1 >= argc || argv[fileStart + 1][0] == '\0' ) {
-          std::cerr << "Error: --char requires a single-character value\n";
+          std::fputs( "Error: --char requires a single-character value\n", stderr );
           return 1;
         }
         opt.target = true;
@@ -244,23 +245,23 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
         fileStart += 1;
       } else if ( std::strcmp( arg, "--top" ) == 0 ) {
         if ( fileStart + 1 >= argc ) {
-          std::cerr << "Error: --top requires a value\n";
+          std::fputs( "Error: --top requires a value\n", stderr );
           return 1;
         }
         opt.topN = std::strtoull( argv[fileStart + 1], nullptr, 10 );
         if ( opt.topN == 0 ) {
-          std::cerr << "Error: --top must be > 0\n";
+          std::fputs( "Error: --top must be > 0\n", stderr );
           return 1;
         }
         fileStart += 2;
       } else if ( std::strcmp( arg, "--version" ) == 0 ) {
-        std::cout << "qwc " << QWC_VERSION << '\n';
+        std::fputs( "qwc " QWC_VERSION "\n", stdout );
         return 0;
       } else if ( std::strcmp( arg, "--help" ) == 0 ) {
         printHelp();
         return 0;
       } else {
-        std::cerr << "Error: unknown flag " << arg << '\n';
+        std::fprintf( stderr, "Error: unknown flag %s\n", arg );
         return 1;
       }
     } else if ( std::strcmp( arg, "-h" ) == 0 ) {
@@ -271,7 +272,7 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
       // own count/option flag; wc allows them stacked, so we do too.
       for ( const char* p = arg + 1; *p != '\0'; ++p ) {
         if ( !applyShort( *p ) ) {
-          std::cerr << "Error: unknown flag -" << *p << '\n';
+          std::fprintf( stderr, "Error: unknown flag -%c\n", *p );
           return 1;
         }
       }
@@ -327,7 +328,7 @@ bool collectFiles( Options& opt )
           path, fs::directory_options::skip_permission_denied, ec
       );
       if ( ec ) {
-        std::cerr << "Error reading directory: " << path << '\n';
+        std::fprintf( stderr, "Error reading directory: %s\n", path.c_str() );
         return false;
       }
       const fs::recursive_directory_iterator end;
@@ -402,12 +403,12 @@ usize columnValue( const Counts& c, const Column col, const Options& opt )
 
 void printCounts( const Options& opt, const Counts& c, const char* name )
 {
-  // Each selected column right-justified in a min-width-7 field (" %7ju", which
-  // grows for larger counts exactly as wc does), then the optional name.
+  // Each selected column right-justified in a min-width-7 field that grows for
+  // larger counts exactly as wc does, then the optional name.
   for ( const Column col: selectedColumns( opt ) )
-    std::cout << ' ' << std::setw( 7 ) << columnValue( c, col, opt );
-  if ( name ) std::cout << ' ' << name;
-  std::cout << '\n';
+    std::printf( " %7zu", columnValue( c, col, opt ) );
+  if ( name ) std::printf( " %s", name );
+  std::putchar( '\n' );
 }
 
 void printResults( const Options& opt, const std::vector<Counts>& output )

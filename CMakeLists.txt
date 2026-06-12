@@ -176,6 +176,19 @@ function( qwc_configure target )
     target_link_options(    ${target} PRIVATE -fsanitize=thread )
   endif()
 
+  # Link libstdc++/libgcc statically. Startup of a short-lived process is
+  # dominated by the dynamic loader binding and faulting in libstdc++.so for
+  # the filesystem/thread/string machinery (measured ~0.9 ms of the ~1.3 ms
+  # qwc-vs-GNU-wc gap on a bare `-c`, which never reads the file -- and the
+  # cost stays even with <iostream> banished from the sources); linked
+  # statically those relocations are resolved at link time and the cost
+  # disappears (2.6 -> 1.7 ms, vs wc's 1.3 ms, on WSL2). Costs ~1.6 MiB of
+  # binary size. Not on Apple: AppleClang has no -static-libgcc, and libc++
+  # ships in the dyld shared cache anyway.
+  if( NOT APPLE )
+    target_link_options( ${target} PRIVATE -static-libstdc++ -static-libgcc )
+  endif()
+
   # Run the clang-tidy gate on this target's own sources (set per-target, not
   # globally, so the vendored googletest is never linted). --warnings-as-errors
   # makes any finding fail the build.
