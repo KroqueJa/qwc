@@ -10,6 +10,24 @@ Why is it faster than the above mentioned byte counters? Many reasons:
 
 `qwc` is benchmarked to be around 25-50x faster than GNU `wc` on a variety of file sizes, and 3-4x faster than `uu-wc`. Wherever possible, it is compliant with the output of GNU `wc` - the exception being for byte streams that do not constitute valid characters in the output locale. For this particular case, `wc`, `uu-wc` and `qwc` all differ in their interpretations. The input flags are all identical to `wc` - hence, one can learn to use `qwc` with eg `man wc`.
 
+# Installation
+Grab the latest release binary (the link always points at the newest tag):
+
+```sh
+# Linux x86-64 (needs an AVX2-capable CPU -- anything from ~2015 onward)
+curl -fsSL https://github.com/KroqueJa/qwc/releases/latest/download/qwc-linux-x86_64.tar.gz | tar xz
+
+# macOS (Apple Silicon)
+curl -fsSL https://github.com/KroqueJa/qwc/releases/latest/download/qwc-macos-arm64.tar.gz | tar xz
+```
+
+This drops a `qwc` binary in the current directory; move it somewhere on your
+`PATH` (e.g. `mv qwc ~/.local/bin/`). Check what you got with `qwc --version`.
+
+On any other platform (or a pre-AVX2 CPU), build from source: clone the repo
+and run `cmake -S . -B build && cmake --build build` -- the build picks the
+right SIMD (or scalar) implementation for your machine automatically.
+
 # How AI is used in this project
 I feel that it's important to state that the core of this project is designed, benchmarked, and implemented by myself. The first version of the project, then called `wcl`, is from a time when AI was not a thing to the extent that it is today in 2026. This is not to say that AI does not play a significant part in the development of the project. AI has enabled rapid development on time-consuming tasks. I'll leave it to Claude itself to tell you what it has done:
 

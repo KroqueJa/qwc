@@ -63,8 +63,8 @@ struct Options
 void printHelp();
 
 // Parse argv into `opt`. Returns std::nullopt to keep running; otherwise the
-// process exit code (0 after --help, 1 on a usage error). Help and error
-// messages are written here.
+// process exit code (0 after --help or --version, 1 on a usage error). Help,
+// version and error messages are written here.
 std::optional<int> parseArgs( int argc, char** argv, Options& opt );
 
 // Expand any directory arguments in opt.files into the regular files beneath

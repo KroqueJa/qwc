@@ -1,6 +1,8 @@
 #include "cli.h"
 
 #include <algorithm>
+
+#include "qwc_version.h"
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -110,6 +112,10 @@ void printHelp()
          "                        MiB). You rarely need this; it's here for\n"
          "                        squeezing out performance on unusual "
          "hardware.\n"
+         "      --version         Print the qwc version and exit. Release\n"
+         "                        builds show the release tag (e.g. v1.2.0);\n"
+         "                        dev builds show the git commit they were\n"
+         "                        built from.\n"
          "  -h, --help            Show this message and exit.\n"
          "\n"
          "Output:\n"
@@ -247,6 +253,9 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
           return 1;
         }
         fileStart += 2;
+      } else if ( std::strcmp( arg, "--version" ) == 0 ) {
+        std::cout << "qwc " << QWC_VERSION << '\n';
+        return 0;
       } else if ( std::strcmp( arg, "--help" ) == 0 ) {
         printHelp();
         return 0;

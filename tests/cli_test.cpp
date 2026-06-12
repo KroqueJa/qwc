@@ -1047,3 +1047,26 @@ TEST( CliLocale, ControlOnlyRunIsNotAWord )
   CmdResult r = run( "printf ' \\001 ' | LC_ALL=C " + kBin + " -w" );
   EXPECT_EQ( r.out, line( 0 ) );
 }
+
+// ---------------------------------------------------------------------------
+// --version prints exactly one line, "qwc <version>", and exits 0 -- like
+// --help, it short-circuits before any counting. The version string itself
+// varies by build (git describe / override / "local"), so assert shape only.
+// ---------------------------------------------------------------------------
+TEST( VersionFlag, PrintsOneLineAndExitsZero )
+{
+  const CmdResult r = run( kBin + " --version" );
+  EXPECT_EQ( r.exitCode, 0 );
+  ASSERT_GT( r.out.size(), 4u );
+  EXPECT_EQ( r.out.rfind( "qwc ", 0 ), 0u );  // starts with "qwc "
+  EXPECT_EQ( r.out.back(), '\n' );
+  EXPECT_EQ( std::count( r.out.begin(), r.out.end(), '\n' ), 1 );
+}
+
+// --version wins over file arguments, again like --help: no counting happens.
+TEST( VersionFlag, IgnoresTrailingArguments )
+{
+  const CmdResult r = run( kBin + " --version /etc/hosts" );
+  EXPECT_EQ( r.exitCode, 0 );
+  EXPECT_EQ( r.out.rfind( "qwc ", 0 ), 0u );
+}

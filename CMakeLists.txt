@@ -44,6 +44,24 @@ set( QWC_SUFFIX "" CACHE STRING "Suffix for the qwc binary name (e.g. la2 -> qwc
 #   -DQWC_DEFINES=ADVISE_LOOKAHEAD=2;ADVISE_WINDOW_MIB=8
 set( QWC_DEFINES "" CACHE STRING "Extra compile definitions (NAME=VALUE list) for sweeps" )
 
+# Embedded version string for --version. Normally LEAVE THIS EMPTY: the build
+# derives it from `git describe --tags --always --dirty` at BUILD time (not
+# configure time, so it never goes stale between rebuilds), falling back to
+# "local" without git. Set it only to override, e.g. -DQWC_VERSION=v9.9.9-rc1.
+set( QWC_VERSION "" CACHE STRING "Override the embedded version string (default: git describe)" )
+
+# The generated header lives in the build tree, one per build dir, so sweep
+# profiles and the WSL/native trees never fight over it.
+set( QWC_VERSION_HEADER_DIR ${CMAKE_BINARY_DIR}/generated )
+add_custom_target( qwc_version_header
+  COMMAND ${CMAKE_COMMAND}
+    -DQWC_VERSION=${QWC_VERSION}
+    -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -DOUTPUT_FILE=${QWC_VERSION_HEADER_DIR}/qwc_version.h
+    -P ${CMAKE_SOURCE_DIR}/cmake/GenerateVersionHeader.cmake
+  BYPRODUCTS ${QWC_VERSION_HEADER_DIR}/qwc_version.h
+  COMMENT "Refreshing qwc_version.h" )
+
 # Build the GoogleTest-based unit tests (under tests/). On by default for the
 # top-level build; harmless to leave on for benchmark profiles since the test
 # target is only built by `ctest`/explicit `--target qwc_tests`.
@@ -137,6 +155,12 @@ endif()
 # ---------------------------------------------------------------------------
 function( qwc_configure target )
   target_include_directories( ${target} PRIVATE include )
+
+  # Every qwc binary embeds the build-time version header (see the
+  # qwc_version_header target); the dependency makes the header refresh before
+  # any TU that includes it compiles.
+  target_include_directories( ${target} PRIVATE ${QWC_VERSION_HEADER_DIR} )
+  add_dependencies( ${target} qwc_version_header )
 
   if( QWC_DEFINES )
     target_compile_definitions( ${target} PRIVATE ${QWC_DEFINES} )

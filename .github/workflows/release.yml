@@ -1,0 +1,105 @@
+# Tag-driven release pipeline for qwc.
+#
+# Push a tag like v1.2.0 and this workflow builds the two supported binaries
+# (Linux x86-64-v3/AVX2, macOS arm64/NEON), gates them on the unit tests and
+# the conformance suite, sanity-checks the embedded --version string, and
+# publishes a GitHub Release with both tarballs attached.
+#
+# No version is passed into CMake: the tag checkout makes the build's own
+# `git describe` produce exactly the tag, so CI and local builds share one
+# code path (see cmake/GenerateVersionHeader.cmake).
+#
+# Asset names are deliberately tag-less (qwc-linux-x86_64.tar.gz, not
+# qwc-v1.2.0-...): GitHub's stable releases/latest/download/<asset> URL --
+# which the README install one-liners use -- requires fixed asset names. The
+# version is identified by the release tag and by `qwc --version` itself.
+#
+# Build and publish are separate jobs so a release only ever appears with BOTH
+# binaries attached; if either platform fails its gate, nothing is published.
+# (The tag still exists -- delete it, fix, re-tag.)
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write  # gh release create
+
+jobs:
+  build:
+    name: build + gate (${{ matrix.os }})
+    strategy:
+      fail-fast: true  # if one platform fails its gate, stop the other; nothing publishes
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: qwc-linux-x86_64
+          - os: macos-latest
+            artifact: qwc-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      # fetch-depth: 0 because the default shallow clone omits tags, and the
+      # build's git describe needs them to embed the version.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive  # unit tests need the googletest submodule
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build qwc + tests (Release)
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target qwc qwc_tests
+
+      - name: "Gate: unit tests"
+        run: ctest --test-dir build --output-on-failure
+
+      # The conformance suite diffs qwc against the SYSTEM wc, and Linux/GNU wc
+      # is the reference it is validated against (analysis.yml runs it on
+      # ubuntu only; macOS BSD wc has known divergences qwc deliberately does
+      # not replicate). So this gate is Linux-only; macOS is covered by the
+      # unit tests, which include the NEON kernels.
+      - name: "Gate: conformance suite (Linux only)"
+        if: runner.os == 'Linux'
+        run: python3 conformance/run.py --fuzz 80
+
+      # On a clean tag checkout, git describe must yield exactly the tag. If
+      # this grep fails, the version plumbing regressed -- abort the release.
+      - name: Verify embedded version matches the tag
+        run: |
+          ./qwc --version
+          ./qwc --version | grep -F "qwc ${GITHUB_REF_NAME}"
+
+      # tar (not a bare binary) so the executable bit survives the download.
+      - name: Package
+        run: tar -czf ${{ matrix.artifact }}.tar.gz qwc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: publish GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # gh needs a repo to resolve the release against
+
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true  # both tarballs into the workdir
+
+      - name: Create release with both binaries
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            qwc-linux-x86_64.tar.gz qwc-macos-arm64.tar.gz \
+            --verify-tag --generate-notes
