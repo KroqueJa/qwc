@@ -2,6 +2,7 @@
 
 #include <sys/wait.h>
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -9,6 +10,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // QWC_BINARY is defined by CMake as the absolute path to the built `qwc`
 // executable. These are end-to-end tests of main()'s argument parsing and
@@ -85,6 +87,26 @@ std::string allLine( uintmax_t l, uintmax_t w, uintmax_t b,
   if ( !name.empty() ) os << ' ' << name;
   os << '\n';
   return os.str();
+}
+
+// Re-join an output blob's lines in sorted order. Without a sort flag qwc
+// promises no listing order (a -r expansion comes back in directory-iteration
+// order, which varies by filesystem), so the recursive tests compare listings
+// as line multisets rather than exact byte sequences.
+std::string sortedLines( const std::string& blob )
+{
+  std::vector<std::string> ls;
+  std::string::size_type pos = 0;
+  while ( pos < blob.size() ) {
+    std::string::size_type end = blob.find( '\n', pos );
+    end = end == std::string::npos ? blob.size() : end + 1;
+    ls.push_back( blob.substr( pos, end - pos ) );
+    pos = end;
+  }
+  std::sort( ls.begin(), ls.end() );
+  std::string out;
+  for ( const std::string& l: ls ) out += l;
+  return out;
 }
 
 // An arbitrary number of columns, each in a min-width-7 field, then the name.
@@ -349,11 +371,11 @@ TEST( CliRecursive, ComposesWithWordsFlag )
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 4, "/tmp/qwc_rec_words/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/qwc_rec_words/sub/mid.txt" ) +
-             line( 2, "/tmp/qwc_rec_words/top.txt" ) +
-             line( 9, "total" ) );
+  EXPECT_EQ( sortedLines( r.out ),
+             sortedLines( line( 4, "/tmp/qwc_rec_words/sub/deep/bottom.txt" ) +
+                          line( 3, "/tmp/qwc_rec_words/sub/mid.txt" ) +
+                          line( 2, "/tmp/qwc_rec_words/top.txt" ) +
+                          line( 9, "total" ) ) );
 }
 
 // ---------------------------------------------------------------------------
@@ -584,21 +606,26 @@ TEST( Cli, ManyFilesBytesPreservesOrderAndTotal )
 }
 
 // ---------------------------------------------------------------------------
-// --recursive: directory arguments expand to all regular files beneath them,
-// sorted, with a per-file line each and a grand total. (-l = line counts.)
+// --recursive: directory arguments expand to all regular files beneath them
+// (in no promised order without a sort flag), with a per-file line each and a
+// grand total last. (-l = line counts.)
 // ---------------------------------------------------------------------------
-TEST( CliRecursive, ExpandsDirectorySortedWithTotal )
+TEST( CliRecursive, ExpandsDirectoryWithTotal )
 {
   const std::string root = makeRecTree( "/tmp/qwc_rec_cli" );
   CmdResult r = run( kBin + " -l --recursive " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 4, "/tmp/qwc_rec_cli/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/qwc_rec_cli/sub/mid.txt" ) +
-             line( 2, "/tmp/qwc_rec_cli/top.txt" ) +
-             line( 9, "total" ) );
+  EXPECT_EQ( sortedLines( r.out ),
+             sortedLines( line( 4, "/tmp/qwc_rec_cli/sub/deep/bottom.txt" ) +
+                          line( 3, "/tmp/qwc_rec_cli/sub/mid.txt" ) +
+                          line( 2, "/tmp/qwc_rec_cli/top.txt" ) +
+                          line( 9, "total" ) ) );
+  // The total row is always last, whatever order the files landed in.
+  const std::string total = line( 9, "total" );
+  ASSERT_GE( r.out.size(), total.size() );
+  EXPECT_EQ( r.out.substr( r.out.size() - total.size() ), total );
 }
 
 TEST( CliRecursive, ComposesWithCharFlag )
@@ -608,11 +635,14 @@ TEST( CliRecursive, ComposesWithCharFlag )
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 0, "/tmp/qwc_rec_cli2/sub/deep/bottom.txt" ) +
-             line( 1, "/tmp/qwc_rec_cli2/sub/mid.txt" ) +
-             line( 0, "/tmp/qwc_rec_cli2/top.txt" ) +
-             line( 1, "total" ) );
+  EXPECT_EQ( sortedLines( r.out ),
+             sortedLines( line( 0, "/tmp/qwc_rec_cli2/sub/deep/bottom.txt" ) +
+                          line( 1, "/tmp/qwc_rec_cli2/sub/mid.txt" ) +
+                          line( 0, "/tmp/qwc_rec_cli2/top.txt" ) +
+                          line( 1, "total" ) ) );
+  const std::string total = line( 1, "total" );
+  ASSERT_GE( r.out.size(), total.size() );
+  EXPECT_EQ( r.out.substr( r.out.size() - total.size() ), total );
 }
 
 TEST( CliRecursive, EmptyDirectoryPrintsZero )
@@ -629,16 +659,20 @@ TEST( CliRecursive, EmptyDirectoryPrintsZero )
 TEST( CliRecursive, PreservesTopLevelOrderForMixedArgs )
 {
   const std::string root = makeRecTree( "/tmp/qwc_rec_cli3" );
-  // A plain file first, then a directory: file stays first, dir expands sorted.
+  // A plain file first, then a directory: the file stays first; the directory
+  // expands after it, its files in no promised order.
   CmdResult r = run( kBin + " -l --recursive " + root + "/top.txt " + root + "/sub" );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 2, "/tmp/qwc_rec_cli3/top.txt" ) +
-             line( 4, "/tmp/qwc_rec_cli3/sub/deep/bottom.txt" ) +
-             line( 3, "/tmp/qwc_rec_cli3/sub/mid.txt" ) +
-             line( 9, "total" ) );
+  const std::string first = line( 2, "/tmp/qwc_rec_cli3/top.txt" );
+  ASSERT_GE( r.out.size(), first.size() );
+  EXPECT_EQ( r.out.substr( 0, first.size() ), first );
+  EXPECT_EQ( sortedLines( r.out ),
+             sortedLines( first +
+                          line( 4, "/tmp/qwc_rec_cli3/sub/deep/bottom.txt" ) +
+                          line( 3, "/tmp/qwc_rec_cli3/sub/mid.txt" ) +
+                          line( 9, "total" ) ) );
 }
 
 TEST( CliRecursive, SingleFileArgNoTotalLine )
@@ -779,18 +813,26 @@ TEST( CliReverse, FlipsCountOrderBiggestFirst )
              line( 9, "total" ) );
 }
 
-TEST( CliReverse, AloneFlipsDefaultAlphabetical )
+TEST( CliReverse, AloneIsANoOp )
 {
+  // Without a sort key there is no promised order to flip, so a bare
+  // --reverse changes nothing: the listing is the (unspecified) collected
+  // order either way, with the total still last.
   const std::string root = makeRecTree( "/tmp/qwc_rev_alpha" );
   CmdResult r = run( kBin + " -l -r --reverse " + root );
+  CmdResult plain = run( kBin + " -l -r " + root );
   std::system( ( "rm -rf " + root ).c_str() );
 
   EXPECT_EQ( r.exitCode, 0 );
-  EXPECT_EQ( r.out,
-             line( 2, "/tmp/qwc_rev_alpha/top.txt" ) +
-             line( 3, "/tmp/qwc_rev_alpha/sub/mid.txt" ) +
-             line( 4, "/tmp/qwc_rev_alpha/sub/deep/bottom.txt" ) +
-             line( 9, "total" ) );
+  EXPECT_EQ( sortedLines( r.out ),
+             sortedLines( line( 2, "/tmp/qwc_rev_alpha/top.txt" ) +
+                          line( 3, "/tmp/qwc_rev_alpha/sub/mid.txt" ) +
+                          line( 4, "/tmp/qwc_rev_alpha/sub/deep/bottom.txt" ) +
+                          line( 9, "total" ) ) );
+  const std::string total = line( 9, "total" );
+  ASSERT_GE( r.out.size(), total.size() );
+  EXPECT_EQ( r.out.substr( r.out.size() - total.size() ), total );
+  EXPECT_EQ( r.out, plain.out );
 }
 
 // ---------------------------------------------------------------------------

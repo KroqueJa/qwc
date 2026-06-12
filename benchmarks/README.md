@@ -148,6 +148,53 @@ kernels agree on *all* input, not just valid UTF-8).
 no printability rule, no UTF-8. The new semantics cost ~40% of the old
 headline throughput but make `-w` byte-for-byte wc-faithful in both locales.
 
+## Finding 5 — many small files: the harness, not the kernel, was the bottleneck
+
+Measured **2026-06-12** on the standard many-files corpus (`gen-data.py --many
+--size 512MiB`, 2,719 files, log-uniform 4KiB–1MiB) on `/tmp` (ext4,
+page-cache-warm), `hyperfine --shell=none -w 2 -r 10`. Before the fix, `qwc -l`
+was **1.7× slower than GNU wc** (236 ms vs 137 ms) despite the AVX2 kernel —
+and `qwc-scalar` was slower still (252 ms), proving the kernel wasn't the
+problem. `/usr/bin/time -v` attributed it: ~5,200 voluntary context switches
+(vs wc's 1) and ~9,000 minor faults (vs 221).
+
+**Root cause — per-file fixed costs in `processFile`, paid 2,719 times:**
+
+1. a `std::thread` spawn + join *per file*, even when `numThreads == 1`
+   (i.e. for every file under `--bytes-per-thread` — on this corpus, all of
+   them): two context switches plus stack/TLS setup per file;
+2. a fresh **value-initialized 1 MiB `std::vector` buffer per file** — a 1 MiB
+   memset (plus allocator churn) to scan a few-KiB file;
+3. two `posix_fadvise` syscalls per file, useless for files one read consumes.
+
+**Fix:** a one-chunk file is scanned inline on the calling `mapFiles` worker
+into a per-thread reused buffer (`threadBuffer()`), and the readahead advice is
+only issued for files larger than one scan buffer. The multi-chunk (large-file)
+path is unchanged.
+
+| `-l`, 2,719 small files | before | after | speedup |
+|-------------------------|--------|-------|---------|
+| qwc (AVX2)              | 236 ms | 43 ms | 5.6×    |
+| vs GNU wc (135 ms)      | 0.57×  | **3.1×** | —    |
+| vs qwc-scalar (52 ms)   | —      | 1.2×  | —       |
+
+The win is workload-agnostic: bare `qwc` on the same corpus went 293→136 ms
+and `-w` 289→130 ms. The single-large-file leg is unchanged (within noise on
+`-l` and `-w`).
+
+**Negative result — a dedicated lone-`-l` fast path buys nothing.** With the
+per-file thread and allocation gone, a specialized lines-only path (no seam
+context, no `ScanState`, no merge — just `pread` + `count()`) benchmarked at
+exactly **1.00× ± 0.06** against the generic scan on this corpus: the generic
+machinery costs a few predictable branches per 1 MiB buffer. Recorded here so
+the specialization is not re-attempted; the remaining wall time is read()
+copy-out (system time), which no dispatch shortcut touches.
+
+**Also dropped:** the alphabetizing `std::sort` in `collectFiles` for sortless
+`-r` runs (output order without a sort flag is now explicitly unspecified, and
+a bare `--reverse` is a documented no-op). On 2,719 names the sort itself was
+sub-millisecond, so this is a contract simplification more than a speed win.
+
 ## Reproducing
 
 The per-core sweep uses a throwaway harness that `#include`s the kernel headers

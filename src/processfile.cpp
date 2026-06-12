@@ -65,6 +65,63 @@ inline void scanBuffer(
   }
 }
 
+// Scan-buffer geometry for the regular-file path. Each scan fetches up to
+// BUF_SIZE owned bytes plus up to WCTX context bytes on both sides, so a
+// multibyte separator window straddling a chunk seam is visible whole.
+constexpr usize BUF_SIZE = usize{ 1 } << 20;  // 1 MiB
+constexpr usize WCTX = 3;  // multibyte window context per side
+
+// The scan buffer is per worker thread and reused across every file that
+// thread processes. Small files dominate some workloads (thousands of opens
+// per second), so a fresh 1 MiB allocation per file -- let alone a
+// value-initialized one -- would cost more than the scan itself.
+char* threadBuffer()
+{
+  static thread_local std::vector<char> buf( BUF_SIZE + 2 * WCTX );
+  return buf.data();
+}
+
+// Stream the byte range [start, start+size) of fd through `buffer` with
+// pread(), running every requested counter and threading the carries into
+// `out`. pread() is thread-safe (the offset is per-call, not shared via fd), so
+// one fd serves concurrent callers. The whole workload is computed on each
+// buffer before moving on -- one read, every requested counter.
+void scanRange(
+    const int fd, const usize start, const usize size, const usize fileSize,
+    const Workload* work, ScanState* out, char* buffer
+)
+{
+  ScanState s;
+  usize remaining = size;
+  usize pos = start;
+  while ( remaining > 0 ) {
+    // Fetch up to WCTX context bytes on both sides of the owned slice so
+    // a multibyte separator window straddling the seam is visible whole.
+    const usize want = std::min( BUF_SIZE, remaining );
+    const usize front = std::min( WCTX, pos );
+    const usize back = std::min( WCTX, fileSize - ( pos + want ) );
+    const isize got =
+        pread( fd, buffer, front + want + back, static_cast<off_t>( pos - front ) );
+    if ( got <= static_cast<isize>( front ) ) break;
+    const usize ownedEnd = std::min( static_cast<usize>( got ), front + want );
+    scanBuffer( buffer, static_cast<usize>( got ), front, ownedEnd, *work, s );
+    remaining -= ownedEnd - front;
+    pos += ownedEnd - front;
+  }
+  *out = s;
+}
+
+// std::thread entry: like scanRange, with the spawned thread's own reusable
+// buffer. (Plain function rather than a lambda, and pointers rather than
+// references, so std::thread's by-value argument copying stays trivial.)
+void scanRangeThread(
+    const int fd, const usize start, const usize size, const usize fileSize,
+    const Workload* work, ScanState* out
+)
+{
+  scanRange( fd, start, size, fileSize, work, out, threadBuffer() );
+}
+
 // Serial single-pass scan of a stream that can only be consumed once and whose
 // length fstat cannot give us up front: standard input, and any non-regular
 // file (FIFO, character/block device, socket, /proc, ...). Bytes are tallied as
@@ -169,7 +226,11 @@ Counts processFile(
   }
 
   // We will read every byte sequentially, so ask the kernel to start pulling
-  // the whole file into the page cache up front.
+  // the whole file into the page cache up front. Only worth the syscall(s) for
+  // a file bigger than one scan buffer: anything smaller is consumed by the
+  // very first read, which the kernel's default readahead already covers, and
+  // on a many-small-files run the advice itself becomes measurable overhead.
+  if ( fileSize > BUF_SIZE ) {
 #if defined( __APPLE__ )
   // On macOS F_RDADVISE is the most effective hint (MADV_WILLNEED is largely a
   // no-op). radvisory::ra_count is an int, so issue the advice in <=INT_MAX
@@ -187,9 +248,12 @@ Counts processFile(
 #elif defined( POSIX_FADV_SEQUENTIAL )
   // On Linux posix_fadvise gives the kernel both the access pattern and an
   // explicit readahead hint over the whole range.
-  posix_fadvise( fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_SEQUENTIAL );
-  posix_fadvise( fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_WILLNEED );
+    posix_fadvise(
+        fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_SEQUENTIAL
+    );
+    posix_fadvise( fd, 0, static_cast<off_t>( fileSize ), POSIX_FADV_WILLNEED );
 #endif
+  }
 
   u32 numThreads = static_cast<u32>( std::min(
       static_cast<usize>( MAX_THREADS ),
@@ -197,52 +261,42 @@ Counts processFile(
   ) );
   numThreads = std::max( numThreads, 1u );
 
-  const usize chunkSize = fileSize / numThreads;
-
-  std::vector<ScanState> results( numThreads );
-  std::vector<std::thread> threads;
-  threads.reserve( numThreads );
-
-  // Each thread streams its byte range with pread() into a private, reused
-  // buffer rather than faulting an mmap page-by-page. pread() is thread-safe
-  // (the offset is per-call, not shared via fd), so one fd serves all threads
-  // and the kernel bulk-copies straight from the warmed page cache. The whole
-  // workload is computed on each buffer before moving on -- one read, every
-  // requested counter.
-  static constexpr usize WCTX = 3;  // multibyte window context per side
-  for ( u32 i = 0; i < numThreads; ++i ) {
-    usize start = i * chunkSize;
-    usize size = ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
-    threads.emplace_back( [fd, start, size, fileSize, &results, i, &work]() {
-      static constexpr usize BUF_SIZE = 1 << 20;  // 1 MiB
-      std::vector<char> buffer( BUF_SIZE + 2 * WCTX );
-      ScanState s;
-      usize remaining = size;
-      usize pos = start;
-      while ( remaining > 0 ) {
-        // Fetch up to WCTX context bytes on both sides of the owned slice so
-        // a multibyte separator window straddling the seam is visible whole.
-        const usize want = std::min( BUF_SIZE, remaining );
-        const usize front = std::min( WCTX, pos );
-        const usize back = std::min( WCTX, fileSize - ( pos + want ) );
-        const isize got = pread(
-            fd, buffer.data(), front + want + back,
-            static_cast<off_t>( pos - front )
-        );
-        if ( got <= static_cast<isize>( front ) ) break;
-        const usize ownedEnd =
-            std::min( static_cast<usize>( got ), front + want );
-        scanBuffer(
-            buffer.data(), static_cast<usize>( got ), front, ownedEnd, work, s
-        );
-        remaining -= ownedEnd - front;
-        pos += ownedEnd - front;
-      }
-      results[i] = s;
-    } );
+  // One chunk: scan inline on the calling thread, into its reused buffer. This
+  // is every file below bytesPerThread -- on a many-small-files run, all of
+  // them -- and spawning a std::thread per file just to join it immediately
+  // costs more (two context switches plus a stack/TLS setup) than scanning a
+  // small file does. `single` keeps the lone result on the stack so this path
+  // allocates nothing at all.
+  // A dedicated lone--l fast path (skipping scanBuffer's flag dispatch, the
+  // seam context and the merge) was prototyped here and benchmarked at exactly
+  // 1.00x against this generic path on the many-small-files corpus: with the
+  // scan inlined onto the calling thread and the buffer reused (below), the
+  // generic machinery costs a few predictable branches per MiB-sized buffer,
+  // which is unmeasurable. Recorded in benchmarks/README.md; don't re-add it.
+  ScanState single;
+  std::vector<ScanState> results;
+  const ScanState* res = &single;
+  if ( numThreads == 1 ) {
+    scanRange( fd, 0, fileSize, fileSize, &work, &single, threadBuffer() );
+  } else {
+    // Multiple chunks: one thread per byte range, each streaming through its
+    // own per-thread buffer rather than faulting an mmap page-by-page; the
+    // kernel bulk-copies straight from the warmed page cache.
+    results.resize( numThreads );
+    res = results.data();
+    const usize chunkSize = fileSize / numThreads;
+    std::vector<std::thread> threads;
+    threads.reserve( numThreads );
+    for ( u32 i = 0; i < numThreads; ++i ) {
+      const usize start = i * chunkSize;
+      const usize size =
+          ( i == numThreads - 1 ) ? fileSize - i * chunkSize : chunkSize;
+      threads.emplace_back(
+          scanRangeThread, fd, start, size, fileSize, &work, &results[i]
+      );
+    }
+    for ( auto& t: threads ) t.join();
   }
-
-  for ( auto& t: threads ) t.join();
   close( fd );
 
   // Lines, chars and target just sum. Words are counted at run END inside each
@@ -254,7 +308,8 @@ Counts processFile(
   // at a seam (which neither side counted). The run still open after the last
   // chunk is the file's trailing word -- EOF terminates it.
   bool carryInWord = false, carryHasP = false;
-  for ( const ScanState& s: results ) {
+  for ( u32 i = 0; i < numThreads; ++i ) {
+    const ScanState& s = res[i];
     result.lines += s.lines;
     result.chars += s.chars;
     result.target += s.target;
@@ -284,7 +339,8 @@ Counts processFile(
   // last chunk has no terminating newline, so -- like wc -L -- it is dropped.
   usize maxLen = 0;
   usize lineCarry = 0;
-  for ( const ScanState& s: results ) {
+  for ( u32 i = 0; i < numThreads; ++i ) {
+    const ScanState& s = res[i];
     maxLen = std::max( maxLen, s.line.maxComplete );
     if ( s.line.hasNewline ) {
       maxLen = std::max( maxLen, lineCarry + s.line.prefixLen );

@@ -88,9 +88,13 @@ void printHelp()
          "      --sort-by-size    Order the listing by file size on disk, "
          "smallest\n"
          "                        first.\n"
-         "      --reverse         Flip whichever ordering is in effect (e.g. "
-         "put\n"
-         "                        the biggest counts at the top instead).\n"
+         "      --reverse         Flip the active sort order (e.g. put the "
+         "biggest\n"
+         "                        counts at the top instead). Without a sort "
+         "flag\n"
+         "                        or --top there is no order to flip, so it "
+         "does\n"
+         "                        nothing.\n"
          "      --top N           Show only the N files that rank highest by "
          "the\n"
          "                        active sort (counts, if none is given). The "
@@ -323,11 +327,11 @@ bool collectFiles( Options& opt )
         if ( it->is_regular_file( ec ) && !ec )
           dirFiles.push_back( it->path().string() );
       }
-      // Alphabetize for stable output -- but only when no sort key is active,
-      // since otherwise the whole list is re-ordered below and this is wasted
-      // work. (With no key, --reverse still has this stable order to flip.)
-      if ( opt.sortMode == SortMode::None )
-        std::sort( dirFiles.begin(), dirFiles.end() );
+      // Files come back in directory-iteration order, which is unspecified and
+      // may differ between runs. That is fine: without a sort flag qwc does
+      // not promise any output order (and with one, the whole list is
+      // re-ordered at print time anyway), so alphabetizing here would be pure
+      // wasted work on the file-heavy recursive runs.
       expanded.insert( expanded.end(), dirFiles.begin(), dirFiles.end() );
     } else {
       expanded.push_back( path );
@@ -454,8 +458,11 @@ void printResults( const Options& opt, const std::vector<Counts>& output )
   if ( single && opt.topN > 0 && opt.topN < order.size() )
     order.erase( order.begin(), order.end() - static_cast<isize>( opt.topN ) );
 
-  // --reverse flips the final display order (e.g. biggest counts first).
-  if ( single && opt.reverse ) std::reverse( order.begin(), order.end() );
+  // --reverse flips the final display order (e.g. biggest counts first). With
+  // no sort key in effect there is no promised order to flip -- qwc emits the
+  // collected order, which for -r is unspecified -- so it is a no-op.
+  if ( single && opt.reverse && opt.sortMode != SortMode::None )
+    std::reverse( order.begin(), order.end() );
 
   // wc prints one row per file -- including for a single file (with its name).
   for ( const usize i: order )
