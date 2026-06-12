@@ -44,9 +44,22 @@ struct Options
   bool reverse = false;  // flip the display order
   usize topN = 0;        // keep only the highest N (0 == show all)
   // Positional args; expanded by collectFiles. Entries either point into argv
-  // or at heap paths allocated by the --recursive walk; both live for the whole
-  // process, so nothing here is ever copied or freed.
+  // or at heap paths allocated by the --recursive walk; `files` itself owns
+  // nothing and never copies.
   std::vector<const char*> files;
+  // The owning side of the walk-allocated entries in `files`, freed by the
+  // destructor. Kept separately because the argv pointers mixed into `files`
+  // must never be freed. (Without this the paths would still be reachable
+  // right up to the end of main -- but LeakSanitizer scans after main's
+  // locals are gone, and the analysis CI runs with detect_leaks on.)
+  std::vector<char*> ownedPaths;
+
+  Options() = default;
+  Options( const Options& ) = delete;
+  Options& operator=( const Options& ) = delete;
+  Options( Options&& ) = delete;
+  Options& operator=( Options&& ) = delete;
+  ~Options();
 
   // How many output columns are selected.
   int columnCount() const

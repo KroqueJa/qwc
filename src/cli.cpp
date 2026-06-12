@@ -296,6 +296,11 @@ std::optional<int> parseArgs( int argc, char** argv, Options& opt )
   return std::nullopt;
 }
 
+Options::~Options()
+{
+  for ( char* p: ownedPaths ) std::free( p );
+}
+
 Workload Options::workload() const
 {
   Workload w;
@@ -329,23 +334,33 @@ char* joinPath( const char* dir, const char* name )
     std::fputs( "Error: out of memory\n", stderr );
     std::_Exit( 1 );
   }
+  // The terminator arrives with the second memcpy: `nlen + 1` copies name's
+  // NUL. The not-null-terminated-result heuristic only sees the first copy.
+  // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
   std::memcpy( out, dir, dlen );
   if ( sep ) out[dlen] = '/';
   std::memcpy( out + dlen + sep, name, nlen + 1 );
   return out;
 }
 
-// Append every regular file beneath `dir` to `out` as a heap path that lives
-// for the rest of the process (it lands in opt.files, which never frees).
-// Unreadable or unstattable entries are skipped, directory symlinks are not
-// walked, and a symlink to a regular file counts as that file -- the same
-// stance fs::recursive_directory_iterator(skip_permission_denied) +
-// is_regular_file took before this was hand-rolled. Returns false only when
-// `dir` itself cannot be opened; deeper failures just prune that subtree.
-bool walkDir( const char* dir, std::vector<const char*>& out )
+// Append every regular file beneath `dir` to `out` as a heap path, recording
+// ownership in `owned` (freed by ~Options). Unreadable or unstattable entries
+// are skipped, directory symlinks are not walked, and a symlink to a regular
+// file counts as that file -- the same stance
+// fs::recursive_directory_iterator(skip_permission_denied) + is_regular_file
+// took before this was hand-rolled. Returns false only when `dir` itself
+// cannot be opened; deeper failures just prune that subtree.
+bool walkDir(
+    const char* dir, std::vector<const char*>& out, std::vector<char*>& owned
+)
 {
   DIR* d = opendir( dir );
   if ( !d ) return false;
+  // Like the setlocale/nl_langinfo calls in main(): collectFiles runs on the
+  // main thread before any workers are spawned, so the thread-safety warning
+  // does not apply (and glibc's readdir is in fact safe on distinct DIR
+  // streams; only sharing one stream races).
+  // NOLINTNEXTLINE(concurrency-mt-unsafe)
   while ( const dirent* e = readdir( d ) ) {
     const char* name = e->d_name;
     if ( name[0] == '.' &&
@@ -372,10 +387,11 @@ bool walkDir( const char* dir, std::vector<const char*>& out )
         type = DT_REG;
     }
     if ( type == DT_REG ) {
-      out.push_back( path );  // ownership moves to the file list
+      out.push_back( path );
+      owned.push_back( path );  // freed by ~Options
       continue;
     }
-    if ( type == DT_DIR ) walkDir( path, out );
+    if ( type == DT_DIR ) walkDir( path, out, owned );
     std::free( path );
   }
   closedir( d );
@@ -399,7 +415,7 @@ bool collectFiles( Options& opt )
     {
     };
     if ( opt.recursive && stat( path, &st ) == 0 && S_ISDIR( st.st_mode ) ) {
-      if ( !walkDir( path, expanded ) ) {
+      if ( !walkDir( path, expanded, opt.ownedPaths ) ) {
         std::fprintf( stderr, "Error reading directory: %s\n", path );
         return false;
       }
