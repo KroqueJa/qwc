@@ -941,9 +941,16 @@ const Mode kCoreModes[] = {
     // Combinations: column order and selection must match wc exactly.
     { "-lw", "-lw" },  { "-lc", "-lc" },   { "-wc", "-wc" },
     { "-lwc", "-lwc" },{ "-lwcL", "-lwcL" },
+#if !defined( __APPLE__ )
     // -c and -m together: GNU prints both columns (chars, then bytes),
-    // regardless of flag order.
-    { "-cm", "-cm" },  { "-mc", "-mc" },   { "-lwmcL", "-lwmcL" } };
+    // regardless of flag order. BSD wc instead collapses them to one column
+    // (last flag wins), so on macOS the system wc is not a valid oracle for
+    // these modes and they are left out -- qwc's own two-column behaviour is
+    // pinned platform-independently by CliCombined.CharsAndBytesAreTwoColumns,
+    // and the GNU comparison runs on the Linux CI legs.
+    { "-cm", "-cm" },  { "-mc", "-mc" },   { "-lwmcL", "-lwmcL" },
+#endif
+};
 
 }  // namespace
 
