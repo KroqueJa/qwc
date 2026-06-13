@@ -51,8 +51,3 @@ But I also think the industry - dare I say humanity? - has become annoyingly com
 Most software does not become slow because the underlying problems are challenging. It becomes slow because we tolerate inefficiency. Sometimes, performance is spent providing security, monitoring, or features. That's fine. "Performance is the currency of computing," according to Bjarne Stroustrup. But very often, software is slow because software teams are taught that 50 half-baked features are better than three good ones. We learn as programmers that premature optimization is evil, and all optimization that does not stem from a user complaint or opex report is premature. I humbly posit that this is dumb and bad.
 
 Hence; this project is equally a challenge, a hobby, and a small act of protest. If we could spend less time waiting for our pocket computers to turn on, we could spend more time with our children, in the sun, or hand-tuning SIMD.
-
-# Roadmap
-
-Lives in [TODO.md](TODO.md) — what's in flight now, what's queued, what's
-done (with outcomes), and what was considered and rejected (with reasons).
