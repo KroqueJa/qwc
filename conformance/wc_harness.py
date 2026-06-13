@@ -173,12 +173,19 @@ def required_to_match(regime: str, mode: Mode, meta: Meta, wc_ok: bool) -> bool:
     # unterminated final line that qwc ignores (so the input must end in '\n').
     if mode.has_maxline and not (meta.ascii_print and meta.nl_terminated):
         return False
-    # Word splitting now follows wc's model in both supported regimes: ASCII
-    # whitespace + the printability rule in C (where classification is purely
-    # bytewise, so parity holds on ANY input), plus the unicode separator set
-    # under a UTF-8 locale (parity on all valid UTF-8; invalid sequences keep
-    # qwc's own resync rule).
-    if mode.kind == "word" and regime != "C" and not meta.valid_utf8:
+    # Word splitting: qwc applies a printability filter -- a run containing no
+    # printable code point is "barren" and not counted (see runHasPrintable in
+    # include/words_kernel.h and the asserts in tests/words_test.cpp). wc has
+    # no analogous filter: it splits purely on (isspace / iswspace), so any
+    # non-separator run is a word. The two therefore agree only on inputs that
+    # never form barren runs -- printable-ASCII text. The earlier (4190263)
+    # claim that "classification is purely bytewise, so parity holds on ANY
+    # input" was incorrect in both supported regimes; reverted to the
+    # pre-4190263 policy.
+    # TODO (recorded in TODO.md): decide whether to keep qwc's barren-run
+    # filter (status quo: deliberate divergence, documented) or drop it to
+    # match wc bytewise. If dropped, this restriction can be tightened again.
+    if mode.kind == "word" and not meta.ascii_text:
         return False
     # Characters (-m): bytes under the C locale (universal); code points under a
     # UTF-8 locale, which agree only on well-formed UTF-8.

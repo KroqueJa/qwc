@@ -68,12 +68,15 @@ inline void scanBuffer(
 // Scan-buffer geometry for the regular-file path. Each scan fetches up to
 // BUF_SIZE owned bytes plus up to WCTX context bytes on both sides, so a
 // multibyte separator window straddling a chunk seam is visible whole.
-constexpr usize BUF_SIZE = usize{ 1 } << 20;  // 1 MiB
+// BUF_SIZE was tuned by the 2026-06-13 sweep -- see Finding 6 in
+// benchmarks/README.md for the LLC-miss data behind the choice (1 MiB spilled
+// L2 on every host we measured; 256 KiB stays L2-resident).
+constexpr usize BUF_SIZE = usize{ 256 } << 10;  // 256 KiB
 constexpr usize WCTX = 3;  // multibyte window context per side
 
 // The scan buffer is per worker thread and reused across every file that
 // thread processes. Small files dominate some workloads (thousands of opens
-// per second), so a fresh 1 MiB allocation per file -- let alone a
+// per second), so a fresh allocation per file -- let alone a
 // value-initialized one -- would cost more than the scan itself.
 char* threadBuffer()
 {

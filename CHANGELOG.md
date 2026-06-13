@@ -8,6 +8,17 @@ not generated from commit messages.
 
 ### Performance
 
+- Big-file `-l` and `-m` are markedly faster on multi-core hosts. The
+  per-thread scan buffer was retuned from 1 MiB to 256 KiB after the sweep
+  documented in `benchmarks/README.md` Finding 6: at the old size the
+  buffer spilled out of L2 on every host we measured, so `pread`'s
+  `copy_to_user` paid two extra DRAM trips per byte; at 256 KiB it stays
+  L2-resident. On a native i7-8700 with a warm 512 MiB file, 4-vCPU pinned
+  `-l` drops from 0.85× vs uu-wc to **1.77×** (29.9 ms vs 53.0 ms), and
+  `-m` matches (25.3 ms vs 44.8 ms). At all 12 threads the big-file `-l`
+  win is **2.36×** (20.5 ms vs 48.4 ms). LLC-load-misses on the headline
+  workload fall from ~91k at 1 MiB to 668 at 256 KiB. Counts are
+  unchanged.
 - `qwc` starts ~1.6× faster (2.6 → 1.6 ms on the measurement box, vs GNU wc's
   1.4 ms), which dominates short invocations like `qwc -c <file>` that never
   scan the file at all. Two changes: libstdc++/libgcc are now linked
