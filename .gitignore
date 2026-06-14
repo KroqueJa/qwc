@@ -1,6 +1,9 @@
-qwc*
+# IDEs and venvs
 .idea
 .venv
+
+# Binaries
+qwc*
 
 # CMake build artifacts
 build/
@@ -14,6 +17,7 @@ benchmarks/test-data
 benchmarks/bench-spec.csv
 benchmarks/benchmarks.log
 
+# Third-party code
 thirdparty
 
 # Agentic helper configs

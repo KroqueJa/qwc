@@ -1,10 +1,15 @@
 # On-demand performance comparison for qwc.
 #
-# Builds the current branch and main in Release, then uses hyperfine to compare
-# counting throughput across a matrix of wc flags against three references:
-#   * qwc @ main  -- "did this branch improve?" (skipped when run on main)
-#   * uu-wc       -- uutils coreutils, the closest competitor (pinned release)
-#   * GNU wc      -- the headline number (the runner's system coreutils)
+# Builds the current branch in Release, then uses hyperfine to compare counting
+# throughput across a matrix of wc flags against three references:
+#   * qwc baseline -- "did this branch improve?" Built from origin/main on a
+#                     feature branch; on main runs the comparison column is the
+#                     latest published release binary, so main still carries a
+#                     regression signal across release cycles. If no release
+#                     exists yet (or the asset is missing), the column is
+#                     omitted and the rest of the run proceeds.
+#   * uu-wc        -- uutils coreutils, the closest competitor (pinned release)
+#   * GNU wc       -- the headline number (the runner's system coreutils)
 #
 # Report-only: it never fails the build. Manual dispatch only -- benchmarks are
 # noisy and costly, so they run when you ask for them. Correctness is NOT checked
@@ -79,6 +84,28 @@ jobs:
           cmake --build build-main --target qwc
           cp /tmp/main-tree/qwc ./qwc-main
 
+      # On main runs there is no "branch vs main" comparison to make, so the
+      # baseline column is the latest published release binary instead. That
+      # keeps a regression signal in front of any main run, across release
+      # cycles. If no release exists yet (or the Linux x86_64 asset is missing
+      # for some reason) the column is omitted -- the bench step keys off the
+      # presence of ./qwc-main and proceeds without it.
+      - name: Download latest release as baseline (main only)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/qwc-latest
+          if gh release download --pattern qwc-linux-x86_64.tar.gz --dir /tmp/qwc-latest; then
+            tar -xzf /tmp/qwc-latest/qwc-linux-x86_64.tar.gz -C /tmp/qwc-latest
+            cp /tmp/qwc-latest/qwc ./qwc-main
+            echo "Using latest release as the baseline:"
+            ./qwc-main --version
+          else
+            echo "No release asset found; the baseline column will be omitted on this run."
+          fi
+
       # Two corpora, same total size: one big file (stresses in-file chunk
       # parallelism + the SIMD kernels) and a directory of many varied-size files
       # (stresses the per-file open/fstat dispatch). File sizes are log-uniform
@@ -92,7 +119,14 @@ jobs:
         run: |
           set -euo pipefail
           MAIN_ARG=""
-          if [ -f ./qwc-main ]; then MAIN_ARG="--qwc-main ./qwc-main"; fi
+          if [ -f ./qwc-main ]; then
+            MAIN_ARG="--qwc-main ./qwc-main"
+            # On main runs the baseline is the latest release rather than main
+            # itself, so the column gets a non-default display label.
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              MAIN_ARG="$MAIN_ARG --qwc-main-name latest-release"
+            fi
+          fi
           common=(--qwc ./qwc-branch $MAIN_ARG --uuwc "coreutils wc" --gwc wc
                   --runs "${{ inputs.runs }}" --warmup "${{ inputs.warmup }}")
           python3 benchmarks/bench.py "${common[@]}" \

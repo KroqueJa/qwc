@@ -2,7 +2,11 @@
 """qwc benchmark orchestrator.
 
 Runs hyperfine across a matrix of wc flags, comparing the branch qwc against:
-  - qwc @ main   (the "did this branch improve?" signal; optional)
+  - a qwc baseline (the "did this branch improve?" signal; optional). Typically
+    qwc @ origin/main; on main runs the workflow points this at the latest
+    published release binary instead, so main still carries a regression
+    signal across release cycles. The rendered column label is overridable
+    with --qwc-main-name so it reads honestly in either case.
   - uu-wc        (uutils coreutils, the closest competitor)
   - GNU wc       (the headline number)
 
@@ -96,7 +100,15 @@ def describe_host() -> str:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--qwc", required=True, help="branch qwc binary")
-    ap.add_argument("--qwc-main", help="main qwc binary (omit when running on main)")
+    ap.add_argument("--qwc-main",
+                    help="baseline qwc binary for the 'did this branch improve?' "
+                         "column. Typically built from origin/main on a feature "
+                         "branch; on main runs it is the latest published "
+                         "release. Omit to drop the column entirely.")
+    ap.add_argument("--qwc-main-name", default="main",
+                    help="display label for the --qwc-main column (default 'main'). "
+                         "Override to e.g. 'latest-release' when the baseline isn't "
+                         "literally main, so the rendered column reads honestly.")
     ap.add_argument("--uuwc", default=None,
                     help="uutils invocation (default: auto-detect 'uu-wc' or 'coreutils wc')")
     ap.add_argument("--gwc", default="wc", help="GNU wc invocation")
@@ -160,17 +172,22 @@ def main() -> None:
         with open(args.json_out, "w") as f:
             json.dump(payload, f, indent=2)
 
-    render(flags, headers, rows, args.title)
+    render(flags, headers, rows, args.title, args.qwc_main_name)
 
 
-def render(flags, headers, rows, title) -> None:
+def render(flags, headers, rows, title, main_label: str = "main") -> None:
     has_main = "main" in headers
     has_uu = "uu-wc" in headers
     has_gwc = "GNU wc" in headers
 
-    cols = ["flag"] + [f"{h} (ms)" for h in headers]
+    # The 'main' key is the stable internal slot (row lookups, has_main); only
+    # the rendered header is overridden, so the JSON sidecar keeps its existing
+    # shape regardless of the display label.
+    cols = ["flag"] + [
+        f"{main_label if h == 'main' else h} (ms)" for h in headers
+    ]
     if has_main:
-        cols.append("vs main")
+        cols.append(f"vs {main_label}")
     if has_uu:
         cols.append("vs uu-wc")
     if has_gwc:
