@@ -45,9 +45,7 @@ inline __m256i rangeU( const __m256i v, const u8 lo, const u8 hi )
 }
 
 inline u32 mm( const __m256i v )
-{
-  return static_cast<u32>( _mm256_movemask_epi8( v ) );
-}
+{ return static_cast<u32>( _mm256_movemask_epi8( v ) ); }
 
 // ASCII separator/printable masks for one block. Bytes >= 0x80 compare
 // signed-negative, so they fall in neither mask.
@@ -137,9 +135,9 @@ void words(
       }
 
       // Exact C2 windows, masked at the lead position via 1-byte lookahead.
-      const __m256i v1 =
-          _mm256_loadu_si256( reinterpret_cast<const __m256i*>( base + i + 1 )
-          );
+      const __m256i v1 = _mm256_loadu_si256(
+          reinterpret_cast<const __m256i*>( base + i + 1 )
+      );
       const u32 isC2 = mm( _mm256_cmpeq_epi8( v, _mm256_set1_epi8( '\xC2' ) ) );
       const u32 s2 =
           m.nbspace

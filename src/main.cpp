@@ -12,19 +12,22 @@
 #include "cli.h"
 #include "processfile.h"
 
-// hardware_concurrency() can report 0 when it cannot tell; treat that as 1 so
-// we never end up with an empty worker pool. Spelled as a ternary over the
-// noexcept hardware_concurrency() rather than std::max, which is not noexcept
-// and so could (in principle) throw during static initialization.
-static const u32 MAX_THREADS = std::thread::hardware_concurrency() > 0
-                                   ? std::thread::hardware_concurrency()
-                                   : 1;
-
+// hardware_concurrency() runs a sysconf reading /sys/devices/system/cpu/online
+// on Linux. Hide it behind a helper so the cost is only paid when a caller
+// actually needs the answer, not unconditionally at program startup as a
+// static initializer would. hardware_concurrency() can report 0 when it cannot
+// tell, treated as 1 so the worker pool never collapses to zero.
+inline u32 maxThreads()
+{
+  return std::thread::hardware_concurrency() > 0
+             ? std::thread::hardware_concurrency()
+             : 1u;
+}
 // Files per worker on the no-scan (bytes-only, `-c`) path: each file is a bare
 // fstat (~microseconds on a warm local cache), so a worker only earns its
 // ~tens-of-microseconds spawn cost once it has this many files to chew through.
-// Below this the glob runs serially; above it we scale up to MAX_THREADS. A
-// cold or networked open() costs far more and parallelises sooner, so this
+// Below this the glob runs serially; above it we scale up to maxThreads(). A
+// cold or networked open() costs far more and parallelizes sooner, so this
 // warm-tuned default is deliberately conservative. Override with
 // -DQWC_FILES_PER_THREAD=N.
 #ifndef QWC_FILES_PER_THREAD
@@ -79,21 +82,30 @@ int main( int argc, char** argv )
   // both the -m collapse (a character is just a byte in single-byte locales,
   // so the -m column displays the byte count) and the word-splitting flavour;
   // POSIXLY_CORRECT disables coreutils' non-breaking-space separators, exactly
-  // like wc.
-  std::setlocale( LC_CTYPE, "" );  // NOLINT(concurrency-mt-unsafe)
-  if ( opt.chars && MB_CUR_MAX <= 1 ) opt.charsAreBytes = true;
+  // like wc. None of this matters when the workload neither counts words nor
+  // counts characters (the common `qwc -c` and `qwc -l` cases): skip the lot
+  // and the cold libc locale pages never get faulted in.
+  if ( opt.words || opt.chars ) {
+    std::setlocale( LC_CTYPE, "" );  // NOLINT(concurrency-mt-unsafe)
+    if ( opt.chars && MB_CUR_MAX <= 1 ) opt.charsAreBytes = true;
+  }
 
   // Resolve the requested columns into a single counting workload, computed
   // once per file in a single pass.
   Workload work = opt.workload();
-  // Like setlocale above: called once at startup, before any worker threads
-  // are spawned, so the thread-safety warnings do not apply here.
-  // NOLINTNEXTLINE(concurrency-mt-unsafe)
-  const char* codeset = nl_langinfo( CODESET );
-  work.wordsMode.utf8 =
-      codeset != nullptr && std::strcmp( codeset, "UTF-8" ) == 0;
-  // NOLINTNEXTLINE(concurrency-mt-unsafe)
-  work.wordsMode.nbspace = std::getenv( "POSIXLY_CORRECT" ) == nullptr;
+  // Only the words kernel consults utf8/nbspace; nl_langinfo and getenv stay
+  // unread when -w is not requested, and WordsMode's defaults (utf8=false,
+  // nbspace=true) are inert because work.words is false too.
+  if ( opt.words ) {
+    // Like setlocale above: called once at startup, before any worker threads
+    // are spawned, so the thread-safety warnings do not apply here.
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    const char* codeset = nl_langinfo( CODESET );
+    work.wordsMode.utf8 =
+        codeset != nullptr && std::strcmp( codeset, "UTF-8" ) == 0;
+    // NOLINTNEXTLINE(concurrency-mt-unsafe)
+    work.wordsMode.nbspace = std::getenv( "POSIXLY_CORRECT" ) == nullptr;
+  }
 
   // No file arguments: count standard input. wc prints just the padded
   // count(s), with no name.
@@ -110,12 +122,22 @@ int main( int argc, char** argv )
   // QWC_FILES_PER_THREAD files) and small globs stay serial. A scanning
   // workload is heavy per file, so it uses as many workers as files (capped)
   // and leans on each file's own internal chunk-parallelism for the rest.
-  const u32 numThreads =
-      work.needsScan()
-          ? static_cast<u32>( std::min<usize>( numFiles, MAX_THREADS ) )
-          : static_cast<u32>( std::clamp<usize>(
-                numFiles / QWC_FILES_PER_THREAD, 1, MAX_THREADS
-            ) );
+  //
+  // Both branches collapse to numThreads=1 below their respective thresholds
+  // (scan: 1 file; no-scan: <2*QWC_FILES_PER_THREAD files, since the clamp
+  // bottom is 1). In those ranges maxThreads() cannot change the answer, so
+  // skip the sysconf -- the headline `qwc -c onefile` invocation calls it
+  // zero times.
+  u32 numThreads = 1;
+  if ( work.needsScan() ) {
+    if ( numFiles > 1 )
+      numThreads =
+          static_cast<u32>( std::min<usize>( numFiles, maxThreads() ) );
+  } else if ( numFiles >= 2 * usize{ QWC_FILES_PER_THREAD } ) {
+    numThreads = static_cast<u32>(
+        std::clamp<usize>( numFiles / QWC_FILES_PER_THREAD, 1, maxThreads() )
+    );
+  }
 
   const std::vector<Counts> output =
       mapFiles<Counts>( numFiles, numThreads, [&]( const usize idx ) {

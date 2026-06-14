@@ -17,7 +17,18 @@
 #include "maxlinelen.h"
 #include "words.h"
 
-static const u32 MAX_THREADS = std::thread::hardware_concurrency();
+// hardware_concurrency() runs a sysconf reading /sys/devices/system/cpu/online
+// on Linux; cache it in a function-local static so the cost is paid once on
+// first call and never on the bytes-only paths that bail before line ~263.
+// hardware_concurrency() can report 0 when it cannot tell, treated as 1 so the
+// thread count never collapses to zero.
+static u32 maxThreads()
+{
+  static const u32 n = std::thread::hardware_concurrency() > 0
+                           ? std::thread::hardware_concurrency()
+                           : 1u;
+  return n;
+}
 
 namespace {
 
@@ -122,9 +133,7 @@ void scanRangeThread(
     const int fd, const usize start, const usize size, const usize fileSize,
     const Workload* work, ScanState* out
 )
-{
-  scanRange( fd, start, size, fileSize, work, out, threadBuffer() );
-}
+{ scanRange( fd, start, size, fileSize, work, out, threadBuffer() ); }
 
 // Serial single-pass scan of a stream that can only be consumed once and whose
 // length fstat cannot give us up front: standard input, and any non-regular
@@ -194,9 +203,7 @@ Counts processFile(
     std::_Exit( 1 );
   }
 
-  struct stat st
-  {
-  };
+  struct stat st{};
   if ( fstat( fd, &st ) < 0 ) {
     std::fprintf( stderr, "Error stating file: %s\n", filename );
     std::_Exit( 1 );
@@ -244,9 +251,9 @@ Counts processFile(
       usize remaining = fileSize - off;
       radvisory ra{};
       ra.ra_offset = static_cast<i64>( off );
-      ra.ra_count =
-          static_cast<int>( std::min( remaining, static_cast<usize>( INT_MAX ) )
-          );
+      ra.ra_count = static_cast<int>(
+          std::min( remaining, static_cast<usize>( INT_MAX ) )
+      );
       fcntl( fd, F_RDADVISE, &ra );
       off += static_cast<usize>( ra.ra_count );
     }
@@ -261,7 +268,7 @@ Counts processFile(
   }
 
   u32 numThreads = static_cast<u32>( std::min(
-      static_cast<usize>( MAX_THREADS ),
+      static_cast<usize>( maxThreads() ),
       ( fileSize + bytesPerThread - 1 ) / bytesPerThread
   ) );
   numThreads = std::max( numThreads, 1u );

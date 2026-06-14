@@ -97,7 +97,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--qwc", required=True, help="branch qwc binary")
     ap.add_argument("--qwc-main", help="main qwc binary (omit when running on main)")
-    ap.add_argument("--uuwc", default="coreutils wc", help="uutils invocation")
+    ap.add_argument("--uuwc", default=None,
+                    help="uutils invocation (default: auto-detect 'uu-wc' or 'coreutils wc')")
     ap.add_argument("--gwc", default="wc", help="GNU wc invocation")
     ap.add_argument("--data", required=True,
                     help="corpus file, or a directory (all files in it are counted)")
@@ -125,11 +126,19 @@ def main() -> None:
     columns = [("qwc", args.qwc)]
     if args.qwc_main:
         columns.append(("main", args.qwc_main))
-    if have(args.uuwc):
-        columns.append(("uu-wc", args.uuwc))
+    # uutils ships as either a standalone 'uu-wc' or the multi-call 'coreutils
+    # wc' dispatcher, depending on distro packaging. Try both when not pinned.
+    uuwc = args.uuwc
+    if uuwc is None:
+        for candidate in ("uu-wc", "coreutils wc"):
+            if have(candidate):
+                uuwc = candidate
+                break
+    if uuwc and have(uuwc):
+        columns.append(("uu-wc", uuwc))
     else:
-        print(f"note: '{args.uuwc}' not found; skipping uu-wc column",
-              file=sys.stderr)
+        print(f"note: '{uuwc or 'uu-wc / coreutils wc'}' not found; "
+              "skipping uu-wc column", file=sys.stderr)
     if have(args.gwc):
         columns.append(("GNU wc", args.gwc))
     else:

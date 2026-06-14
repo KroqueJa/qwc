@@ -372,9 +372,7 @@ bool walkDir(
     // followed one step (stat) to see whether a regular file is behind it.
     unsigned char type = e->d_type;
     if ( type == DT_UNKNOWN || type == DT_LNK ) {
-      struct stat st
-      {
-      };
+      struct stat st{};
       if ( type == DT_UNKNOWN && lstat( path, &st ) == 0 ) {
         if ( S_ISDIR( st.st_mode ) )
           type = DT_DIR;
@@ -402,6 +400,12 @@ bool walkDir(
 
 bool collectFiles( Options& opt )
 {
+  // Without --recursive there is nothing to expand: every entry in opt.files
+  // is already a file argument straight from argv. Building a fresh vector and
+  // moving it over the old one would just be a pointer-copy round-trip, so
+  // bail before allocating anything.
+  if ( !opt.recursive ) return true;
+
   // With --recursive, a directory argument is replaced by every regular file
   // beneath it; plain file arguments and the top-level argument order are left
   // untouched. Files come back in directory-iteration order, which is
@@ -411,9 +415,7 @@ bool collectFiles( Options& opt )
   // wasted work on the file-heavy recursive runs.
   std::vector<const char*> expanded;
   for ( const char* path: opt.files ) {
-    struct stat st
-    {
-    };
+    struct stat st{};
     if ( opt.recursive && stat( path, &st ) == 0 && S_ISDIR( st.st_mode ) ) {
       if ( !walkDir( path, expanded, opt.ownedPaths ) ) {
         std::fprintf( stderr, "Error reading directory: %s\n", path );
@@ -521,9 +523,7 @@ void printResults( const Options& opt, const std::vector<Counts>& output )
     if ( opt.sortMode == SortMode::Size ) {
       sizes.resize( numFiles );
       for ( usize i = 0; i < numFiles; ++i ) {
-        struct stat st
-        {
-        };
+        struct stat st{};
         sizes[i] = stat( opt.files[i], &st ) == 0
                        ? static_cast<usize>( st.st_size )
                        : 0;
