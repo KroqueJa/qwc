@@ -5,6 +5,9 @@
 # Binaries
 qwc*
 
+# Caches
+benchmarks/__pycache__
+
 # CMake build artifacts
 build/
 build-release
