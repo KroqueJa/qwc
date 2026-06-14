@@ -80,8 +80,10 @@ TEST( WordsC, PrintabilityRule )
   EXPECT_EQ( wordsStr( " \x7F " ), 0u );   // DEL is not printable
   EXPECT_EQ( wordsStr( " \xFF " ), 0u );   // high byte: not printable in C
   EXPECT_EQ(
-      wordsStr( "a\xFF"
-                "b" ),
+      wordsStr(
+          "a\xFF"
+          "b"
+      ),
       1u
   );  // ...but word-constituent
 }
