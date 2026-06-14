@@ -187,6 +187,15 @@ function( qwc_configure target )
   # ships in the dyld shared cache anyway.
   if( NOT APPLE )
     target_link_options( ${target} PRIVATE -static-libstdc++ -static-libgcc )
+
+    # Dead-strip unused functions and data at link time. With static libstdc++
+    # the image is ~354 KB, big enough that the kernel pays ~276 minor faults
+    # to map the code on startup vs wc's 96 (~50-90 us). Putting each function
+    # and data object in its own section and letting the linker garbage-collect
+    # the unreferenced ones trims the image without changing any source.
+    # GNU ld / lld syntax; Apple's ld64 uses -Wl,-dead_strip on its own.
+    target_compile_options( ${target} PRIVATE -ffunction-sections -fdata-sections )
+    target_link_options( ${target} PRIVATE -Wl,--gc-sections )
   endif()
 
   # Run the clang-tidy gate on this target's own sources (set per-target, not

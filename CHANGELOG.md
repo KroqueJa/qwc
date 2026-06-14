@@ -25,6 +25,19 @@ not generated from commit messages.
   statically, removing the dynamic-loader relocation and page-fault cost that
   made up most of the gap to `wc`, and all output goes through stdio instead
   of iostreams. Output is byte-identical to before.
+- Bare `qwc -c <file>` is now faster than GNU `wc -c` on the measurement box
+  — the first time qwc has measured ahead on the bytes-only invocation. Four
+  small cuts closed the residual ~0.2 ms left over after the static-link
+  work: `std::thread::hardware_concurrency()` no longer runs as a static
+  initializer (the sysconf reading `/sys/devices/system/cpu/online` is now
+  paid lazily, and the lone-file `-c` and `-l` paths skip it entirely);
+  `setlocale(LC_CTYPE, "")`, `nl_langinfo(CODESET)`, and
+  `getenv("POSIXLY_CORRECT")` are gated on `-w`/`-m`, so bare `-c`/`-l`
+  never fault in libc's cold locale pages; `collectFiles` short-circuits
+  when `--recursive` is off; and the binary is built with
+  `-ffunction-sections -fdata-sections -Wl,--gc-sections` (GNU ld / lld
+  only), shrinking the ~276 minor page faults the kernel paid to map the
+  354 KB static image on startup. Counts and output are unchanged.
 
 ### Changed
 

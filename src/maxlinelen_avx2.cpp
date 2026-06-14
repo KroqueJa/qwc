@@ -185,8 +185,8 @@ void maxLineLenChars(
         _mm256_loadu_si256( reinterpret_cast<const __m256i*>( tmp ) );
 
     if ( _mm256_movemask_epi8( _mm256_cmpeq_epi8( v, newline ) ) != 0 ) {
-      flushRun(
-      );  // realize the run (into cur and charCount) before the newline
+      flushRun();  // realize the run (into cur and charCount) before the
+                   // newline
       for ( int i = 0; i < 32; ++i ) stepBoth( tmp[i], s, charCount );
     } else {
       contAcc = _mm256_sub_epi8(

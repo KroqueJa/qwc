@@ -180,8 +180,8 @@ void maxLineLenChars(
     const uint8x16_t v = vld1q_u8( tmp );
 
     if ( vmaxvq_u8( vceqq_u8( v, newline ) ) != 0 ) {
-      flushRun(
-      );  // realize the run (into cur and charCount) before the newline
+      flushRun();  // realize the run (into cur and charCount) before the
+                   // newline
       for ( int i = 0; i < 16; ++i ) stepBoth( tmp[i], s, charCount );
     } else {
       contAcc =

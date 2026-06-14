@@ -1,0 +1,13 @@
+  sudo cpupower frequency-set -g performance
+
+  cd /home/jiku/CLionProjects/qwc
+
+  python3 benchmarks/bench.py \
+    --qwc ./qwc --qwc-main ./qwc-main \
+    --data benchmarks/test-data/big.txt \
+    --runs 50 --title "Single large file"
+
+  python3 benchmarks/bench.py \
+    --qwc ./qwc --qwc-main ./qwc-main \
+    --data benchmarks/test-data/many \
+    --runs 50 --title "Many small files"
