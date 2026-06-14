@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #include "processfile.h"
 
 #include <fcntl.h>

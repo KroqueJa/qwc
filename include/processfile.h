@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #pragma once
 #include "typedef.h"
 #include "words.h"

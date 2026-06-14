@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #pragma once
 #include <cstddef>
 #include <cstdint>

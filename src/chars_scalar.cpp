@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #include "chars.h"
 
 // Naive, scalar character counter. Like words_scalar it is unvectorised by

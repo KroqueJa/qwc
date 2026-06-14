@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #include "countlines.h"
 
 usize count( const char* buffer, const usize length, const char target )

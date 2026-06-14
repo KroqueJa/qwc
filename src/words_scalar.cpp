@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #include "words.h"
 #include "words_kernel.h"
 

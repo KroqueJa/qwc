@@ -1,3 +1,6 @@
+/*
+ * Copyright Ji Krochmal 2026
+ */
 #include <arm_neon.h>
 
 #include <algorithm>
