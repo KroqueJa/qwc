@@ -1,9 +1,9 @@
 """
 Core engine for the qwc-vs-wc conformance suite.
 
-qwc aims to be a drop-in replacement for GNU `wc` -- the `wc` on Linux, in CI and
-in virtually every container -- so "correct" is defined as "produces the same
-counts as GNU `wc`" on real text. The carve-out is deliberately narrow: on binary
+qwc aims to be a drop-in replacement for GNU `wc`, so "correct" is defined
+as "produces the same counts as GNU `wc`" on real text. The oracle is verified
+explicitly because the system `wc` may be uutils or BSD. The carve-out is deliberately narrow: on binary
 / invalid-UTF-8 input, where word splitting and `-L` stop being byte-defined and
 `wc`'s answer depends on the C library's locale tables, qwc is permitted its own
 fast, locale-independent interpretation and the suite does not demand agreement
@@ -47,6 +47,8 @@ import dataclasses
 import os
 import subprocess
 from typing import Optional
+
+from session import find_gnu_wc
 
 
 # ---------------------------------------------------------------------------
@@ -328,7 +330,7 @@ def compare(
     selection and the "total" row are still enforced via parse_output.
     """
     wc_run = run_tool(
-        "wc", mode.wc, files=files, stdin=stdin, locale=locale
+        find_gnu_wc(), mode.wc, files=files, stdin=stdin, locale=locale
     )
     qwc_run = run_tool(
         qwc_bin, mode.qwc, files=files, stdin=stdin,

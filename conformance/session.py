@@ -6,6 +6,7 @@ Environment discovery shared by run.py and test_conformance.py: where is the
 from __future__ import annotations
 
 import dataclasses
+import functools
 import os
 import shutil
 import subprocess
@@ -62,9 +63,25 @@ def find_qwc() -> str:
     )
 
 
-def _wc_present() -> None:
-    if shutil.which("wc") is None:
-        raise SystemExit("System `wc` not found on PATH; it is the oracle.")
+@functools.lru_cache(maxsize=1)
+def find_gnu_wc() -> str:
+    """Resolve and verify the oracle, including Ubuntu's renamed GNU binary."""
+    override = os.environ.get("QWC_CONF_WC")
+    candidates = [override] if override else ["gnuwc", "gwc", "wc"]
+    for candidate in candidates:
+        path = shutil.which(candidate)
+        if path is None:
+            continue
+        proc = subprocess.run(
+            [path, "--version"], capture_output=True,
+            env=dict(os.environ, LC_ALL="C"), check=False,
+        )
+        if proc.returncode == 0 and b"GNU coreutils" in proc.stdout:
+            return path
+    raise SystemExit(
+        "GNU wc is required as the conformance oracle. Install GNU coreutils "
+        "or set QWC_CONF_WC to its wc executable (uutils/BSD wc is not accepted)."
+    )
 
 
 def _wc_char_count(text: bytes, locale: str) -> Optional[int]:
@@ -74,7 +91,7 @@ def _wc_char_count(text: bytes, locale: str) -> Optional[int]:
     env["LANG"] = locale
     try:
         proc = subprocess.run(
-            ["wc", "-m"], input=text, capture_output=True, env=env
+            [find_gnu_wc(), "-m"], input=text, capture_output=True, env=env
         )
     except OSError:
         return None
@@ -100,7 +117,7 @@ def pick_utf8_locale() -> Optional[str]:
 
 
 def build_session() -> Session:
-    _wc_present()
+    find_gnu_wc()
     qwc_bin = find_qwc()
     utf8 = None if os.environ.get("QWC_CONF_NO_UTF8") else pick_utf8_locale()
     return Session(

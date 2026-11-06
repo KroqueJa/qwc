@@ -29,7 +29,7 @@ from typing import Iterator, Optional
 
 import corpus
 import wc_harness as H
-from session import build_session, Session
+from session import build_session, Session, find_gnu_wc
 
 
 # A bytes-per-thread of 1 forces qwc to split work into as many chunks as it has
@@ -171,6 +171,7 @@ def main() -> int:
     bpt_stress = not (args.quick or args.no_bpt_stress)
 
     print("qwc conformance suite")
+    print(f"  GNU wc oracle : {find_gnu_wc()}")
     print(f"  qwc binary    : {session.qwc_bin}")
     print(f"  C locale      : {session.c_locale}")
     print(f"  UTF-8 locale  : {session.utf8_locale or '(none available -- UTF-8 regime skipped)'}")

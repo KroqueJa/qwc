@@ -1,12 +1,17 @@
 # qwc conformance suite
 
-qwc exists to be a faster, drop-in replacement for **GNU `wc`** — the `wc` on
-Linux, in CI, and in virtually every container, and the one nearly every script
-and `awk` pipeline was written against. A replacement is only worth anything if
-you can swap it in without noticing, so the bar this suite holds qwc to is
-simple: **for every input and every shared mode, qwc must produce what GNU `wc`
-produces — on real text.** These tests are the executable definition of that
-promise.
+The suite compares qwc with **GNU `wc`**, not whichever implementation the
+operating system installs as `wc`. Ubuntu 26.04 defaults to uutils; its GNU
+binary is named `gnuwc`.
+
+Discovery checks `gnuwc`, `gwc`, then `wc`, accepting only a binary whose
+`--version` identifies GNU coreutils. Set `QWC_CONF_WC=/path/to/gnu/wc` to
+select an explicit oracle; overrides are verified too. The runner prints the
+selected path. Locale probes and all comparisons use that same binary.
+Missing GNU coreutils fails early rather than producing misleading conformance
+failures. Sanitizer checks and the existing parity policy are unchanged.
+
+Run oracle-discovery regression tests with `python3 conformance/test_oracle.py`.
 
 ## Conformance goals
 
