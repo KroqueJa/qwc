@@ -553,3 +553,30 @@ TEST( WordsSeamFacts, EmptyRangeReportsNothing )
   EXPECT_FALSE( ws.sawByte );
   EXPECT_EQ( ws.words, 0u );
 }
+
+// Exercise every two-/three-byte encoding, including surrogate encodings,
+// across SIMD edges. A barren prefix exposes accidental printable promotion.
+TEST( WordsUtf8, RefinedGroupsAcrossVectorEdges )
+{
+  for ( u32 cp = 0x80; cp < 0x10000; ++cp ) {
+    std::string encoded;
+    if ( cp < 0x800 ) {
+      encoded += static_cast<char>( 0xC0 | ( cp >> 6 ) );
+    } else {
+      encoded += static_cast<char>( 0xE0 | ( cp >> 12 ) );
+      encoded += static_cast<char>( 0x80 | ( ( cp >> 6 ) & 63 ) );
+    }
+    encoded += static_cast<char>( 0x80 | ( cp & 63 ) );
+    for ( usize offset: { 0u, 14u, 15u, 30u, 31u } ) {
+      const std::string s = std::string( offset, '\1' ) + encoded + " \1" +
+                            encoded + "x " + std::string( 64, ' ' );
+      for ( const WordsMode mode: { kUtf8, kUtf8Posix } ) {
+        const usize expected =
+            refWords( s, true, mode.nbspace );
+        ASSERT_EQ( wordsStr( s, mode ), expected ) << cp << " at " << offset;
+        ASSERT_EQ( wordsSplit( s, offset + 1, mode ), expected )
+            << cp << " split at " << offset + 1;
+      }
+    }
+  }
+}

@@ -2420,6 +2420,182 @@ scattered-ragged fuzz iters × both dialects × swept chunk sizes,
 **Port status: unchanged — driver-only, both ISAs shipped together.** The open
 follow-up is the SIMD enumeration kernel to close the `--all`→`--fast` gap.
 
+## Multi-file concurrency benchmark (2026-11-06)
+
+`bench-concurrency.py` tests the interaction between the outer file worker
+pool and the independent inner range workers. Run from the repository root:
+
+```sh
+bash scripts/bench/concurrency.sh --json-out /tmp/concurrency.json
+# Optional candidate/baseline comparison, with both scheduling settings:
+python3 benchmarks/bench-concurrency.py --qwc ./qwc \
+  --baseline /path/to/baseline-qwc --json-out /tmp/concurrency-ab.json
+```
+
+The default corpus physically writes 5 GiB under ignored
+`benchmarks/test-data/concurrency`: sixteen distinct 256 MiB files plus a
+1 GiB outlier. Each contains deterministic 32-byte ASCII lines with four
+words. Cases are one file, four files, sixteen files, and the outlier followed
+by seven ordinary files. The uneven case deliberately tests a long tail.
+Files are rewritten on every invocation; generation is outside timing.
+The files remain on disk for inspection. `--file-mib` changes their size
+(minimum 128 MiB, above the default inner-thread threshold).
+
+Each case measures `-l`, `-w`, and default counting in `LC_ALL=C`:
+
+- `default`: unmodified thread scheduling, 64 MiB per inner worker.
+- `file-only`: same binary, `--bytes-per-thread` greater than the largest
+  file, so the outer workers scan their files inline.
+
+The script randomizes variant order with a fixed seed, runs two warmups and
+seven measured repetitions per cell, and checks every output row and total
+against arithmetic counts. It records all wall-time, child CPU-time, and
+voluntary/involuntary context-switch samples, plus medians, commands, binary
+SHA-256, host, and logical CPU count. These are whole-process measurements;
+startup and captured output are included. Warm-cache intent is not a promise
+that the corpus fits the host's available RAM. This synthetic ASCII/C-locale
+profile isolates scheduling; it does not establish Unicode, cold-storage,
+or cross-platform results. Cases have different total byte counts: compare
+scheduling settings *within* a case, not raw time across cases.
+
+### Initial measurement
+
+Counting code at `0aac49f1b914a7c221bb7b771b40f3f8bfc28728`, freshly built
+with AppleClang 21.0.0, Release, NEON and LTO; macOS 26.6.2 arm64, 14 logical
+CPUs. No counting implementation changes. Raw samples and binary hash are in
+[`concurrency-initial.json`](concurrency-initial.json).
+
+Median wall milliseconds, default scheduling / file-only:
+
+| Case | `-l` | `-w` | Default counting |
+| --- | ---: | ---: | ---: |
+| One × 256 MiB | 7.42 / 17.22 | 15.17 / 46.09 | 15.62 / 49.04 |
+| Four × 256 MiB | 11.73 / 19.43 | 25.03 / 47.77 | 26.57 / 52.40 |
+| Sixteen × 256 MiB | 33.87 / 39.95 | 77.45 / 100.26 | 80.35 / 105.30 |
+| 1 GiB + seven × 256 MiB | 24.61 / 64.22 | 58.62 / 183.11 | 60.62 / 188.57 |
+
+Disabling inner threads **loses in every cell**. On sixteen-file default
+counting, it reduces median CPU time from 960.50 to 914.30 ms and involuntary
+switches from 920 to 622, but increases wall time from 80.35 to 105.30 ms.
+Thus context-switch reduction alone does not imply a throughput improvement.
+The uneven case also demonstrates the cost of leaving an entire large file
+on one worker. This falsifies the simple proposed shortcut on this host and
+corpus; it does not test a bounded pool dynamically scheduling file ranges.
+That design must retain intra-file parallelism and beat these baselines.
+
+## UTF-8 word fallback probe (2026-11-06)
+
+```sh
+python3 benchmarks/bench-unicode-fallback.py --qwc build-worker-budget/qwc \
+  --json-out benchmarks/unicode-fallback-initial.json
+```
+
+This probe holds file length (256 MiB), word count, ASCII separator positions,
+and token byte width constant. It replaces `xxxx` in a 64-byte ASCII line with
+`éé`, `αα`, `中x`, `、x`, or `😀`, once per 1, 16, or 256 lines. Each case is
+written to the same reusable file under ignored `benchmarks/test-data` before
+measurement. Two warmups and seven measured runs compare serial scanning
+(`--bytes-per-thread` above file size) with default threading. Case and variant
+order are randomized with seed 42. Every invocation's word count is checked
+against the generated corpus's arithmetic count. Locale is explicitly
+`en_US.UTF-8` and validated as UTF-8. Raw wall-time samples, binary hash, host
+and parameters are in [`unicode-fallback-initial.json`](unicode-fallback-initial.json).
+
+The initial run uses the same unmodified counting binary as the concurrency
+experiment above, on macOS arm64, 14 logical CPUs. Median milliseconds for a
+substitution in **every line**:
+
+| Token | Relevant path in the NEON implementation | Serial | Default threading |
+| --- | --- | ---: | ---: |
+| `xxxx` | ASCII | 48.03 | 15.10 |
+| `éé` | Clean two-byte leads | 60.87 | 18.91 |
+| `中x` | Clean three-byte sub-row | 65.10 | 19.42 |
+| `αα` | Dirty two-byte lead → scalar block | 169.04 | 46.67 |
+| `、x` | Dirty three-byte sub-row → scalar block | 173.63 | 47.68 |
+| `😀` | Four-byte sequence → scalar block | 158.09 | 43.45 |
+
+At one substitution per 16 lines, Greek, punctuation and emoji take
+57.97–58.88 ms serial versus 48.65 ms ASCII (about 19–21% slower).
+At one per 256 lines their serial times are 48.89–50.00 ms versus 48.42 ms
+ASCII: small differences that should not be treated as established wins or
+losses from this one run. The frequent-substitution penalty is large enough
+to justify a focused optimization experiment.
+
+Code evidence: `words_neon.cpp` rejects a two-byte lead if `kCandLead` marks
+any member of that group as problematic; three-byte sequences use the same
+conservative rule at `(lead, first-continuation)` granularity. Greek `α`
+shares lead CE with the unassigned U+03A2; `、` shares E3 80 with separator
+U+3000. Neither tested character is itself exceptional. Four-byte leads are
+excluded from the vector model entirely. Rejection calls `scalarUtf8` on a
+whole 16-byte block (possibly consuming a code point beyond its end), so
+surrounding ASCII also pays for scalar decoding, classification and state
+updates. AVX2 has the analogous fallback over 32-byte blocks, but was not
+measured here. These are code-path deductions, not sampled profiler data.
+
+**Next hypothesis:** when an otherwise structurally valid block contains a
+dirty two-/three-byte group, classify the actual code point before rejecting
+the block. If it is printable and non-separating, the existing printable-byte
+mask treatment can remain valid; genuinely exceptional characters still
+fall back. This could rescue ordinary Greek and Japanese punctuation without
+first building a full four-byte SIMD decoder. The extra classification cost
+must be measured against the saved scalar block work. Preserve strict UTF-8
+validation, separator modes, barren runs and chunk/block seam behavior.
+
+Limitations: this probe uses repeated synthetic lines, fixed token placement,
+one UTF-8 locale and one ISA. It establishes headroom for these shapes, not
+an optimization speedup. Before accepting a change, sweep token alignment,
+test dense and mixed scripts, malformed sequences, Unicode separators and
+unassigned code points, and verify that ASCII and clean Unicode do not regress.
+
+### Exact-character refinement experiment
+
+Implemented the refinement in both NEON variants and AVX2, sharing strict
+`printableSequence` decoding. It only rescues printable, non-separator
+characters; the separator check uses the larger coreutils set, conservatively
+falling back even in POSIX mode. Four-byte sequences remain scalar.
+
+Reproduce the interleaved A/B (save an unmodified binary before rebuilding):
+
+```sh
+python3 benchmarks/bench-unicode-fallback.py --qwc build-worker-budget/qwc \
+  --baseline /private/tmp/qwc-unicode-baseline \
+  --json-out benchmarks/unicode-fallback-ab.json
+```
+
+Raw samples and both binary hashes are in
+[`unicode-fallback-ab.json`](unicode-fallback-ab.json). Same host, 256 MiB,
+seven measured runs, two warmups per variant. Frequent substitutions:
+
+| Token | Serial baseline → candidate ms | Default-threaded baseline → candidate ms |
+| --- | ---: | ---: |
+| ASCII | 48.74 → 49.61 | 14.91 → 14.97 |
+| Latin | 61.55 → 62.02 | 18.63 → 18.45 |
+| CJK | 65.83 → 66.22 | 19.40 → 19.58 |
+| Greek | 173.43 → 80.22 | 46.59 → 23.29 |
+| Japanese punctuation | 172.02 → 74.62 | 48.50 → 21.91 |
+| Emoji | 158.95 → 160.12 | 43.19 → 44.08 |
+
+Greek improves 2.16× serial / 2.00× threaded; punctuation improves 2.31× /
+2.21×. At one substitution per 16 lines, serial Greek improves from 59.47 to
+53.13 ms and punctuation from 58.81 to 52.59 ms (about 12%). Sparse cases
+remain close. Controls include small regressions (about 1–2% in several
+cells), so this is a targeted win, not evidence of universal improvement.
+The fixed-alignment synthetic corpus remains a limitation; no x86 performance
+claim follows from the AVX2 source change.
+
+The normal Release test suite passed (265 discovered tests, one Linux-only
+procfs test skipped). A new exhaustive regression test covers all two-/three-
+byte code-point encodings, including surrogate encodings, five vector-edge
+placements, a mid-sequence buffer split, barren prefixes and both separator
+modes against the scalar reference. Existing malformed-input and seam tests
+remain in the suite.
+
+ASan+UBSan Debug runs passed all 45 word/classifier-related tests for both
+NEON nibble ON and OFF. AVX2 was updated equivalently but cannot be executed
+on this arm64 host. `git diff --check` passed. The pinned clang-format-22
+gate was unavailable locally (the default wrapper is broken; the installed
+LLVM formatter is version 23), so formatting has not passed that gate.
+
 ## Reproducing
 
 The per-core sweep uses a throwaway harness that `#include`s the kernel headers

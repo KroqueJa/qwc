@@ -1,0 +1,1647 @@
+{
+  "host": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "logical_cpus": 14,
+  "locale": "C",
+  "file_mib": 256,
+  "runs": 7,
+  "warmup": 2,
+  "seed": 42,
+  "binaries": {
+    "current": {
+      "path": "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+      "sha256": "25d1fafc04a2adcb68e36caabff89ff89c2ee6b9cd0ad1b05c2ed8ff31536628"
+    }
+  },
+  "cells": [
+    {
+      "case": "one",
+      "mode": "lines",
+      "variant": "current/default",
+      "bytes": 268435456,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.0076326249982230365,
+          "cpu_s": 0.019614000000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 23
+        },
+        {
+          "wall_s": 0.007408125005895272,
+          "cpu_s": 0.019265000000000018,
+          "voluntary_switches": 0,
+          "involuntary_switches": 27
+        },
+        {
+          "wall_s": 0.007008582993876189,
+          "cpu_s": 0.01847199999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 19
+        },
+        {
+          "wall_s": 0.007435999985318631,
+          "cpu_s": 0.018700999999999995,
+          "voluntary_switches": 0,
+          "involuntary_switches": 17
+        },
+        {
+          "wall_s": 0.007311583001865074,
+          "cpu_s": 0.019247999999999987,
+          "voluntary_switches": 0,
+          "involuntary_switches": 44
+        },
+        {
+          "wall_s": 0.007595041999593377,
+          "cpu_s": 0.019077999999999984,
+          "voluntary_switches": 0,
+          "involuntary_switches": 16
+        },
+        {
+          "wall_s": 0.007419333996949717,
+          "cpu_s": 0.019837999999999995,
+          "voluntary_switches": 0,
+          "involuntary_switches": 17
+        }
+      ],
+      "median": {
+        "wall_s": 0.007419333996949717,
+        "cpu_s": 0.019247999999999987,
+        "voluntary_switches": 0,
+        "involuntary_switches": 19
+      }
+    },
+    {
+      "case": "one",
+      "mode": "lines",
+      "variant": "current/file-only",
+      "bytes": 268435456,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.018139583989977837,
+          "cpu_s": 0.017050999999999997,
+          "voluntary_switches": 0,
+          "involuntary_switches": 7
+        },
+        {
+          "wall_s": 0.017217249987879768,
+          "cpu_s": 0.016265,
+          "voluntary_switches": 0,
+          "involuntary_switches": 4
+        },
+        {
+          "wall_s": 0.016746750014135614,
+          "cpu_s": 0.015560000000000018,
+          "voluntary_switches": 0,
+          "involuntary_switches": 6
+        },
+        {
+          "wall_s": 0.016950209013884887,
+          "cpu_s": 0.015809000000000017,
+          "voluntary_switches": 0,
+          "involuntary_switches": 5
+        },
+        {
+          "wall_s": 0.016949083015788347,
+          "cpu_s": 0.015816000000000024,
+          "voluntary_switches": 0,
+          "involuntary_switches": 6
+        },
+        {
+          "wall_s": 0.01734491699608043,
+          "cpu_s": 0.016197000000000017,
+          "voluntary_switches": 0,
+          "involuntary_switches": 7
+        },
+        {
+          "wall_s": 0.017270749987801537,
+          "cpu_s": 0.016129000000000004,
+          "voluntary_switches": 0,
+          "involuntary_switches": 6
+        }
+      ],
+      "median": {
+        "wall_s": 0.017217249987879768,
+        "cpu_s": 0.016129000000000004,
+        "voluntary_switches": 0,
+        "involuntary_switches": 6
+      }
+    },
+    {
+      "case": "one",
+      "mode": "words",
+      "variant": "current/default",
+      "bytes": 268435456,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.014913582999724895,
+          "cpu_s": 0.04882500000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 16
+        },
+        {
+          "wall_s": 0.015316083008656278,
+          "cpu_s": 0.049764000000000086,
+          "voluntary_switches": 0,
+          "involuntary_switches": 22
+        },
+        {
+          "wall_s": 0.015011792012955993,
+          "cpu_s": 0.04964200000000002,
+          "voluntary_switches": 0,
+          "involuntary_switches": 17
+        },
+        {
+          "wall_s": 0.015221165987895802,
+          "cpu_s": 0.04896999999999996,
+          "voluntary_switches": 0,
+          "involuntary_switches": 25
+        },
+        {
+          "wall_s": 0.014814833004493266,
+          "cpu_s": 0.048424000000000134,
+          "voluntary_switches": 0,
+          "involuntary_switches": 23
+        },
+        {
+          "wall_s": 0.015316125005483627,
+          "cpu_s": 0.05030299999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 21
+        },
+        {
+          "wall_s": 0.01517058297758922,
+          "cpu_s": 0.048281999999999936,
+          "voluntary_switches": 0,
+          "involuntary_switches": 31
+        }
+      ],
+      "median": {
+        "wall_s": 0.01517058297758922,
+        "cpu_s": 0.04896999999999996,
+        "voluntary_switches": 0,
+        "involuntary_switches": 22
+      }
+    },
+    {
+      "case": "one",
+      "mode": "words",
+      "variant": "current/file-only",
+      "bytes": 268435456,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.04781970800831914,
+          "cpu_s": 0.04665399999999997,
+          "voluntary_switches": 0,
+          "involuntary_switches": 9
+        },
+        {
+          "wall_s": 0.04717224999330938,
+          "cpu_s": 0.04599999999999993,
+          "voluntary_switches": 0,
+          "involuntary_switches": 8
+        },
+        {
+          "wall_s": 0.045257083023898304,
+          "cpu_s": 0.044177999999999884,
+          "voluntary_switches": 0,
+          "involuntary_switches": 7
+        },
+        {
+          "wall_s": 0.04609454199089669,
+          "cpu_s": 0.044852,
+          "voluntary_switches": 0,
+          "involuntary_switches": 5
+        },
+        {
+          "wall_s": 0.04754845899879001,
+          "cpu_s": 0.046391000000000016,
+          "voluntary_switches": 0,
+          "involuntary_switches": 8
+        },
+        {
+          "wall_s": 0.044885416980832815,
+          "cpu_s": 0.04372599999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 8
+        },
+        {
+          "wall_s": 0.04585416699410416,
+          "cpu_s": 0.04472100000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 6
+        }
+      ],
+      "median": {
+        "wall_s": 0.04609454199089669,
+        "cpu_s": 0.044852,
+        "voluntary_switches": 0,
+        "involuntary_switches": 8
+      }
+    },
+    {
+      "case": "one",
+      "mode": "default",
+      "variant": "current/default",
+      "bytes": 268435456,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.01579850001144223,
+          "cpu_s": 0.051754999999999884,
+          "voluntary_switches": 0,
+          "involuntary_switches": 33
+        },
+        {
+          "wall_s": 0.015287457994418219,
+          "cpu_s": 0.0504079999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 21
+        },
+        {
+          "wall_s": 0.016177707992028445,
+          "cpu_s": 0.051595999999999975,
+          "voluntary_switches": 0,
+          "involuntary_switches": 20
+        },
+        {
+          "wall_s": 0.015247208008076996,
+          "cpu_s": 0.0500919999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 22
+        },
+        {
+          "wall_s": 0.01558258300065063,
+          "cpu_s": 0.05141000000000007,
+          "voluntary_switches": 0,
+          "involuntary_switches": 32
+        },
+        {
+          "wall_s": 0.016183875006390736,
+          "cpu_s": 0.052389999999999826,
+          "voluntary_switches": 0,
+          "involuntary_switches": 22
+        },
+        {
+          "wall_s": 0.015624791994923726,
+          "cpu_s": 0.05173299999999992,
+          "voluntary_switches": 0,
+          "involuntary_switches": 31
+        }
+      ],
+      "median": {
+        "wall_s": 0.015624791994923726,
+        "cpu_s": 0.051595999999999975,
+        "voluntary_switches": 0,
+        "involuntary_switches": 22
+      }
+    },
+    {
+      "case": "one",
+      "mode": "default",
+      "variant": "current/file-only",
+      "bytes": 268435456,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.04816104201017879,
+          "cpu_s": 0.04698499999999983,
+          "voluntary_switches": 0,
+          "involuntary_switches": 7
+        },
+        {
+          "wall_s": 0.04904337500920519,
+          "cpu_s": 0.0478240000000002,
+          "voluntary_switches": 0,
+          "involuntary_switches": 8
+        },
+        {
+          "wall_s": 0.05006020897417329,
+          "cpu_s": 0.04869699999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 8
+        },
+        {
+          "wall_s": 0.04984091597725637,
+          "cpu_s": 0.04855599999999993,
+          "voluntary_switches": 0,
+          "involuntary_switches": 9
+        },
+        {
+          "wall_s": 0.0495940409891773,
+          "cpu_s": 0.04851899999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 5
+        },
+        {
+          "wall_s": 0.048545500001637265,
+          "cpu_s": 0.04733699999999996,
+          "voluntary_switches": 0,
+          "involuntary_switches": 8
+        },
+        {
+          "wall_s": 0.04873245899216272,
+          "cpu_s": 0.04752299999999987,
+          "voluntary_switches": 0,
+          "involuntary_switches": 7
+        }
+      ],
+      "median": {
+        "wall_s": 0.04904337500920519,
+        "cpu_s": 0.0478240000000002,
+        "voluntary_switches": 0,
+        "involuntary_switches": 8
+      }
+    },
+    {
+      "case": "four",
+      "mode": "lines",
+      "variant": "current/default",
+      "bytes": 1073741824,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.012304624979151413,
+          "cpu_s": 0.08871700000000016,
+          "voluntary_switches": 0,
+          "involuntary_switches": 93
+        },
+        {
+          "wall_s": 0.011906125000678003,
+          "cpu_s": 0.09286099999999986,
+          "voluntary_switches": 0,
+          "involuntary_switches": 97
+        },
+        {
+          "wall_s": 0.01136791700264439,
+          "cpu_s": 0.09477000000000002,
+          "voluntary_switches": 0,
+          "involuntary_switches": 123
+        },
+        {
+          "wall_s": 0.011726041993824765,
+          "cpu_s": 0.08917700000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 85
+        },
+        {
+          "wall_s": 0.011293000017758459,
+          "cpu_s": 0.09074999999999989,
+          "voluntary_switches": 0,
+          "involuntary_switches": 104
+        },
+        {
+          "wall_s": 0.012044250004692003,
+          "cpu_s": 0.0859700000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 121
+        },
+        {
+          "wall_s": 0.01158154199947603,
+          "cpu_s": 0.09481799999999985,
+          "voluntary_switches": 0,
+          "involuntary_switches": 125
+        }
+      ],
+      "median": {
+        "wall_s": 0.011726041993824765,
+        "cpu_s": 0.09074999999999989,
+        "voluntary_switches": 0,
+        "involuntary_switches": 104
+      }
+    },
+    {
+      "case": "four",
+      "mode": "lines",
+      "variant": "current/file-only",
+      "bytes": 1073741824,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.019425041013164446,
+          "cpu_s": 0.06683200000000022,
+          "voluntary_switches": 0,
+          "involuntary_switches": 29
+        },
+        {
+          "wall_s": 0.018955292005557567,
+          "cpu_s": 0.06591300000000011,
+          "voluntary_switches": 0,
+          "involuntary_switches": 26
+        },
+        {
+          "wall_s": 0.019031417003134266,
+          "cpu_s": 0.06563799999999986,
+          "voluntary_switches": 0,
+          "involuntary_switches": 28
+        },
+        {
+          "wall_s": 0.019205792021239176,
+          "cpu_s": 0.06595600000000013,
+          "voluntary_switches": 0,
+          "involuntary_switches": 22
+        },
+        {
+          "wall_s": 0.019636290991911665,
+          "cpu_s": 0.06771400000000005,
+          "voluntary_switches": 0,
+          "involuntary_switches": 29
+        },
+        {
+          "wall_s": 0.01947925001149997,
+          "cpu_s": 0.06612400000000007,
+          "voluntary_switches": 0,
+          "involuntary_switches": 34
+        },
+        {
+          "wall_s": 0.019429125008173287,
+          "cpu_s": 0.0672609999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 30
+        }
+      ],
+      "median": {
+        "wall_s": 0.019425041013164446,
+        "cpu_s": 0.06612400000000007,
+        "voluntary_switches": 0,
+        "involuntary_switches": 29
+      }
+    },
+    {
+      "case": "four",
+      "mode": "words",
+      "variant": "current/default",
+      "bytes": 1073741824,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.024246249988209456,
+          "cpu_s": 0.2216269999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 178
+        },
+        {
+          "wall_s": 0.025028083997312933,
+          "cpu_s": 0.21969899999999942,
+          "voluntary_switches": 0,
+          "involuntary_switches": 154
+        },
+        {
+          "wall_s": 0.025137416989309713,
+          "cpu_s": 0.21499200000000007,
+          "voluntary_switches": 0,
+          "involuntary_switches": 104
+        },
+        {
+          "wall_s": 0.02502012500190176,
+          "cpu_s": 0.2252869999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 175
+        },
+        {
+          "wall_s": 0.024711917008971795,
+          "cpu_s": 0.22687299999999988,
+          "voluntary_switches": 0,
+          "involuntary_switches": 211
+        },
+        {
+          "wall_s": 0.025786957994569093,
+          "cpu_s": 0.22467799999999993,
+          "voluntary_switches": 0,
+          "involuntary_switches": 196
+        },
+        {
+          "wall_s": 0.02507149998564273,
+          "cpu_s": 0.22359799999999952,
+          "voluntary_switches": 0,
+          "involuntary_switches": 198
+        }
+      ],
+      "median": {
+        "wall_s": 0.025028083997312933,
+        "cpu_s": 0.22359799999999952,
+        "voluntary_switches": 0,
+        "involuntary_switches": 178
+      }
+    },
+    {
+      "case": "four",
+      "mode": "words",
+      "variant": "current/file-only",
+      "bytes": 1073741824,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.047282166982768103,
+          "cpu_s": 0.1763100000000004,
+          "voluntary_switches": 0,
+          "involuntary_switches": 51
+        },
+        {
+          "wall_s": 0.04870899999514222,
+          "cpu_s": 0.18089100000000036,
+          "voluntary_switches": 0,
+          "involuntary_switches": 26
+        },
+        {
+          "wall_s": 0.0477263749926351,
+          "cpu_s": 0.176307,
+          "voluntary_switches": 0,
+          "involuntary_switches": 51
+        },
+        {
+          "wall_s": 0.04923962501925416,
+          "cpu_s": 0.18564399999999948,
+          "voluntary_switches": 0,
+          "involuntary_switches": 52
+        },
+        {
+          "wall_s": 0.047964416997274384,
+          "cpu_s": 0.17915600000000031,
+          "voluntary_switches": 0,
+          "involuntary_switches": 40
+        },
+        {
+          "wall_s": 0.047438333014724776,
+          "cpu_s": 0.17816199999999993,
+          "voluntary_switches": 0,
+          "involuntary_switches": 47
+        },
+        {
+          "wall_s": 0.04776891699293628,
+          "cpu_s": 0.1798220000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 46
+        }
+      ],
+      "median": {
+        "wall_s": 0.04776891699293628,
+        "cpu_s": 0.17915600000000031,
+        "voluntary_switches": 0,
+        "involuntary_switches": 47
+      }
+    },
+    {
+      "case": "four",
+      "mode": "default",
+      "variant": "current/default",
+      "bytes": 1073741824,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.024279125005705282,
+          "cpu_s": 0.23385000000000034,
+          "voluntary_switches": 0,
+          "involuntary_switches": 205
+        },
+        {
+          "wall_s": 0.02657270900090225,
+          "cpu_s": 0.2266290000000004,
+          "voluntary_switches": 0,
+          "involuntary_switches": 187
+        },
+        {
+          "wall_s": 0.025348042021505535,
+          "cpu_s": 0.23995400000000044,
+          "voluntary_switches": 0,
+          "involuntary_switches": 207
+        },
+        {
+          "wall_s": 0.025862707989290357,
+          "cpu_s": 0.23908499999999977,
+          "voluntary_switches": 0,
+          "involuntary_switches": 225
+        },
+        {
+          "wall_s": 0.02707574999658391,
+          "cpu_s": 0.23888799999999932,
+          "voluntary_switches": 0,
+          "involuntary_switches": 228
+        },
+        {
+          "wall_s": 0.02800241598743014,
+          "cpu_s": 0.22693900000000067,
+          "voluntary_switches": 0,
+          "involuntary_switches": 183
+        },
+        {
+          "wall_s": 0.026594124996336177,
+          "cpu_s": 0.23289399999999993,
+          "voluntary_switches": 0,
+          "involuntary_switches": 169
+        }
+      ],
+      "median": {
+        "wall_s": 0.02657270900090225,
+        "cpu_s": 0.23385000000000034,
+        "voluntary_switches": 0,
+        "involuntary_switches": 205
+      }
+    },
+    {
+      "case": "four",
+      "mode": "default",
+      "variant": "current/file-only",
+      "bytes": 1073741824,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.0528151250036899,
+          "cpu_s": 0.19697900000000024,
+          "voluntary_switches": 0,
+          "involuntary_switches": 45
+        },
+        {
+          "wall_s": 0.052633667015470564,
+          "cpu_s": 0.19671599999999945,
+          "voluntary_switches": 0,
+          "involuntary_switches": 44
+        },
+        {
+          "wall_s": 0.05209895802545361,
+          "cpu_s": 0.19715399999999939,
+          "voluntary_switches": 0,
+          "involuntary_switches": 52
+        },
+        {
+          "wall_s": 0.05240095799672417,
+          "cpu_s": 0.19660900000000003,
+          "voluntary_switches": 0,
+          "involuntary_switches": 46
+        },
+        {
+          "wall_s": 0.05235237500164658,
+          "cpu_s": 0.19766899999999898,
+          "voluntary_switches": 0,
+          "involuntary_switches": 35
+        },
+        {
+          "wall_s": 0.05292958300560713,
+          "cpu_s": 0.1962789999999992,
+          "voluntary_switches": 0,
+          "involuntary_switches": 47
+        },
+        {
+          "wall_s": 0.05041850000270642,
+          "cpu_s": 0.18936800000000087,
+          "voluntary_switches": 0,
+          "involuntary_switches": 52
+        }
+      ],
+      "median": {
+        "wall_s": 0.05240095799672417,
+        "cpu_s": 0.19671599999999945,
+        "voluntary_switches": 0,
+        "involuntary_switches": 46
+      }
+    },
+    {
+      "case": "sixteen",
+      "mode": "lines",
+      "variant": "current/default",
+      "bytes": 4294967296,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-07-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-08-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-09-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-10-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-11-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-12-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-13-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-14-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-15-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.03387012498569675,
+          "cpu_s": 0.381888,
+          "voluntary_switches": 0,
+          "involuntary_switches": 460
+        },
+        {
+          "wall_s": 0.034481125010643154,
+          "cpu_s": 0.3826989999999997,
+          "voluntary_switches": 0,
+          "involuntary_switches": 489
+        },
+        {
+          "wall_s": 0.0338671249919571,
+          "cpu_s": 0.3864420000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 460
+        },
+        {
+          "wall_s": 0.033380167005816475,
+          "cpu_s": 0.3670940000000007,
+          "voluntary_switches": 0,
+          "involuntary_switches": 411
+        },
+        {
+          "wall_s": 0.03384008302236907,
+          "cpu_s": 0.38487199999999966,
+          "voluntary_switches": 0,
+          "involuntary_switches": 464
+        },
+        {
+          "wall_s": 0.033535291004227474,
+          "cpu_s": 0.3818860000000015,
+          "voluntary_switches": 0,
+          "involuntary_switches": 517
+        },
+        {
+          "wall_s": 0.035090833000140265,
+          "cpu_s": 0.3663640000000026,
+          "voluntary_switches": 0,
+          "involuntary_switches": 489
+        }
+      ],
+      "median": {
+        "wall_s": 0.0338671249919571,
+        "cpu_s": 0.381888,
+        "voluntary_switches": 0,
+        "involuntary_switches": 464
+      }
+    },
+    {
+      "case": "sixteen",
+      "mode": "lines",
+      "variant": "current/file-only",
+      "bytes": 4294967296,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-07-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-08-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-09-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-10-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-11-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-12-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-13-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-14-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-15-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.04023849999066442,
+          "cpu_s": 0.3476960000000009,
+          "voluntary_switches": 0,
+          "involuntary_switches": 284
+        },
+        {
+          "wall_s": 0.03964412500499748,
+          "cpu_s": 0.3457080000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 221
+        },
+        {
+          "wall_s": 0.03964579099556431,
+          "cpu_s": 0.34199800000000025,
+          "voluntary_switches": 0,
+          "involuntary_switches": 203
+        },
+        {
+          "wall_s": 0.03994862499530427,
+          "cpu_s": 0.3485989999999983,
+          "voluntary_switches": 0,
+          "involuntary_switches": 272
+        },
+        {
+          "wall_s": 0.03991587497876026,
+          "cpu_s": 0.3313959999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 181
+        },
+        {
+          "wall_s": 0.040300041990121827,
+          "cpu_s": 0.35034200000000126,
+          "voluntary_switches": 0,
+          "involuntary_switches": 249
+        },
+        {
+          "wall_s": 0.04020950000267476,
+          "cpu_s": 0.3321190000000005,
+          "voluntary_switches": 0,
+          "involuntary_switches": 127
+        }
+      ],
+      "median": {
+        "wall_s": 0.03994862499530427,
+        "cpu_s": 0.3457080000000001,
+        "voluntary_switches": 0,
+        "involuntary_switches": 221
+      }
+    },
+    {
+      "case": "sixteen",
+      "mode": "words",
+      "variant": "current/default",
+      "bytes": 4294967296,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-07-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-08-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-09-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-10-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-11-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-12-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-13-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-14-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-15-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.07707412500167266,
+          "cpu_s": 0.9220229999999976,
+          "voluntary_switches": 0,
+          "involuntary_switches": 968
+        },
+        {
+          "wall_s": 0.07663091699942015,
+          "cpu_s": 0.9006729999999994,
+          "voluntary_switches": 0,
+          "involuntary_switches": 917
+        },
+        {
+          "wall_s": 0.07744804100366309,
+          "cpu_s": 0.9130329999999987,
+          "voluntary_switches": 0,
+          "involuntary_switches": 848
+        },
+        {
+          "wall_s": 0.07873716700123623,
+          "cpu_s": 0.9096879999999992,
+          "voluntary_switches": 0,
+          "involuntary_switches": 920
+        },
+        {
+          "wall_s": 0.07710066699655727,
+          "cpu_s": 0.9066399999999994,
+          "voluntary_switches": 0,
+          "involuntary_switches": 879
+        },
+        {
+          "wall_s": 0.07745800001430325,
+          "cpu_s": 0.9104060000000018,
+          "voluntary_switches": 0,
+          "involuntary_switches": 1001
+        },
+        {
+          "wall_s": 0.08210058300755918,
+          "cpu_s": 0.9170419999999986,
+          "voluntary_switches": 0,
+          "involuntary_switches": 935
+        }
+      ],
+      "median": {
+        "wall_s": 0.07744804100366309,
+        "cpu_s": 0.9104060000000018,
+        "voluntary_switches": 0,
+        "involuntary_switches": 920
+      }
+    },
+    {
+      "case": "sixteen",
+      "mode": "words",
+      "variant": "current/file-only",
+      "bytes": 4294967296,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-07-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-08-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-09-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-10-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-11-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-12-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-13-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-14-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-15-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.10055495900451206,
+          "cpu_s": 0.8654150000000005,
+          "voluntary_switches": 0,
+          "involuntary_switches": 554
+        },
+        {
+          "wall_s": 0.10387995798373595,
+          "cpu_s": 0.8767010000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 639
+        },
+        {
+          "wall_s": 0.09950308399857022,
+          "cpu_s": 0.871474000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 588
+        },
+        {
+          "wall_s": 0.09939441701862961,
+          "cpu_s": 0.8729089999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 570
+        },
+        {
+          "wall_s": 0.09752020801533945,
+          "cpu_s": 0.8584640000000014,
+          "voluntary_switches": 0,
+          "involuntary_switches": 642
+        },
+        {
+          "wall_s": 0.10189474999788217,
+          "cpu_s": 0.8742899999999985,
+          "voluntary_switches": 0,
+          "involuntary_switches": 649
+        },
+        {
+          "wall_s": 0.10026162501890212,
+          "cpu_s": 0.8667689999999979,
+          "voluntary_switches": 0,
+          "involuntary_switches": 628
+        }
+      ],
+      "median": {
+        "wall_s": 0.10026162501890212,
+        "cpu_s": 0.871474000000001,
+        "voluntary_switches": 0,
+        "involuntary_switches": 628
+      }
+    },
+    {
+      "case": "sixteen",
+      "mode": "default",
+      "variant": "current/default",
+      "bytes": 4294967296,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-07-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-08-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-09-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-10-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-11-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-12-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-13-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-14-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-15-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.08121116700931452,
+          "cpu_s": 0.9713290000000061,
+          "voluntary_switches": 0,
+          "involuntary_switches": 953
+        },
+        {
+          "wall_s": 0.08035049997852184,
+          "cpu_s": 0.9597359999999959,
+          "voluntary_switches": 0,
+          "involuntary_switches": 932
+        },
+        {
+          "wall_s": 0.08011966600315645,
+          "cpu_s": 0.9605029999999992,
+          "voluntary_switches": 0,
+          "involuntary_switches": 920
+        },
+        {
+          "wall_s": 0.08185970899648964,
+          "cpu_s": 0.9567639999999962,
+          "voluntary_switches": 0,
+          "involuntary_switches": 900
+        },
+        {
+          "wall_s": 0.07863229102804326,
+          "cpu_s": 0.9648060000000065,
+          "voluntary_switches": 0,
+          "involuntary_switches": 956
+        },
+        {
+          "wall_s": 0.08212745800847188,
+          "cpu_s": 0.9599450000000012,
+          "voluntary_switches": 0,
+          "involuntary_switches": 901
+        },
+        {
+          "wall_s": 0.07872250000946224,
+          "cpu_s": 0.9691229999999926,
+          "voluntary_switches": 0,
+          "involuntary_switches": 915
+        }
+      ],
+      "median": {
+        "wall_s": 0.08035049997852184,
+        "cpu_s": 0.9605029999999992,
+        "voluntary_switches": 0,
+        "involuntary_switches": 920
+      }
+    },
+    {
+      "case": "sixteen",
+      "mode": "default",
+      "variant": "current/file-only",
+      "bytes": 4294967296,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-07-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-08-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-09-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-10-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-11-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-12-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-13-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-14-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-15-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.10412120798719116,
+          "cpu_s": 0.9142989999999998,
+          "voluntary_switches": 0,
+          "involuntary_switches": 799
+        },
+        {
+          "wall_s": 0.10969183398992755,
+          "cpu_s": 0.9219710000000028,
+          "voluntary_switches": 0,
+          "involuntary_switches": 672
+        },
+        {
+          "wall_s": 0.10842733300523832,
+          "cpu_s": 0.9226869999999963,
+          "voluntary_switches": 0,
+          "involuntary_switches": 648
+        },
+        {
+          "wall_s": 0.10529516701353714,
+          "cpu_s": 0.9036410000000039,
+          "voluntary_switches": 0,
+          "involuntary_switches": 622
+        },
+        {
+          "wall_s": 0.10491916700266302,
+          "cpu_s": 0.9263979999999954,
+          "voluntary_switches": 0,
+          "involuntary_switches": 568
+        },
+        {
+          "wall_s": 0.10521133299334906,
+          "cpu_s": 0.9137319999999995,
+          "voluntary_switches": 0,
+          "involuntary_switches": 610
+        },
+        {
+          "wall_s": 0.10585579101461917,
+          "cpu_s": 0.9090340000000019,
+          "voluntary_switches": 0,
+          "involuntary_switches": 583
+        }
+      ],
+      "median": {
+        "wall_s": 0.10529516701353714,
+        "cpu_s": 0.9142989999999998,
+        "voluntary_switches": 0,
+        "involuntary_switches": 622
+      }
+    },
+    {
+      "case": "uneven",
+      "mode": "lines",
+      "variant": "current/default",
+      "bytes": 2952790016,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-16-1024MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.024618999974336475,
+          "cpu_s": 0.2572890000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 261
+        },
+        {
+          "wall_s": 0.02460783298010938,
+          "cpu_s": 0.25242100000000534,
+          "voluntary_switches": 0,
+          "involuntary_switches": 318
+        },
+        {
+          "wall_s": 0.024442291993182153,
+          "cpu_s": 0.2542950000000026,
+          "voluntary_switches": 0,
+          "involuntary_switches": 274
+        },
+        {
+          "wall_s": 0.024540457990951836,
+          "cpu_s": 0.2560409999999962,
+          "voluntary_switches": 0,
+          "involuntary_switches": 305
+        },
+        {
+          "wall_s": 0.02461554200272076,
+          "cpu_s": 0.2650909999999982,
+          "voluntary_switches": 0,
+          "involuntary_switches": 307
+        },
+        {
+          "wall_s": 0.024811625014990568,
+          "cpu_s": 0.2609470000000016,
+          "voluntary_switches": 0,
+          "involuntary_switches": 264
+        },
+        {
+          "wall_s": 0.024425167008303106,
+          "cpu_s": 0.2564630000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 348
+        }
+      ],
+      "median": {
+        "wall_s": 0.02460783298010938,
+        "cpu_s": 0.2564630000000001,
+        "voluntary_switches": 0,
+        "involuntary_switches": 305
+      }
+    },
+    {
+      "case": "uneven",
+      "mode": "lines",
+      "variant": "current/file-only",
+      "bytes": 2952790016,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-l",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-16-1024MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.0638559999933932,
+          "cpu_s": 0.19064699999999846,
+          "voluntary_switches": 0,
+          "involuntary_switches": 47
+        },
+        {
+          "wall_s": 0.06422400000155903,
+          "cpu_s": 0.18984999999999985,
+          "voluntary_switches": 0,
+          "involuntary_switches": 52
+        },
+        {
+          "wall_s": 0.06496954101021402,
+          "cpu_s": 0.19072099999999992,
+          "voluntary_switches": 0,
+          "involuntary_switches": 40
+        },
+        {
+          "wall_s": 0.06508812500396743,
+          "cpu_s": 0.1937660000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 65
+        },
+        {
+          "wall_s": 0.06417045899434015,
+          "cpu_s": 0.18887000000000143,
+          "voluntary_switches": 0,
+          "involuntary_switches": 54
+        },
+        {
+          "wall_s": 0.06431062499177642,
+          "cpu_s": 0.1896750000000047,
+          "voluntary_switches": 0,
+          "involuntary_switches": 21
+        },
+        {
+          "wall_s": 0.06373879199963994,
+          "cpu_s": 0.18776799999999838,
+          "voluntary_switches": 0,
+          "involuntary_switches": 34
+        }
+      ],
+      "median": {
+        "wall_s": 0.06422400000155903,
+        "cpu_s": 0.18984999999999985,
+        "voluntary_switches": 0,
+        "involuntary_switches": 47
+      }
+    },
+    {
+      "case": "uneven",
+      "mode": "words",
+      "variant": "current/default",
+      "bytes": 2952790016,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-16-1024MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.05861604100209661,
+          "cpu_s": 0.6142590000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 590
+        },
+        {
+          "wall_s": 0.05788137498893775,
+          "cpu_s": 0.6212209999999985,
+          "voluntary_switches": 0,
+          "involuntary_switches": 553
+        },
+        {
+          "wall_s": 0.059363832988310605,
+          "cpu_s": 0.6247299999999996,
+          "voluntary_switches": 0,
+          "involuntary_switches": 532
+        },
+        {
+          "wall_s": 0.05700816700118594,
+          "cpu_s": 0.6183350000000019,
+          "voluntary_switches": 0,
+          "involuntary_switches": 596
+        },
+        {
+          "wall_s": 0.060076957975979894,
+          "cpu_s": 0.6335970000000017,
+          "voluntary_switches": 0,
+          "involuntary_switches": 603
+        },
+        {
+          "wall_s": 0.05475841599400155,
+          "cpu_s": 0.605004000000001,
+          "voluntary_switches": 0,
+          "involuntary_switches": 547
+        },
+        {
+          "wall_s": 0.05877945802058093,
+          "cpu_s": 0.625117999999997,
+          "voluntary_switches": 0,
+          "involuntary_switches": 609
+        }
+      ],
+      "median": {
+        "wall_s": 0.05861604100209661,
+        "cpu_s": 0.6212209999999985,
+        "voluntary_switches": 0,
+        "involuntary_switches": 590
+      }
+    },
+    {
+      "case": "uneven",
+      "mode": "words",
+      "variant": "current/file-only",
+      "bytes": 2952790016,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "-w",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-16-1024MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.17633508300059475,
+          "cpu_s": 0.5012509999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 173
+        },
+        {
+          "wall_s": 0.18865979101974517,
+          "cpu_s": 0.5251900000000056,
+          "voluntary_switches": 0,
+          "involuntary_switches": 205
+        },
+        {
+          "wall_s": 0.18628762502339669,
+          "cpu_s": 0.5250009999999996,
+          "voluntary_switches": 0,
+          "involuntary_switches": 234
+        },
+        {
+          "wall_s": 0.1745189999928698,
+          "cpu_s": 0.5057389999999984,
+          "voluntary_switches": 0,
+          "involuntary_switches": 159
+        },
+        {
+          "wall_s": 0.17636170799960382,
+          "cpu_s": 0.5037519999999951,
+          "voluntary_switches": 0,
+          "involuntary_switches": 129
+        },
+        {
+          "wall_s": 0.18310591598856263,
+          "cpu_s": 0.510070000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 154
+        },
+        {
+          "wall_s": 0.186544625001261,
+          "cpu_s": 0.5200679999999984,
+          "voluntary_switches": 0,
+          "involuntary_switches": 215
+        }
+      ],
+      "median": {
+        "wall_s": 0.18310591598856263,
+        "cpu_s": 0.510070000000006,
+        "voluntary_switches": 0,
+        "involuntary_switches": 173
+      }
+    },
+    {
+      "case": "uneven",
+      "mode": "default",
+      "variant": "current/default",
+      "bytes": 2952790016,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-16-1024MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.06002791700302623,
+          "cpu_s": 0.6512730000000033,
+          "voluntary_switches": 0,
+          "involuntary_switches": 551
+        },
+        {
+          "wall_s": 0.06393087501055561,
+          "cpu_s": 0.6680069999999994,
+          "voluntary_switches": 0,
+          "involuntary_switches": 630
+        },
+        {
+          "wall_s": 0.0623435830057133,
+          "cpu_s": 0.658385999999993,
+          "voluntary_switches": 0,
+          "involuntary_switches": 638
+        },
+        {
+          "wall_s": 0.05925179200130515,
+          "cpu_s": 0.6568170000000002,
+          "voluntary_switches": 0,
+          "involuntary_switches": 648
+        },
+        {
+          "wall_s": 0.06061833302373998,
+          "cpu_s": 0.6571759999999927,
+          "voluntary_switches": 0,
+          "involuntary_switches": 657
+        },
+        {
+          "wall_s": 0.06447366700740531,
+          "cpu_s": 0.6474619999999938,
+          "voluntary_switches": 0,
+          "involuntary_switches": 570
+        },
+        {
+          "wall_s": 0.0596270420064684,
+          "cpu_s": 0.6536819999999999,
+          "voluntary_switches": 0,
+          "involuntary_switches": 663
+        }
+      ],
+      "median": {
+        "wall_s": 0.06061833302373998,
+        "cpu_s": 0.6568170000000002,
+        "voluntary_switches": 0,
+        "involuntary_switches": 638
+      }
+    },
+    {
+      "case": "uneven",
+      "mode": "default",
+      "variant": "current/file-only",
+      "bytes": 2952790016,
+      "command": [
+        "/Users/jikrochmal/CLionProjects/qwc/build-worker-budget/qwc",
+        "--bytes-per-thread",
+        "1073741825",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-16-1024MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-00-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-01-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-02-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-03-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-04-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-05-256MiB.txt",
+        "/Users/jikrochmal/CLionProjects/qwc/benchmarks/test-data/concurrency/ascii-v1-06-256MiB.txt"
+      ],
+      "samples": [
+        {
+          "wall_s": 0.18715470901224762,
+          "cpu_s": 0.5309799999999996,
+          "voluntary_switches": 0,
+          "involuntary_switches": 186
+        },
+        {
+          "wall_s": 0.18567050001001917,
+          "cpu_s": 0.5305000000000106,
+          "voluntary_switches": 0,
+          "involuntary_switches": 218
+        },
+        {
+          "wall_s": 0.18856587499612942,
+          "cpu_s": 0.5424630000000015,
+          "voluntary_switches": 0,
+          "involuntary_switches": 192
+        },
+        {
+          "wall_s": 0.1929176250123419,
+          "cpu_s": 0.5476119999999973,
+          "voluntary_switches": 0,
+          "involuntary_switches": 144
+        },
+        {
+          "wall_s": 0.1924610410060268,
+          "cpu_s": 0.544192000000006,
+          "voluntary_switches": 0,
+          "involuntary_switches": 165
+        },
+        {
+          "wall_s": 0.19631354199373163,
+          "cpu_s": 0.5496060000000043,
+          "voluntary_switches": 0,
+          "involuntary_switches": 155
+        },
+        {
+          "wall_s": 0.18614579198765568,
+          "cpu_s": 0.5318509999999961,
+          "voluntary_switches": 0,
+          "involuntary_switches": 242
+        }
+      ],
+      "median": {
+        "wall_s": 0.18856587499612942,
+        "cpu_s": 0.5424630000000015,
+        "voluntary_switches": 0,
+        "involuntary_switches": 186
+      }
+    }
+  ]
+}

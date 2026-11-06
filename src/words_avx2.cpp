@@ -18,17 +18,12 @@
 // words_neon.cpp.
 //
 // C mode: S = ASCII whitespace, P = 0x21..0x7E, every full block vectorizes.
-// UTF-8 mode vectorizes exactly the content it can classify bit-for-bit like
-// the scalar kernel: ASCII, plus well-formed 2- AND 3-byte sequences whose
-// lead (resp. (lead, cont1) sub-row) the generated kCandLead / kCandLead3
-// tables certify as "clean" (every code point in the row/sub-row is printable
-// and non-separator, bar the exact C2 windows: U+0080-009F non-printable,
-// U+00A0 the nbspace separator). Anything else -- 4-byte sequences, invalid
-// bytes, dirty leads like 0xCE (the U+03A2 unassigned hole) or 0xE3 (contains
-// U+3000 ideographic space) -- punts that one block to the scalar
-// classifier, so the two kernels agree on ALL input, not just valid UTF-8.
-// ASCII-dominant, Latin-ish and CJK / Hangul / Devanagari text stays fully
-// vectorized.
+// UTF-8 mode accepts well-formed two- and three-byte sequences. Generated
+// tables certify common printable, non-separator groups cheaply. A dirty
+// group gets an exact code-point check before rejecting the block, so a hole
+// or separator elsewhere in the group does not penalize ordinary text.
+// C2 controls/NBSP retain their specialized masks. Four-byte sequences,
+// invalid encodings and other exceptional classes still use scalarUtf8.
 
 using namespace qwc::words_kernel;
 
@@ -120,7 +115,9 @@ inline u32 asciiPrint( const __m256i v )
     leads &= leads - 1;
     const u8 L = p[b];
     const u8 C = p[b + 1];  // in-block (b<=29) or lookahead (b=30,31)
-    if ( kCandLead3[( ( L - 0xE0u ) << 6 ) | ( C & 0x3Fu )] != 0 ) return true;
+    if ( kCandLead3[( ( L - 0xE0u ) << 6 ) | ( C & 0x3Fu )] != 0 &&
+         !printableSequence( p + b, 3 ) )
+      return true;
   }
   return false;
 }
@@ -196,7 +193,8 @@ void words(
         while ( leads != 0 ) {
           const u32 b = static_cast<u32>( __builtin_ctz( leads ) );
           leads &= leads - 1;
-          if ( kCandLead[base[i + b]] != 0 ) {
+          if ( kCandLead[base[i + b]] != 0 &&
+               !printableSequence( base + i + b, 2 ) ) {
             clean = false;
             break;
           }

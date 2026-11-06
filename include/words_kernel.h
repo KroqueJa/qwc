@@ -63,6 +63,17 @@ inline Cls classifyUtf8( const u32 cp, const bool nbspace )
   return qwcIswprint( cp ) ? Cls::Print : Cls::Other;
 }
 
+// Refine a dirty table group using the actual sequence. Callers have already
+// checked continuation layout and have `width` readable bytes. Strict decoding
+// still rejects overlongs and surrogates. Using the larger separator set keeps
+// this refinement valid in both POSIX and coreutils separator modes.
+inline bool printableSequence( const u8* p, const usize width )
+{
+  usize used = 1;
+  const u32 cp = decodeCp( p, p + width, used );
+  return used == width && classifyUtf8( cp, true ) == Cls::Print;
+}
+
 // One classified code point through the run state machine.
 inline void step( const Cls c, WordScan& s )
 {
