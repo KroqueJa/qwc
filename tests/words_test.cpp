@@ -571,8 +571,7 @@ TEST( WordsUtf8, RefinedGroupsAcrossVectorEdges )
       const std::string s = std::string( offset, '\1' ) + encoded + " \1" +
                             encoded + "x " + std::string( 64, ' ' );
       for ( const WordsMode mode: { kUtf8, kUtf8Posix } ) {
-        const usize expected =
-            refWords( s, true, mode.nbspace );
+        const usize expected = refWords( s, true, mode.nbspace );
         ASSERT_EQ( wordsStr( s, mode ), expected ) << cp << " at " << offset;
         ASSERT_EQ( wordsSplit( s, offset + 1, mode ), expected )
             << cp << " split at " << offset + 1;

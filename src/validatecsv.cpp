@@ -316,9 +316,10 @@ void runValidityWorkers(
   if ( nWorkers <= 1 ) {
     csvWorker( &ctx );
   } else {
-    std::vector<std::thread> pool;
-    pool.reserve( nWorkers );
-    for ( u32 t = 0; t < nWorkers; ++t ) pool.emplace_back( csvWorker, &ctx );
+    // Size the storage up front, as in mapFiles. This also lets GCC's LTO
+    // analyzer track the non-null thread objects through the join loop.
+    std::vector<std::thread> pool( nWorkers );
+    for ( auto& th: pool ) th = std::thread( csvWorker, &ctx );
     for ( auto& th: pool ) th.join();
   }
 }

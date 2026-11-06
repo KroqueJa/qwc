@@ -85,7 +85,7 @@ inline void scanBuffer(
 // BUF_SIZE was tuned by the 2026-06-13 sweep -- see Finding 6 in
 // benchmarks/README.md for the LLC-miss data behind the choice (1 MiB spilled
 // L2 on every host we measured; 256 KiB stays L2-resident).
-constexpr usize BUF_SIZE = usize{ 256 } << 10;  // 256 KiB
+constexpr usize BUF_SIZE = usize{ 256 } << 10u;  // 256 KiB
 constexpr usize WCTX = 3;  // multibyte window context per side
 
 // The scan buffer is per worker thread and reused across every file that
