@@ -1018,8 +1018,9 @@ static const u8 kIswprintBlocks[143][32] = {
 inline bool qwcIswprint( const u32 cp )
 {
   if ( cp >= 0x110000 ) return false;
-  const u8* block = kIswprintBlocks[kIswprintIndex[cp >> 8]];
-  return ( block[( cp & 0xFF ) >> 3] >> ( cp & 7 ) ) & 1;
+  const u8* block = kIswprintBlocks[kIswprintIndex[cp >> 8u]];
+  return ( static_cast<u32>( block[( cp & 0xFFu ) >> 3u] ) >> ( cp & 7u ) ) &
+         1u;
 }
 
 // Candidate leads for the AVX2 words kernel: 1 = a byte that may
@@ -1040,7 +1041,7 @@ static const u8 kCandLead[256] = {
 };
 
 // Candidate 3-byte (lead, cont1) sub-rows for the AVX2 words
-// kernel. Indexed by ((lead - 0xE0) << 6) | (cont1 & 0x3F). A 0
+// kernel. Indexed by ((lead - 0xE0) << 6u) | (cont1 & 0x3Fu). A 0
 // (CLEAN) cell means every codepoint in this 64-cp sub-row is
 // iswprint and not a separator in either nbspace mode -- safe to
 // vectorize. A 1 (DIRTY) cell forces the block to scalarUtf8. See

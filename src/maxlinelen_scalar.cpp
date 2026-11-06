@@ -21,7 +21,8 @@ void maxLineLen(
       if ( s.cur > s.maxComplete ) s.maxComplete = s.cur;
       s.cur = 0;  // the newline is not counted; start the next line
     } else if (
-        countChars && ( static_cast<unsigned char>( buffer[i] ) & 0xC0 ) == 0x80
+        countChars &&
+        ( static_cast<unsigned char>( buffer[i] ) & 0xC0u ) == 0x80
     ) {
       // A UTF-8 continuation byte continues the current character; in character
       // mode it does not advance the line length.
@@ -46,7 +47,7 @@ void maxLineLenChars(
       }
       if ( s.cur > s.maxComplete ) s.maxComplete = s.cur;
       s.cur = 0;  // ...but it does not extend the line's character length
-    } else if ( ( c & 0xC0 ) == 0x80 ) {
+    } else if ( ( c & 0xC0u ) == 0x80 ) {
       // UTF-8 continuation byte: neither a new character nor a length advance.
     } else {
       ++charCount;

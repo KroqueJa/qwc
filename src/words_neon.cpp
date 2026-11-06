@@ -58,9 +58,9 @@ inline u32 mm( const uint8x16_t lo, const uint8x16_t hi )
   const uint8x16_t a = vandq_u8( lo, bits );
   const uint8x16_t b = vandq_u8( hi, bits );
   return static_cast<u32>( vaddv_u8( vget_low_u8( a ) ) ) |
-         ( static_cast<u32>( vaddv_u8( vget_high_u8( a ) ) ) << 8 ) |
-         ( static_cast<u32>( vaddv_u8( vget_low_u8( b ) ) ) << 16 ) |
-         ( static_cast<u32>( vaddv_u8( vget_high_u8( b ) ) ) << 24 );
+         ( static_cast<u32>( vaddv_u8( vget_high_u8( a ) ) ) << 8u ) |
+         ( static_cast<u32>( vaddv_u8( vget_low_u8( b ) ) ) << 16u ) |
+         ( static_cast<u32>( vaddv_u8( vget_high_u8( b ) ) ) << 24u );
 }
 
 // Per-half in-range mask: lo <= byte <= hi, unsigned. NEON's native unsigned
@@ -123,7 +123,7 @@ inline u32 asciiPrint( const Blk& v )
     leads &= leads - 1;
     const u8 L = p[b];
     const u8 C = p[b + 1];  // in-block (b<=29) or lookahead (b=30,31)
-    if ( kCandLead3[( ( L - 0xE0u ) << 6 ) | ( C & 0x3Fu )] != 0 &&
+    if ( kCandLead3[( ( L - 0xE0u ) << 6u ) | ( C & 0x3Fu )] != 0 &&
          !printableSequence( p + b, 3 ) )
       return true;
   }
@@ -186,11 +186,11 @@ inline u64 nibbleHigh( const uint8x16_t v )
 {
   u64 leads = lead3;
   while ( leads != 0 ) {
-    const u32 b = static_cast<u32>( __builtin_ctzll( leads ) ) >> 2;
+    const u32 b = static_cast<u32>( __builtin_ctzll( leads ) ) >> 2u;
     leads &= ~( 0xFull << ( 4 * b ) );
     const u8 L = p[b];
     const u8 C = p[b + 1];  // in-block (b<=14) or lookahead (b=15)
-    if ( kCandLead3[( ( L - 0xE0u ) << 6 ) | ( C & 0x3Fu )] != 0 &&
+    if ( kCandLead3[( ( L - 0xE0u ) << 6u ) | ( C & 0x3Fu )] != 0 &&
          !printableSequence( p + b, 3 ) )
       return true;
   }
@@ -213,19 +213,20 @@ inline void stepMasksNibble(
       s.sawByte = true;
       s.startsInWord = ( nonSep & 0xFull ) != 0;
     }
-    const u64 ends = sMask & ( ( nonSep << 4 ) | ( s.inWord ? 0xFull : 0ull ) );
-    u32 ended = static_cast<u32>( __builtin_popcountll( ends ) ) >> 2;
+    const u64 ends =
+        sMask & ( ( nonSep << 4u ) | ( s.inWord ? 0xFull : 0ull ) );
+    u32 ended = static_cast<u32>( __builtin_popcountll( ends ) ) >> 2u;
     if ( ( ends & 0xFull ) && !s.runHasPrintable ) --ended;
     s.words += ended;
     if ( sMask != 0 ) {
       if ( !s.sawSeparator && s.startsInWord ) {
         s.leadingEnded = true;
         s.leadingHasPrintable =
-            ( static_cast<u32>( __builtin_ctzll( sMask ) ) >> 2 ) > 0 ||
+            ( static_cast<u32>( __builtin_ctzll( sMask ) ) >> 2u ) > 0 ||
             s.runHasPrintable;
       }
       s.sawSeparator = true;
-      const bool open = ( sMask >> 60 ) == 0;
+      const bool open = ( sMask >> 60u ) == 0;
       s.inWord = open;
       s.runHasPrintable = open;
     } else {
@@ -254,7 +255,7 @@ inline void stepMasksNibble(
       s.sawSeparator = true;
       const u64 rest = ~( sMask >> ( 4 * b ) );
       b += rest == 0 ? ( n - b )
-                     : ( static_cast<u32>( __builtin_ctzll( rest ) ) >> 2 );
+                     : ( static_cast<u32>( __builtin_ctzll( rest ) ) >> 2u );
     } else {
       if ( !s.sawByte ) {
         s.sawByte = true;
@@ -264,7 +265,7 @@ inline void stepMasksNibble(
       const u64 rest = sMask >> ( 4 * b );
       const u32 len =
           rest == 0 ? ( n - b )
-                    : ( static_cast<u32>( __builtin_ctzll( rest ) ) >> 2 );
+                    : ( static_cast<u32>( __builtin_ctzll( rest ) ) >> 2u );
       const u64 segMask = len >= 16 ? ~0ull : ( ( 1ull << ( 4 * len ) ) - 1 );
       if ( ( pMask >> ( 4 * b ) ) & segMask ) s.runHasPrintable = true;
       b += len;
@@ -314,9 +315,10 @@ void words(
 #if QWC_NEON_NIBBLE
   // Nibble path: 16-byte blocks -> u64 masks (4 bits/byte). Lookahead is
   // i + 18 <= len (a clean 3-byte lead at byte 15 needs cont1 at 16, cont2 at
-  // 17). Every stride is x4 vs the 32-byte path: << 1 -> << 4, << 2 -> << 8,
-  // >> 31 -> >> 60, (>> 30 & 1) -> (>> 56 & 0xF). Carries are u64 nibble values
-  // (0xF / 0x0) at nibble 0.
+  // 17). Every stride is x4 vs the 32-byte path: << 1u -> << 4u, << 2u -> <<
+  // 8u,
+  // >> 31u -> >> 60u, (>> 30u & 1u) -> (>> 56u & 0xFu). Carries are u64 nibble
+  // values (0xF / 0x0) at nibble 0.
   u64 carryS = 0, carryN = 0;
   u64 carryLead2 = 0, carryLead3a = 0, carryLead3b = 0;
   while ( i + 18 <= len && i + 16 <= ownedEnd ) {
@@ -329,25 +331,25 @@ void words(
       const u64 lead3 = nibbleRange( v, 0xE0, 0xEF );
       const u64 cont = nibbleRange( v, 0x80, 0xBF );
       const u64 carryC1 = carryLead2 | carryLead3a | carryLead3b;  // -> nib 0
-      const u64 carryC2 = carryLead3b << 4;                        // -> nib 1
+      const u64 carryC2 = carryLead3b << 4u;                       // -> nib 1
       bool clean = high == ( lead2 | lead3 | cont ) &&
-                   cont == ( ( lead2 << 4 ) | ( lead3 << 4 ) | ( lead3 << 8 ) |
-                             carryC1 | carryC2 );
+                   cont == ( ( lead2 << 4u ) | ( lead3 << 4u ) |
+                             ( lead3 << 8u ) | carryC1 | carryC2 );
       // Edge-byte validation: a lead whose continuations spill past byte 15
       // must see actual continuation bytes in the lookahead.
       if ( clean ) {
-        const bool needB16 = ( lead2 >> 60 ) != 0 ||
-                             ( ( lead3 >> 56 ) & 0xFull ) != 0 ||
-                             ( lead3 >> 60 ) != 0;
-        const bool needB17 = ( lead3 >> 60 ) != 0;
-        if ( needB16 && ( base[i + 16] & 0xC0 ) != 0x80 ) clean = false;
-        if ( clean && needB17 && ( base[i + 17] & 0xC0 ) != 0x80 )
+        const bool needB16 = ( lead2 >> 60u ) != 0 ||
+                             ( ( lead3 >> 56u ) & 0xFull ) != 0 ||
+                             ( lead3 >> 60u ) != 0;
+        const bool needB17 = ( lead3 >> 60u ) != 0;
+        if ( needB16 && ( base[i + 16] & 0xC0u ) != 0x80 ) clean = false;
+        if ( clean && needB17 && ( base[i + 17] & 0xC0u ) != 0x80 )
           clean = false;
       }
       if ( clean ) {
         u64 leads = lead2;
         while ( leads != 0 ) {
-          const u32 b = static_cast<u32>( __builtin_ctzll( leads ) ) >> 2;
+          const u32 b = static_cast<u32>( __builtin_ctzll( leads ) ) >> 2u;
           leads &= ~( 0xFull << ( 4 * b ) );
           if ( kCandLead[base[i + b]] != 0 &&
                !printableSequence( base + i + b, 2 ) ) {
@@ -372,16 +374,16 @@ void words(
       const u64 s2 = m.nbspace ? isC2 & nibbleEq( v1, 0xA0 ) : 0;
       const u64 n2 = isC2 & nibbleRange( v1, 0x80, 0x9F );  // C1 controls
 
-      const u64 sSm = s2 | ( s2 << 4 ) | carryS;
-      const u64 nSm = n2 | ( n2 << 4 ) | carryN;
+      const u64 sSm = s2 | ( s2 << 4u ) | carryS;
+      const u64 nSm = n2 | ( n2 << 4u ) | carryN;
       sMask |= sSm;
       pMask |= high & ~( sSm | nSm );
       pMask &= ~( sSm | nSm );
-      carryS = s2 >> 60;
-      carryN = n2 >> 60;
-      carryLead2 = lead2 >> 60;
-      carryLead3a = ( lead3 >> 56 ) & 0xFull;
-      carryLead3b = lead3 >> 60;
+      carryS = s2 >> 60u;
+      carryN = n2 >> 60u;
+      carryLead2 = lead2 >> 60u;
+      carryLead3a = ( lead3 >> 56u ) & 0xFull;
+      carryLead3b = lead3 >> 60u;
     } else {
       carryS = carryN = 0;
       carryLead2 = carryLead3a = carryLead3b = 0;
@@ -409,19 +411,19 @@ void words(
       // Carry contributions to the "expected continuation positions" of THIS
       // block. carryLead3b forces both bit 0 (cont1) and bit 1 (cont2).
       const u32 carryC1 = carryLead2 | carryLead3a | carryLead3b;  // -> bit 0
-      const u32 carryC2 = carryLead3b << 1;                        // -> bit 1
+      const u32 carryC2 = carryLead3b << 1u;                       // -> bit 1
       bool clean = high == ( lead2 | lead3 | cont ) &&
-                   cont == ( ( lead2 << 1 ) | ( lead3 << 1 ) | ( lead3 << 2 ) |
-                             carryC1 | carryC2 );
+                   cont == ( ( lead2 << 1u ) | ( lead3 << 1u ) |
+                             ( lead3 << 2u ) | carryC1 | carryC2 );
       // Edge-byte validation: any lead whose continuations spill past bit 31
       // must see actual continuation bytes in the lookahead.
       if ( clean ) {
-        const bool needB32 = ( lead2 >> 31 ) != 0 ||
-                             ( ( lead3 >> 30 ) & 1u ) != 0 ||
-                             ( lead3 >> 31 ) != 0;
-        const bool needB33 = ( lead3 >> 31 ) != 0;
-        if ( needB32 && ( base[i + 32] & 0xC0 ) != 0x80 ) clean = false;
-        if ( clean && needB33 && ( base[i + 33] & 0xC0 ) != 0x80 )
+        const bool needB32 = ( lead2 >> 31u ) != 0 ||
+                             ( ( lead3 >> 30u ) & 1u ) != 0 ||
+                             ( lead3 >> 31u ) != 0;
+        const bool needB33 = ( lead3 >> 31u ) != 0;
+        if ( needB32 && ( base[i + 32] & 0xC0u ) != 0x80 ) clean = false;
+        if ( clean && needB33 && ( base[i + 33] & 0xC0u ) != 0x80 )
           clean = false;
       }
       if ( clean ) {
@@ -458,16 +460,16 @@ void words(
 
       // Smear each window across both bytes of its sequence; every other high
       // byte belongs to a printable 2-byte code point (kCandLead certified).
-      const u32 sSm = s2 | ( s2 << 1 ) | carryS;
-      const u32 nSm = n2 | ( n2 << 1 ) | carryN;
+      const u32 sSm = s2 | ( s2 << 1u ) | carryS;
+      const u32 nSm = n2 | ( n2 << 1u ) | carryN;
       sMask |= sSm;
       pMask |= high & ~( sSm | nSm );
       pMask &= ~( sSm | nSm );
-      carryS = s2 >> 31;
-      carryN = n2 >> 31;
-      carryLead2 = lead2 >> 31;
-      carryLead3a = ( lead3 >> 30 ) & 1u;
-      carryLead3b = lead3 >> 31;
+      carryS = s2 >> 31u;
+      carryN = n2 >> 31u;
+      carryLead2 = lead2 >> 31u;
+      carryLead3a = ( lead3 >> 30u ) & 1u;
+      carryLead3b = lead3 >> 31u;
     } else {
       carryS = carryN = 0;
       carryLead2 = carryLead3a = carryLead3b = 0;

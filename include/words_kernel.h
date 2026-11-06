@@ -39,8 +39,8 @@ inline u32 decodeCp( const u8* p, const u8* end, usize& seqLen )
   if ( p + need > end ) return 0xFFFFFFFF;
   u32 cp = b0 & ( 0xFFu >> ( need + 1 ) );
   for ( usize k = 1; k < need; ++k ) {
-    if ( ( p[k] & 0xC0 ) != 0x80 ) return 0xFFFFFFFF;
-    cp = ( cp << 6 ) | ( p[k] & 0x3F );
+    if ( ( p[k] & 0xC0u ) != 0x80 ) return 0xFFFFFFFF;
+    cp = ( cp << 6u ) | ( p[k] & 0x3Fu );
   }
   static constexpr u32 kMin[5] = { 0, 0, 0x80, 0x800, 0x10000 };
   if ( cp < kMin[need] || cp > 0x10FFFF || ( cp >= 0xD800 && cp <= 0xDFFF ) )
@@ -115,11 +115,11 @@ inline usize scalarUtf8(
   // already classified (by the previous scan, or by the preceding vector
   // block) -- skip past it. If no valid sequence covers it, the bytes are
   // stray continuations owned here, classified one-by-one as invalid below.
-  if ( i < stop && ( base[i] & 0xC0 ) == 0x80 ) {
+  if ( i < stop && ( base[i] & 0xC0u ) == 0x80 ) {
     const usize back = i < 3 ? i : 3;
     for ( usize k = 1; k <= back; ++k ) {
       const u8 lead = base[i - k];
-      if ( ( lead & 0xC0 ) == 0x80 ) continue;  // still a continuation byte
+      if ( ( lead & 0xC0u ) == 0x80 ) continue;  // still a continuation byte
       usize seqLen = 1;
       if ( decodeCp( base + i - k, end, seqLen ) != 0xFFFFFFFF &&
            i - k + seqLen > i )
@@ -158,7 +158,7 @@ inline void stepMasks(
       s.sawByte = true;
       s.startsInWord = ( nonSep & 1u ) != 0;
     }
-    const u32 ends = sMask & ( ( nonSep << 1 ) | ( s.inWord ? 1u : 0u ) );
+    const u32 ends = sMask & ( ( nonSep << 1u ) | ( s.inWord ? 1u : 0u ) );
     u32 ended = static_cast<u32>( __builtin_popcount( ends ) );
     if ( ( ends & 1u ) && !s.runHasPrintable ) --ended;  // carried run: barren
     s.words += ended;
@@ -170,7 +170,7 @@ inline void stepMasks(
         s.leadingHasPrintable = __builtin_ctz( sMask ) > 0 || s.runHasPrintable;
       }
       s.sawSeparator = true;
-      const bool open = ( sMask >> 31 ) == 0;  // trailing run after last sep
+      const bool open = ( sMask >> 31u ) == 0;  // trailing run after last sep
       s.inWord = open;
       s.runHasPrintable = open;  // its bytes here are all printable
     } else {

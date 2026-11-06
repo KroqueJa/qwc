@@ -119,8 +119,8 @@ int main(void)
   printf("};\n\n");
   printf("inline bool qwcIswprint( const u32 cp )\n{\n");
   printf("  if ( cp >= 0x110000 ) return false;\n");
-  printf("  const u8* block = kIswprintBlocks[kIswprintIndex[cp >> 8]];\n");
-  printf("  return ( block[( cp & 0xFF ) >> 3] >> ( cp & 7 ) ) & 1;\n}\n");
+  printf("  const u8* block = kIswprintBlocks[kIswprintIndex[cp >> 8u]];\n");
+  printf("  return ( static_cast<u32>( block[( cp & 0xFFu ) >> 3u] ) >> ( cp & 7u ) ) & 1u;\n}\n");
   printf("\n// Candidate leads for the AVX2 words kernel: 1 = a byte that may\n");
   printf("// begin a code point the in-vector 2-byte model misclassifies (or\n");
   printf("// that is not a 2-byte lead at all), so its block must take the\n");

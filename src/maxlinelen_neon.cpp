@@ -33,7 +33,7 @@ static inline void scalarStep(
     }
     if ( s.cur > s.maxComplete ) s.maxComplete = s.cur;
     s.cur = 0;  // the newline is not counted; start the next line
-  } else if ( countChars && ( c & 0xC0 ) == 0x80 ) {
+  } else if ( countChars && ( c & 0xC0u ) == 0x80 ) {
     // A UTF-8 continuation byte continues the current character; in character
     // mode it does not advance the line length.
   } else {
@@ -131,7 +131,7 @@ static inline void stepBoth(
     }
     if ( s.cur > s.maxComplete ) s.maxComplete = s.cur;
     s.cur = 0;
-  } else if ( ( c & 0xC0 ) == 0x80 ) {
+  } else if ( ( c & 0xC0u ) == 0x80 ) {
     // UTF-8 continuation byte: not a character, not a length advance.
   } else {
     ++charCount;

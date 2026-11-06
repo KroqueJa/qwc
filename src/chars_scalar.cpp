@@ -12,6 +12,6 @@ usize chars( const char* buffer, const usize length )
   usize count = 0;
   for ( usize i = 0; i < length; ++i )
     // Count every byte that is not a UTF-8 continuation byte (10xxxxxx).
-    if ( ( static_cast<unsigned char>( buffer[i] ) & 0xC0 ) != 0x80 ) ++count;
+    if ( ( static_cast<unsigned char>( buffer[i] ) & 0xC0u ) != 0x80 ) ++count;
   return count;
 }

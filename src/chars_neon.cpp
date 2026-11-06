@@ -27,7 +27,7 @@ usize chars( const char* buffer, const usize length )
   // Align to a 16-byte boundary with a scalar prologue.
   while ( processedBytes < length &&
           reinterpret_cast<usize>( tmp ) % 16 != 0 ) {
-    if ( ( *tmp & 0xC0 ) == 0x80 ) ++cont;
+    if ( ( *tmp & 0xC0u ) == 0x80 ) ++cont;
     ++tmp;
     ++processedBytes;
   }
@@ -72,7 +72,7 @@ usize chars( const char* buffer, const usize length )
 
   // Scalar epilogue for the remaining < 64 bytes.
   while ( processedBytes < length ) {
-    if ( ( *tmp & 0xC0 ) == 0x80 ) ++cont;
+    if ( ( *tmp & 0xC0u ) == 0x80 ) ++cont;
     ++tmp;
     ++processedBytes;
   }

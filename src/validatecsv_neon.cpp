@@ -43,7 +43,7 @@ inline u64 nibblesBelow( const usize byteIdx )
 
 // Delimiter bytes selected by `mask` (a nibble mask), as a count of bytes.
 inline u64 delimsIn( const u64 delimNib, const u64 mask )
-{ return static_cast<u64>( __builtin_popcountll( delimNib & mask ) ) >> 2; }
+{ return static_cast<u64>( __builtin_popcountll( delimNib & mask ) ) >> 2u; }
 
 }  // namespace
 
@@ -76,7 +76,7 @@ void csvBlindChunk(
     u64 nn = nlNib;
     usize prevByte = 0;
     while ( nn != 0 ) {
-      const usize b = static_cast<usize>( __builtin_ctzll( nn ) ) >> 2;
+      const usize b = static_cast<usize>( __builtin_ctzll( nn ) ) >> 2u;
       st.cur +=
           delimsIn( delimNib, nibblesBelow( b ) & ~nibblesBelow( prevByte ) );
       csvBlindClose( st );
@@ -107,7 +107,7 @@ inline u32 movemask16( const uint8x16_t cmp )
   const uint8x16_t a = vandq_u8( cmp, vld1q_u8( kBits ) );
   const u32 lo = vaddv_u8( vget_low_u8( a ) );
   const u32 hi = vaddv_u8( vget_high_u8( a ) );
-  return lo | ( hi << 8 );
+  return lo | ( hi << 8u );
 }
 
 // Inclusive prefix-XOR of the low 16 bits: result bit i = XOR of input bits
@@ -127,10 +127,10 @@ inline u32 prefixXor16( u32 x )
 #else
   // Kogge-Stone prefix-XOR (no crypto extension): 4 steps cover 16 bits.
   x &= 0xFFFFu;
-  x ^= x << 1;
-  x ^= x << 2;
-  x ^= x << 4;
-  x ^= x << 8;
+  x ^= x << 1u;
+  x ^= x << 2u;
+  x ^= x << 4u;
+  x ^= x << 8u;
   return x & 0xFFFFu;
 #endif
 }
@@ -236,12 +236,12 @@ inline u32 findEscaped16( u32 backslash, u32& prevEscaped )
   }
   const u32 kEven = 0x5555u;  // bits 0,2,4,...
   backslash &= ~prevEscaped;  // a backslash that is itself escaped is inert
-  const u32 followsEscape = ( ( backslash << 1 ) | prevEscaped ) & 0xFFFFu;
+  const u32 followsEscape = ( ( backslash << 1u ) | prevEscaped ) & 0xFFFFu;
   const u32 oddStarts = backslash & ~kEven & ~followsEscape & 0xFFFFu;
   const u32 sum =
-      oddStarts + backslash;         // carry-propagate through runs (17 bits)
-  prevEscaped = ( sum >> 16 ) & 1u;  // carry out of bit 15 -> next block
-  const u32 invert = ( sum << 1 ) & 0xFFFFu;
+      oddStarts + backslash;          // carry-propagate through runs (17 bits)
+  prevEscaped = ( sum >> 16u ) & 1u;  // carry out of bit 15 -> next block
+  const u32 invert = ( sum << 1u ) & 0xFFFFu;
   return ( kEven ^ invert ) & followsEscape & 0xFFFFu;
 }
 
@@ -296,7 +296,7 @@ void csvQuotedChunk(
     // bytes are exactly those qOut selects.
     segmentBits16( dl & ~qOut & 0xFFFFu, nlm & ~qOut & 0xFFFFu, s0 );
     segmentBits16( dl & qOut, nlm & qOut, s1 );
-    parity ^= ( __builtin_popcount( q ) & 1 ) != 0;
+    parity ^= ( static_cast<u32>( __builtin_popcount( q ) ) & 1u ) != 0;
   }
 
   bool inQ0 = parity;            // h0's quote state at the tail
