@@ -23,6 +23,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+from hyperfine_json import wall_time_means
 from typing import Dict, List, Tuple
 
 # Default sweep axes. The spec calls for 64K/128K/256K/512K/1M and adds 2M only
@@ -63,7 +65,7 @@ def hyperfine_means(commands: List[Tuple[str, str]], warmup: int,
     with open(json_path) as f:
         data = json.load(f)
     os.unlink(json_path)
-    return [r["mean"] for r in data["results"]]
+    return wall_time_means(data)
 
 
 def build_targets(corpus_path: str, out_dir: str) -> Dict[str, str]:

@@ -26,6 +26,8 @@ import subprocess
 import sys
 import tempfile
 
+from hyperfine_json import wall_time_means
+
 # Default flag matrix. '' is the bare invocation (wc prints lines/words/bytes).
 # -c is kept for completeness; all three tools take the fstat fast path for it,
 # so it mostly measures process startup.
@@ -94,7 +96,7 @@ def run_hyperfine(commands, warmup: int, runs: int,
     with open(json_path) as f:
         data = json.load(f)
     os.unlink(json_path)
-    return [r["mean"] for r in data["results"]]
+    return wall_time_means(data)
 
 
 def fmt_ratio(slower: float, faster: float) -> str:
