@@ -13,7 +13,7 @@ in shapes that exercise the two-phase validator differently:
   ragged           -- like unquoted but ragged (wrong field count) rows force a
                       reject. With --ragged-density 1 (default) the single bad row
                       is the very last line -- the worst case for the default-mode
-                      inspection re-scan (Finding 18). With --ragged-density N>1 the
+                      inspection re-scan (companion CSV journal). With --ragged-density N>1 the
                       N bad rows are scattered evenly through the file, modelling a
                       real-world dirty export (the case where default `--all` must
                       name every bad row).
@@ -152,7 +152,7 @@ def main():
                 buf_bytes = 0
         if args.shape == "ragged" and args.ragged_density <= 1:
             # Worst case for the default-mode re-scan: a lone bad row as the very
-            # last line, so naming it costs ~a full extra pass (Finding 18).
+            # last line, stressing the seeded enumeration tail (companion CSV journal).
             buf.append(make_ragged_row(rng, delim) + "\n")
             bad_emitted += 1
         f.write("".join(buf))

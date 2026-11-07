@@ -103,7 +103,7 @@ inline u32 asciiPrint( const __m256i v )
 // If a future tweak makes words() grow again and the C-locale sweep starts
 // regressing despite identical instruction counts, re-check the
 // inlined-vs-extracted sizes via objdump/nm before chasing algorithmic
-// causes -- see qwc-companion/CLAUDE.md "Diagnosing small regressions" for
+// causes -- see ../qwc-companion/docs/journal/2026-06-22-unicode-words.md for
 // the workflow.
 [[gnu::noinline, gnu::cold]] bool lead3SubrowDirty(
     const u8* p, const u32 lead3

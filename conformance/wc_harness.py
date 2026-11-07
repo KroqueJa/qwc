@@ -184,7 +184,7 @@ def required_to_match(regime: str, mode: Mode, meta: Meta, wc_ok: bool) -> bool:
     # claim that "classification is purely bytewise, so parity holds on ANY
     # input" was incorrect in both supported regimes; reverted to the
     # pre-4190263 policy.
-    # TODO (recorded in TODO.md): decide whether to keep qwc's barren-run
+    # TODO (companion docs/journal/open-work.md): decide whether to keep qwc's barren-run
     # filter (status quo: deliberate divergence, documented) or drop it to
     # match wc bytewise. If dropped, this restriction can be tightened again.
     if mode.kind == "word" and not meta.ascii_text:

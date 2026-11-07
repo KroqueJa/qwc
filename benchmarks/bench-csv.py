@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Competitive benchmark: `qwc --validate-csv` vs `zsv check --parser fast`.
 
-Two sections. The first reproduces benchmarks/README.md Finding 18 (the four
+Two sections. The first reproduces the companion journal CSV validation baseline (the four
 classic shapes, qwc on its fast path). The second is the default-mode
 enumeration contest the TODO targets: on a file with many scattered ragged
 rows, qwc's default --all/--first must re-read and serially re-scan to name the

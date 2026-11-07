@@ -31,9 +31,8 @@ from hyperfine_json import wall_time_means
 # Default flag matrix. '' is the bare invocation (wc prints lines/words/bytes).
 # -c is kept for completeness; all three tools take the fstat fast path for it,
 # so it mostly measures process startup.
-# `-l -w`, `-l -L`, `-l -w -m` cover the planned-fusion combos in TODO.md's
-# `Next` list. Before each fusion lands, the cell establishes the two-pass
-# baseline; after, it's the regression-monitoring surface. `-L -m` is the
+# `-l -w`, `-l -L`, `-l -w -m` cover multi-counter regressions and potential
+# fusion experiments (companion docs/journal/open-work.md). `-L -m` is the
 # existing fused cell. The `-c` combos and `-wL` are deliberately not in the
 # matrix -- we are not committing to ship every flag combination as a fused
 # kernel.
@@ -265,7 +264,7 @@ def render(locales, flags, headers, rows, title, main_label: str = "main") -> No
         cols.append("vs GNU wc")
 
     # Pad the locale field to the widest locale so the `/` divider lines up,
-    # matching the existing locale-flag row idiom in benchmarks/README.md
+    # matching the existing locale-flag row idiom in docs/benchmarking.md
     # Findings 7 and 8.
     loc_width = max(len(loc) for loc in locales)
 

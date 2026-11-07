@@ -44,7 +44,8 @@ option( QWC_LTO "Enable IPO/LTO on Release builds" ON )
 # NEON-only: the words movemask uses the vshrn nibble trick (16-byte blocks,
 # u64 nibble masks) instead of the vaddv horizontal-reduction construction.
 # Default ON -- it wins ~20% on the common UTF-8 word-count path and ~4% on the
-# C path, at the cost of a regression on dense 2-byte scripts (see Finding 15).
+# C path, at the cost of a regression on dense 2-byte scripts. See companion
+# docs/journal/2026-06-22-unicode-words.md.
 # Build with -DQWC_NEON_NIBBLE=OFF for the vaddv fallback (the A/B baseline for
 # the open dense-2-byte investigation). No effect on the AVX2 build.
 option( QWC_NEON_NIBBLE "NEON words: vshrn nibble-mask movemask (OFF = vaddv fallback)" ON )
@@ -52,7 +53,8 @@ option( QWC_NEON_NIBBLE "NEON words: vshrn nibble-mask movemask (OFF = vaddv fal
 # NEON-only: validate-csv Phase 2 (quote-aware) builds the in-quote mask with a
 # bit-per-byte movemask + prefix-XOR (vmull_p64/PMULL or a shift-XOR ladder)
 # instead of the per-byte scalar walk. Default ON. Build -DQWC_CSV_NEON_PHASE2=OFF
-# for the scalar-Phase-2 A/B baseline (see Finding 19). No effect on AVX2.
+# for the scalar-Phase-2 A/B baseline. See companion
+# docs/journal/2026-06-25-csv-validation.md. No effect on AVX2.
 option( QWC_CSV_NEON_PHASE2 "NEON validate-csv Phase 2: prefix-XOR in-quote mask (OFF = scalar walk)" ON )
 
 # x86-only: validate-csv Phase 2 (quote-aware) builds the in-quote mask with a

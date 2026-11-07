@@ -82,9 +82,8 @@ inline void scanBuffer(
 // Scan-buffer geometry for the regular-file path. Each scan fetches up to
 // BUF_SIZE owned bytes plus up to WCTX context bytes on both sides, so a
 // multibyte separator window straddling a chunk seam is visible whole.
-// BUF_SIZE was tuned by the 2026-06-13 sweep -- see Finding 6 in
-// benchmarks/README.md for the LLC-miss data behind the choice (1 MiB spilled
-// L2 on every host we measured; 256 KiB stays L2-resident).
+// BUF_SIZE was tuned by the 2026-06-13 sweep. See the companion journal
+// docs/journal/2026-06-13-io-and-startup.md for the measurements and limits.
 constexpr usize BUF_SIZE = usize{ 256 } << 10u;  // 256 KiB
 constexpr usize WCTX = 3;  // multibyte window context per side
 
@@ -287,7 +286,8 @@ Counts processFile(
   // 1.00x against this generic path on the many-small-files corpus: with the
   // scan inlined onto the calling thread and the buffer reused (below), the
   // generic machinery costs a few predictable branches per MiB-sized buffer,
-  // which is unmeasurable. Recorded in benchmarks/README.md; don't re-add it.
+  // which is unmeasurable. See the companion journal entry on I/O and startup;
+  // don't re-add it.
   ScanState single;
   std::vector<ScanState> results;
   const ScanState* res = &single;

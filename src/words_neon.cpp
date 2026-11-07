@@ -22,7 +22,7 @@
 //     C word paths.
 //   OFF (fallback): 32-byte blocks (two uint8x16_t) compacted to 32-bit bit
 //     masks via vaddv, stepped by the shared stepMasks. The A/B baseline for
-//     the open dense-2-byte regression (qwc-companion Finding 15).
+//     the open dense-2-byte regression (companion journal, Unicode words).
 //
 // C mode: S = ASCII whitespace, P = 0x21..0x7E, every full block vectorizes.
 // UTF-8 mode accepts well-formed two- and three-byte sequences. Generated
@@ -109,8 +109,8 @@ inline u32 asciiPrint( const Blk& v )
 // helper of the same name -- pure scalar, no NEON -- so the table probe is
 // identical across ISAs. The [[gnu::noinline, gnu::cold]] pair was measured on
 // GCC/x86 to fix a binary-layout regression in words() (see words_avx2.cpp for
-// the full rationale and qwc-companion/CLAUDE.md "Diagnosing small
-// regressions"). Kept here to match the AVX2 structure; on clang/AArch64 the
+// the full rationale). See companion docs/journal/2026-06-22-unicode-words.md.
+// Kept here to match the AVX2 structure; on clang/AArch64 the
 // inliner heuristics differ, so its effect on this side is an empirical
 // question settled by the C-locale + CJK sweep, not assumed.
 [[gnu::noinline, gnu::cold]] bool lead3SubrowDirty(
